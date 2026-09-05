@@ -9,7 +9,18 @@ import {
   onAuthStateChanged,
   User as FirebaseUser
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  collection,
+  onSnapshot,
+  getDocs,
+  query,
+  updateDoc,
+  deleteDoc
+} from 'firebase/firestore';
 
 // Your web app's Firebase configuration from user
 export const firebaseConfig = {
@@ -41,6 +52,11 @@ export {
   doc,
   setDoc,
   getDoc,
-  onSnapshot
+  collection,
+  onSnapshot,
+  getDocs,
+  query,
+  updateDoc,
+  deleteDoc
 };
 export type { FirebaseUser };

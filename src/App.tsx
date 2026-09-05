@@ -169,6 +169,13 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('home');
 
+  // Guard against opening a coming-soon subject
+  useEffect(() => {
+    if (selectedSubject?.isComingSoon) {
+      setSelectedSubject(null);
+    }
+  }, [selectedSubject]);
+
   // Modals
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -404,7 +411,10 @@ export default function App() {
                           lessons={safeLessons}
                           lessonsCount={subjectLessons.length}
                           isSelected={selectedSubject?.id === sub.id}
-                          onSelect={(s) => setSelectedSubject(s)}
+                          onSelect={(s) => {
+                            if (s.isComingSoon) return;
+                            setSelectedSubject(s);
+                          }}
                         />
                       );
                     })}

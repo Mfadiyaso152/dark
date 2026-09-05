@@ -91,6 +91,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     name: 'التفسير',
     code: 'TAF-101',
     semester: 1,
+    isComingSoon: true,
     icon: 'BookOpenCheck',
     emoji: '📖',
     color: 'emerald',

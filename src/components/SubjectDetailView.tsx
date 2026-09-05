@@ -194,12 +194,27 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               {subject.emoji || '📖'}
             </div>
             <div>
-              <h2 className={`text-xl font-black ${subject.titleColor || 'text-[#1E3A8A]'}`}>
-                {subject.name}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className={`text-xl font-black ${subject.titleColor || 'text-[#1E3A8A]'}`}>
+                  {subject.name}
+                </h2>
+                {subject.isComingSoon && (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                    قريباً
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Coming Soon Notice if applicable */}
+        {subject.isComingSoon && (
+          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 text-xs text-amber-900 font-bold flex items-center gap-2.5 shadow-2xs">
+            <span className="text-base shrink-0">⏳</span>
+            <span>مادة {subject.name} قادمة قريباً، ويجري العمل على استكمال الدروس والمذكرات الخاصة بها.</span>
+          </div>
+        )}
 
         {/* The Two Choices Cards */}
         <div className="pt-1">

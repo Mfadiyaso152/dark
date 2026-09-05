@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth, SUPER_ADMIN_EMAIL } from '../context/AuthContext';
-import { Search, Trash2, ShieldCheck, Crown, CheckCircle, XCircle } from 'lucide-react';
+import { Search, Trash2, Crown, CheckCircle, XCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const UserManagementView: React.FC = () => {
@@ -8,12 +8,19 @@ export const UserManagementView: React.FC = () => {
     isSuperAdmin,
     registeredUsers,
     assistantAdminEmails,
-    addAssistantAdmin,
+    refreshUsers,
     removeAssistantAdmin
   } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshUsers();
+    setTimeout(() => setIsRefreshing(false), 600);
+  };
 
   const handleRemoveAdmin = (email: string) => {
     const result = removeAssistantAdmin(email);
@@ -24,8 +31,26 @@ export const UserManagementView: React.FC = () => {
     setTimeout(() => setFeedback(null), 3000);
   };
 
+  // Strictly deduplicate users by email so supervisor and users never appear twice
+  const uniqueUsers = useMemo(() => {
+    const map = new Map<string, typeof registeredUsers[0]>();
+    for (const u of registeredUsers) {
+      if (!u || !u.email) continue;
+      const key = u.email.trim().toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, u);
+      } else {
+        const existing = map.get(key)!;
+        if (u.isSuperAdmin || key === SUPER_ADMIN_EMAIL.toLowerCase()) {
+          map.set(key, { ...existing, ...u, isSuperAdmin: true, role: 'supervisor' });
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [registeredUsers]);
+
   // Filter users by search only (no role filters)
-  const filteredUsers = registeredUsers.filter((u) => {
+  const filteredUsers = uniqueUsers.filter((u) => {
     const q = searchQuery.toLowerCase().trim();
     if (!q) return true;
     return (
@@ -37,7 +62,24 @@ export const UserManagementView: React.FC = () => {
 
   return (
     <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
-      {/* Top Search Bar (No add assistant button) */}
+      {/* Header */}
+      <div className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-xs flex items-center justify-between gap-3">
+        <h3 className="font-bold text-slate-800 text-sm">
+          المستخدمين المسجلين ({filteredUsers.length})
+        </h3>
+
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+          title="تحديث القائمة"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-600' : ''}`} />
+          <span>تحديث</span>
+        </button>
+      </div>
+
+      {/* Top Search Bar */}
       <div className="relative">
         <input
           type="text"
@@ -92,28 +134,35 @@ export const UserManagementView: React.FC = () => {
                   />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-[#1E293B] text-xs sm:text-sm truncate">
                       {u.name}
                     </span>
                     {isThisSuperAdmin ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 shrink-0">
                         <Crown className="w-2.5 h-2.5 text-amber-500" />
                         مشرف
                       </span>
                     ) : isThisAssistant ? (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 shrink-0">
                         مشرف مساعد
                       </span>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-600">
-                        طالب
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 font-medium truncate mt-0.5 font-mono">
+                    <span className="truncate">{u.email}</span>
+                    {u.lastLogin && (
+                      <span className="text-[10px] text-slate-400 font-sans shrink-0">
+                        • آخر دخول:{' '}
+                        {new Date(u.lastLogin).toLocaleDateString('ar-SA', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 font-medium truncate mt-0.5 font-mono">
-                    {u.email}
-                  </p>
                 </div>
               </div>
 
@@ -123,30 +172,15 @@ export const UserManagementView: React.FC = () => {
                   <span className="text-[11px] font-black text-purple-700 bg-purple-100/70 px-2.5 py-1 rounded-xl">
                     المشرف الأساسي
                   </span>
-                ) : isSuperAdmin ? (
-                  isThisAssistant ? (
-                    <button
-                      onClick={() => handleRemoveAdmin(u.email)}
-                      className="py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-rose-200 cursor-pointer"
-                      title="إزالة صلاحية الإشراف"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>إزالة كمشرف</span>
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const res = addAssistantAdmin(u.email, u.name);
-                        setFeedback({ type: res.success ? 'success' : 'error', message: res.message });
-                        setTimeout(() => setFeedback(null), 2500);
-                      }}
-                      className="py-1.5 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-purple-200 cursor-pointer"
-                      title="ترقية إلى مشرف مساعد"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>ترقية لمشرف</span>
-                    </button>
-                  )
+                ) : isSuperAdmin && isThisAssistant ? (
+                  <button
+                    onClick={() => handleRemoveAdmin(u.email)}
+                    className="py-1.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-rose-200 cursor-pointer"
+                    title="إزالة صلاحية الإشراف"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>إزالة كمشرف</span>
+                  </button>
                 ) : null}
               </div>
             </div>

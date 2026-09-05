@@ -18,6 +18,7 @@ export interface User {
   isSuperAdmin?: boolean;
   isAssistantAdmin?: boolean;
   joinedAt?: string;
+  lastLogin?: string;
 }
 
 export type Semester = 1 | 2;
@@ -63,6 +64,7 @@ export interface Subject {
   countColor?: string;
   description: string;
   supervisorName: string;
+  isComingSoon?: boolean;
 }
 
 export interface UserProgress {
