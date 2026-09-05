@@ -61,7 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem('thanaweya_assistant_admins');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (e: string) =>
+              typeof e === 'string' &&
+              !e.toLowerCase().includes('sara') &&
+              !e.toLowerCase().includes('mansour')
+          );
+        }
       }
     } catch (e) {
       console.error(e);
@@ -83,12 +90,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 (!u.name.includes('سعود') &&
                   !u.name.includes('عبد الرحمن') &&
                   !u.name.includes('ريان') &&
+                  !u.name.includes('سارة') &&
+                  !u.name.includes('ساره') &&
+                  !u.name.includes('المنصور') &&
+                  !u.email.toLowerCase().includes('sara') &&
+                  !u.email.toLowerCase().includes('mansour') &&
                   !u.email.includes('fake') &&
                   !u.email.includes('edu.sa') &&
                   !u.email.includes('saud.otb') &&
                   !u.email.includes('abdulrahman.d')))
           );
-          if (validUsers.length > 0) return validUsers;
+          if (validUsers.length > 0) {
+            localStorage.setItem('thanaweya_registered_users', JSON.stringify(validUsers));
+            return validUsers;
+          }
         }
       }
     } catch (e) {

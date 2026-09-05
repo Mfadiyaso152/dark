@@ -10,7 +10,8 @@ import {
   Download,
   Trash2,
   FileCheck,
-  ChevronLeft
+  ChevronLeft,
+  AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF } from '../utils/pdfGenerator';
@@ -348,6 +349,12 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               <p className="text-xs text-slate-500">لا توجد شروحات مضافة حالياً في هذه المادة</p>
             </div>
           )}
+        </div>
+
+        {/* Notice under lessons: site is experimental */}
+        <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold text-center shadow-2xs">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span>تنبيه: هذا الموقع تجريبي</span>
         </div>
       </div>
     );

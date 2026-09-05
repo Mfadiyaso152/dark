@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search } from 'lucide-react';
+import { Search, AlertTriangle } from 'lucide-react';
 import { Subject, Lesson, UserProgress, SubjectBooklet } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
 import { Header } from './components/Header';
@@ -25,11 +25,12 @@ export default function App() {
   // Lessons: Always ensure all authentic curriculum lessons are present
   const [lessons, setLessons] = useState<Lesson[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_lessons_v2');
+      const saved = localStorage.getItem('thanaweya_lessons_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= INITIAL_LESSONS.length) {
-          return parsed;
+          const hasVoc = parsed.some((l) => l.subjectId === 'voc-1');
+          if (!hasVoc) return parsed;
         }
       }
     } catch (e) {
@@ -41,10 +42,10 @@ export default function App() {
   // Booklets (مذكرات وملخصات)
   const [booklets, setBooklets] = useState<SubjectBooklet[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_subject_booklets');
+      const saved = localStorage.getItem('thanaweya_subject_booklets_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_BOOKLETS.length) {
           return parsed;
         }
       }
@@ -157,7 +158,7 @@ export default function App() {
   // Sync lessons to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('thanaweya_lessons_v2', JSON.stringify(lessons));
+      localStorage.setItem('thanaweya_lessons_v3', JSON.stringify(lessons));
     } catch (e) {
       console.error(e);
     }
@@ -346,6 +347,13 @@ export default function App() {
               ) : (
                 <div className="text-center py-12 px-4 bg-white rounded-3xl border border-dashed border-slate-200">
                   <p className="text-xs text-slate-400">لا توجد دروس محفوظة حالياً بحسابك</p>
+                </div>
+              )}
+
+              {filteredLessons.length > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold text-center shadow-2xs">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>تنبيه: هذا الموقع تجريبي</span>
                 </div>
               )}
             </div>

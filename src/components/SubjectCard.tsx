@@ -69,7 +69,7 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
             subject?.countColor || 'text-[#60A5FA]'
           }`}
         >
-          {totalCount} درس ومحتوى
+          {totalCount} درس
         </span>
       </div>
     </div>

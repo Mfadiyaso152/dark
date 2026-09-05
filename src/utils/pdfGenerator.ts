@@ -168,7 +168,7 @@ export async function downloadLessonPDF(lesson: Lesson, subject?: Subject): Prom
         <!-- Summary Section -->
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px;">
           <h3 style="font-size: 14px; font-weight: 700; color: #1e293b; margin-top: 0; margin-bottom: 10px;">
-            📌 ملخص ومحتوى الدرس
+            📌 ملخص الدرس
           </h3>
           <p style="font-size: 13px; line-height: 1.8; color: #334155; margin: 0; white-space: pre-line;">
             ${lesson.summary}
