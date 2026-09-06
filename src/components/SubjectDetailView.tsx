@@ -17,7 +17,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { downloadAllSummariesPDF } from '../utils/pdfGenerator';
+import { downloadAllSummariesPDF, downloadBookletPDF, triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
 
@@ -168,27 +168,10 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
       }
 
       if (urlToUse) {
-        const a = document.createElement('a');
-        a.href = urlToUse;
-        a.download = booklet.fileName || `${booklet.title}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        triggerFileDownload(urlToUse, booklet.fileName || `${booklet.title}.pdf`);
       } else {
-        const blob = new Blob(
-          [
-            `%PDF-1.4\n% مذكرة ملخص ${subject.name}\n${booklet.title}\nعدد الصفحات: ${booklet.pagesCount}\nإشراف: ${booklet.supervisorName}`
-          ],
-          { type: 'application/pdf' }
-        );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${booklet.title.replace(/\s+/g, '_')}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Generate authentic, high-quality PDF booklet
+        await downloadBookletPDF(booklet, subject, subjectLessons);
       }
     } catch (err) {
       console.error('Failed to download booklet:', err);

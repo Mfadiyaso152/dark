@@ -10,7 +10,10 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   setDoc,
   getDoc,
@@ -34,10 +37,27 @@ export const firebaseConfig = {
   measurementId: "G-ZW5RM8V9E7"
 };
 
-// Initialize Firebase
+// Initialize Firebase with ignoreUndefinedProperties and robust offline caching
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = (() => {
+  try {
+    return initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    });
+  } catch (e) {
+    try {
+      return initializeFirestore(app, {
+        ignoreUndefinedProperties: true
+      });
+    } catch (err) {
+      return getFirestore(app);
+    }
+  }
+})();
 
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
@@ -62,3 +82,4 @@ export {
   deleteDoc
 };
 export type { FirebaseUser };
+

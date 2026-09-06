@@ -18,7 +18,7 @@ interface AddLessonModalProps {
   isOpen: boolean;
   onClose: () => void;
   subjects: Subject[];
-  onSaveLesson: (lesson: Lesson) => void;
+  onSaveLesson: (lesson: Lesson) => Promise<void> | void;
   editingLesson?: Lesson | null;
   defaultSubjectId?: string;
 }
@@ -104,26 +104,33 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
     setIsSaving(true);
     setError('');
 
+    const targetSub = subjects.find((s) => s.id === subjectId);
     const lessonId = editingLesson ? editingLesson.id : `lesson-cloud-${Date.now()}`;
     const newLesson: Lesson = {
       id: lessonId,
       subjectId,
-      semester: 1,
+      semester: targetSub?.semester || editingLesson?.semester || 1,
       title: title.trim(),
-      pages: 'مرفق',
-      summary: title.trim(),
-      keyPoints: [title.trim()],
-      terms: [],
-      difficulty: 'easy',
+      pages: editingLesson?.pages || 'مرفق',
+      summary: editingLesson?.summary || title.trim(),
+      keyPoints: editingLesson?.keyPoints && editingLesson.keyPoints.length > 0 ? editingLesson.keyPoints : [title.trim()],
+      terms: editingLesson?.terms || [],
+      difficulty: editingLesson?.difficulty || 'easy',
       attachedFile,
-      authorId: user?.id,
-      authorName: user?.name,
+      authorId: user?.id || 'supervisor',
+      authorName: user?.name || targetSub?.supervisorName || 'مشرف المادة',
       createdAt: editingLesson?.createdAt || new Date().toISOString()
     };
 
-    onSaveLesson(newLesson);
-    setIsSaving(false);
-    onClose();
+    try {
+      await onSaveLesson(newLesson);
+      setIsSaving(false);
+      onClose();
+    } catch (err: any) {
+      console.error('Error saving lesson:', err);
+      setError('حدث خطأ أثناء حفظ الدرس في السحابة. يرجى المحاولة مجدداً.');
+      setIsSaving(false);
+    }
   };
 
   return (

@@ -451,19 +451,30 @@ export default function App() {
       return;
     }
 
+    // 0. Remove from local deleted IDs list if re-adding
+    try {
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_lesson_ids') || '[]');
+      if (Array.isArray(storedDeleted) && storedDeleted.includes(newLesson.id)) {
+        const cleaned = storedDeleted.filter((id) => id !== newLesson.id);
+        safeSetItem('thanaweya_deleted_lesson_ids', JSON.stringify(cleaned));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+
     const fileId = 'lesson-file-' + newLesson.id;
     const hasFileData = !!newLesson.attachedFile?.dataUrl;
     const attachedFileDataUrl = newLesson.attachedFile?.dataUrl;
 
-    // 1. Cloud-safe document: strictly metadata (no bulky dataUrl)
-    // Small payload (<1KB) writes to Firestore in milliseconds (~50ms), triggering onSnapshot instantly for all students!
+    // 1. Cloud-safe document: strictly clean metadata (no bulky dataUrl)
+    // Saves to Firestore in milliseconds, triggering onSnapshot instantly for all students across all devices!
     const cloudLesson: Lesson = {
       ...newLesson,
       attachedFile: newLesson.attachedFile
         ? {
-            name: newLesson.attachedFile.name,
-            type: newLesson.attachedFile.type,
-            size: newLesson.attachedFile.size,
+            name: newLesson.attachedFile.name || 'ملف الدرس.pdf',
+            type: newLesson.attachedFile.type || 'pdf',
+            size: newLesson.attachedFile.size || '1 MB',
             hasFile: true,
             fileId,
             previewUrl:
@@ -487,7 +498,16 @@ export default function App() {
 
     // 3. Instant cloud push: reaches all students at the exact moment of addition!
     try {
-      await setDoc(doc(db, 'lessons', newLesson.id), cloudLesson, { merge: true });
+      const sanitizedCloudDoc = JSON.parse(JSON.stringify(cloudLesson));
+      await setDoc(
+        doc(db, 'lessons', newLesson.id),
+        {
+          ...sanitizedCloudDoc,
+          isDeleted: false,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
     } catch (err) {
       console.error('Firestore lesson save error:', err);
     }
@@ -541,6 +561,17 @@ export default function App() {
     const hasFileData = !!newBooklet.fileDataUrl;
     const fileDataUrl = newBooklet.fileDataUrl;
 
+    // 0. Remove from local deleted IDs list if present
+    try {
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_booklet_ids') || '[]');
+      if (Array.isArray(storedDeleted) && storedDeleted.includes(bookletId)) {
+        const cleaned = storedDeleted.filter((id) => id !== bookletId);
+        safeSetItem('thanaweya_deleted_booklet_ids', JSON.stringify(cleaned));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+
     // 1. Cloud-safe metadata document: strictly metadata (no bulky dataUrl)
     // Saves to Firestore in milliseconds (~50ms), triggering onSnapshot instantly on all student devices!
     const cloudBooklet: SubjectBooklet = {
@@ -548,9 +579,9 @@ export default function App() {
       subjectId: newBooklet.subjectId,
       title: newBooklet.title,
       pagesCount: newBooklet.pagesCount,
-      description: newBooklet.description,
-      fileName: newBooklet.fileName,
-      supervisorName: newBooklet.supervisorName,
+      description: newBooklet.description || '',
+      fileName: newBooklet.fileName || `${newBooklet.title}.pdf`,
+      supervisorName: newBooklet.supervisorName || 'مشرف المادة',
       hasFile: hasFileData,
       createdAt: new Date().toISOString().split('T')[0]
     };
@@ -564,7 +595,16 @@ export default function App() {
 
     // 3. Instant cloud push: arrives on all student devices at the exact moment of addition!
     try {
-      await setDoc(doc(db, 'booklets', bookletId), cloudBooklet, { merge: true });
+      const sanitizedCloudDoc = JSON.parse(JSON.stringify(cloudBooklet));
+      await setDoc(
+        doc(db, 'booklets', bookletId),
+        {
+          ...sanitizedCloudDoc,
+          isDeleted: false,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
     } catch (err) {
       console.error('Firestore booklet save error:', err);
     }

@@ -17,7 +17,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 import { Lesson, Subject } from '../types';
-import { downloadLessonPDF } from '../utils/pdfGenerator';
+import { downloadLessonPDF, triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
 import confetti from 'canvas-confetti';
@@ -65,6 +65,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
   const handleDownloadAttachedFile = async () => {
     if (!lesson.attachedFile) return;
+    setIsDownloading(true);
     let url = lesson.attachedFile.dataUrl;
     if (!url) {
       const stored = await getLargeFile('lesson-file-' + lesson.id);
@@ -75,12 +76,12 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       if (cloudUrl) url = cloudUrl;
     }
     if (url) {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = lesson.attachedFile.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const ok = triggerFileDownload(url, lesson.attachedFile.name || `${lesson.title}.pdf`);
+      setIsDownloading(false);
+      if (ok) {
+        setDownloadSuccess(true);
+        setTimeout(() => setDownloadSuccess(false), 3000);
+      }
     } else {
       handleDownloadPDF();
     }

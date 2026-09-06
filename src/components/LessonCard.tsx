@@ -7,7 +7,7 @@ import {
   Edit,
   Trash2
 } from 'lucide-react';
-import { downloadLessonPDF } from '../utils/pdfGenerator';
+import { downloadLessonPDF, triggerFileDownload } from '../utils/pdfGenerator';
 import { useAuth } from '../context/AuthContext';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
@@ -56,20 +56,17 @@ export const LessonCard: React.FC<LessonCardProps> = ({
           fileUrl = await downloadFileFromCloud('lesson-file-' + lesson.id);
         }
         if (fileUrl) {
-          const link = document.createElement('a');
-          link.href = fileUrl;
-          link.download = lesson.attachedFile.name || `${lesson.title}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          const ok = triggerFileDownload(fileUrl, lesson.attachedFile.name || `${lesson.title}.pdf`);
           setIsDownloading(false);
-          setDownloadDone(true);
-          setTimeout(() => setDownloadDone(false), 2500);
+          if (ok) {
+            setDownloadDone(true);
+            setTimeout(() => setDownloadDone(false), 2500);
+          }
           return;
         }
       }
 
-      // Fallback: Generate summary PDF
+      // Generate high-resolution authentic PDF summary
       const ok = await downloadLessonPDF(lesson, subject);
       setIsDownloading(false);
       if (ok) {

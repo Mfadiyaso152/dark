@@ -1,139 +1,130 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Lesson, Subject } from '../types';
+import { Lesson, Subject, SubjectBooklet } from '../types';
 
 /**
- * Downloads an existing attached file directly if present.
+ * Universal file download trigger that safely handles base64 data URIs, Blob objects, and remote URLs.
+ * Converts base64 to binary Blobs to bypass mobile browser restrictions (iOS Safari / Android Chrome / WebViews).
  */
-function downloadAttachedFileDirect(attachedFile: NonNullable<Lesson['attachedFile']>): boolean {
+export function triggerFileDownload(blobOrDataUrl: Blob | string, fileName: string): boolean {
   try {
-    if (attachedFile.dataUrl) {
-      const link = document.createElement('a');
-      link.href = attachedFile.dataUrl;
-      link.download = attachedFile.name.endsWith('.pdf') ? attachedFile.name : `${attachedFile.name}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return true;
+    let blobUrl: string;
+    let shouldRevoke = false;
+
+    if (typeof blobOrDataUrl === 'string') {
+      if (blobOrDataUrl.startsWith('data:')) {
+        // Convert base64 data URI to genuine binary Blob
+        const parts = blobOrDataUrl.split(',');
+        const mimeMatch = parts[0].match(/:(.*?);/);
+        const mime = mimeMatch ? mimeMatch[1] : 'application/pdf';
+        const byteCharacters = atob(parts[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: mime });
+        blobUrl = URL.createObjectURL(blob);
+        shouldRevoke = true;
+      } else {
+        blobUrl = blobOrDataUrl;
+      }
+    } else {
+      blobUrl = URL.createObjectURL(blobOrDataUrl);
+      shouldRevoke = true;
     }
-  } catch (e) {
-    console.error('Direct download failed:', e);
+
+    const cleanName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = cleanName;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      if (shouldRevoke) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    }, 20000);
+
+    return true;
+  } catch (err) {
+    console.error('Trigger file download failed:', err);
+    return false;
   }
-  return false;
 }
 
 /**
- * Render HTML inside an isolated iframe so html2canvas never encounters Tailwind v4 oklch CSS functions.
+ * Renders HTML inside a dedicated, isolated off-screen DOM container attached to the document.
+ * Removes external CSS style tags in onclone so html2canvas never crashes on Tailwind v4 oklch colors.
  */
-async function renderHtmlToCanvasIsolated(htmlContent: string, width = 800): Promise<HTMLCanvasElement> {
-  const iframe = document.createElement('iframe');
-  iframe.style.position = 'fixed';
-  iframe.style.left = '-9999px';
-  iframe.style.top = '0';
-  iframe.style.width = `${width}px`;
-  iframe.style.height = '1200px';
-  iframe.style.border = 'none';
-  iframe.style.zIndex = '-9999';
-  iframe.style.pointerEvents = 'none';
+async function renderHtmlToCanvasDirect(htmlContent: string, width = 780): Promise<HTMLCanvasElement> {
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
+  container.style.width = `${width}px`;
+  container.style.zIndex = '-99999';
+  container.style.opacity = '0.01';
+  container.style.pointerEvents = 'none';
+  container.style.backgroundColor = '#ffffff';
+  container.style.direction = 'rtl';
+  container.style.fontFamily = 'Tajawal, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  container.innerHTML = htmlContent;
 
-  document.body.appendChild(iframe);
+  document.body.appendChild(container);
 
   try {
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!iframeDoc) throw new Error('Cannot access iframe document');
+    // Small delay to allow fonts and layout to settle
+    await new Promise((res) => setTimeout(res, 80));
 
-    iframeDoc.open();
-    iframeDoc.write(`
-      <!DOCTYPE html>
-      <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            * {
-              box-sizing: border-box;
-              margin: 0;
-              padding: 0;
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            }
-            body {
-              background-color: #ffffff;
-              color: #1e293b;
-              padding: 24px;
-              direction: rtl;
-              text-align: right;
-            }
-          </style>
-        </head>
-        <body>
-          ${htmlContent}
-        </body>
-      </html>
-    `);
-    iframeDoc.close();
-
-    // Small delay to allow layout
-    await new Promise((res) => setTimeout(res, 120));
-
-    const canvas = await html2canvas(iframeDoc.body, {
+    const canvas = await html2canvas(container, {
       scale: 2,
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
-      windowWidth: width
+      windowWidth: width,
+      onclone: (clonedDoc) => {
+        // Strip external styles that might contain oklch() colors incompatible with html2canvas
+        const externalStyles = clonedDoc.querySelectorAll('style, link[rel="stylesheet"]');
+        externalStyles.forEach((s) => s.remove());
+      }
     });
 
     return canvas;
   } finally {
-    if (document.body.contains(iframe)) {
-      document.body.removeChild(iframe);
+    if (document.body.contains(container)) {
+      document.body.removeChild(container);
     }
   }
 }
 
 /**
- * Fallback to direct jsPDF generation when canvas is unavailable, ensuring it always outputs a pure .pdf
- */
-function generateFallbackDirectPDF(lesson: Lesson, subject?: Subject, fileName?: string) {
-  const pdf = new jsPDF('p', 'mm', 'a4');
-  const cleanTitle = fileName || `ملخص_${lesson.title.slice(0, 25).replace(/[^\w\u0600-\u06FF]/g, '_')}.pdf`;
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(16);
-  pdf.text('First Secondary Summary', 105, 20, { align: 'center' });
-
-  pdf.setFontSize(12);
-  pdf.setFont('helvetica', 'normal');
-  pdf.text(`Subject: ${subject?.name || 'Secondary 1'}`, 20, 32);
-  pdf.text(`Pages: ${lesson.pages}`, 20, 40);
-  pdf.text(`Lesson: ${lesson.title}`, 20, 48);
-
-  pdf.setDrawColor(200, 200, 200);
-  pdf.line(20, 52, 190, 52);
-
-  const splitSummary = pdf.splitTextToSize(lesson.summary, 170);
-  pdf.text(splitSummary, 20, 60);
-
-  pdf.save(cleanTitle);
-}
-
-/**
- * Generates and downloads a single lesson summary as a genuine PDF.
+ * Generates and downloads a single lesson summary as a high-quality PDF.
  */
 export async function downloadLessonPDF(lesson: Lesson, subject?: Subject): Promise<boolean> {
-  const cleanFileName = `ملخص_${lesson.title.slice(0, 25).replace(/[^\w\u0600-\u06FF]/g, '_')}.pdf`;
+  const cleanFileName = `ملخص_${lesson.title.slice(0, 30).replace(/[^\w\u0600-\u06FF]/g, '_')}.pdf`;
 
   try {
-    // If lesson has an attached PDF file dataUrl, download it directly
+    // If lesson already has an attached PDF file, trigger download directly
     if (lesson.attachedFile && lesson.attachedFile.dataUrl) {
-      const downloaded = downloadAttachedFileDirect(lesson.attachedFile);
-      if (downloaded) return true;
+      const ok = triggerFileDownload(lesson.attachedFile.dataUrl, lesson.attachedFile.name || cleanFileName);
+      if (ok) return true;
     }
 
     const subjectTitle = subject ? subject.name : 'مقررات أول ثانوي';
-    const cleanSupervisor = (lesson.supervisorName || 'مشرف المادة').replace(/^(أ\.|أستاذ\s*)/, '');
+    const cleanSupervisor = (lesson.supervisorName || subject?.supervisorName || 'مشرف المادة').replace(/^(أ\.|أستاذ\s*)/, '');
 
     const htmlContent = `
-      <div style="border: 2px solid #e2e8f0; border-radius: 16px; padding: 28px; background: #ffffff;">
+      <div style="border: 2px solid #e2e8f0; border-radius: 16px; padding: 28px; background: #ffffff; color: #1e293b; direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
         <!-- Header -->
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 18px; margin-bottom: 22px;">
           <div>
@@ -151,13 +142,13 @@ export async function downloadLessonPDF(lesson: Lesson, subject?: Subject): Prom
         <div style="margin-bottom: 22px;">
           <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
             <span style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #334155;">
-              📖 الصفحات: ${lesson.pages}
+              📖 الصفحات: ${lesson.pages || 'مقرر المادة'}
             </span>
             <span style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #334155;">
               👤 إشراف: ${cleanSupervisor}
             </span>
             <span style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; color: #334155;">
-              📅 ${lesson.semester === 1 ? 'P1' : 'P2'}
+              📅 الفصل ${lesson.semester === 1 ? 'الأول (P1)' : 'الثاني (P2)'}
             </span>
           </div>
           <h1 style="font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.4; margin: 0;">
@@ -168,10 +159,10 @@ export async function downloadLessonPDF(lesson: Lesson, subject?: Subject): Prom
         <!-- Summary Section -->
         <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 22px;">
           <h3 style="font-size: 14px; font-weight: 700; color: #1e293b; margin-top: 0; margin-bottom: 10px;">
-            📌 ملخص الدرس
+            📌 ملخص الدرس ومفاهيمه
           </h3>
           <p style="font-size: 13px; line-height: 1.8; color: #334155; margin: 0; white-space: pre-line;">
-            ${lesson.summary}
+            ${lesson.summary || 'ملخص شامل ومكثف لدرس ' + lesson.title}
           </p>
         </div>
 
@@ -235,24 +226,37 @@ export async function downloadLessonPDF(lesson: Lesson, subject?: Subject): Prom
       </div>
     `;
 
-    const canvas = await renderHtmlToCanvasIsolated(htmlContent);
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    const canvas = await renderHtmlToCanvasDirect(htmlContent);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: 'a4',
+      compress: true
+    });
+
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pageHeight = pdf.internal.pageSize.getHeight();
 
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save(cleanFileName);
-    return true;
-  } catch (err) {
-    console.error('Error generating single PDF with canvas, falling back to direct PDF:', err);
-    try {
-      generateFallbackDirectPDF(lesson, subject, cleanFileName);
-      return true;
-    } catch (fallbackErr) {
-      console.error('Direct PDF generation error:', fallbackErr);
-      return false;
+    let heightLeft = pdfHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - pdfHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
     }
+
+    const pdfBlob = pdf.output('blob');
+    return triggerFileDownload(pdfBlob, cleanFileName);
+  } catch (err) {
+    console.error('Error generating PDF with canvas:', err);
+    return false;
   }
 }
 
@@ -279,7 +283,7 @@ export async function downloadAllSummariesPDF(
       : `الملف الشامل لملخصات P${semester}`;
 
     const htmlContent = `
-      <div style="padding: 10px;">
+      <div style="padding: 16px; background: #ffffff; color: #1e293b; direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
         <!-- Booklet Cover Banner -->
         <div style="border: 2px solid #2563eb; border-radius: 16px; padding: 30px 20px; text-align: center; background: #eff6ff; margin-bottom: 30px;">
           <div style="font-size: 12px; font-weight: 700; color: #1d4ed8; margin-bottom: 6px;">
@@ -320,7 +324,7 @@ export async function downloadAllSummariesPDF(
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 11px; color: #64748b; font-weight: 600;">${subj?.name || ''}</span>
                     <span style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; color: #475569;">
-                      ${l.pages}
+                      ${l.pages || ''}
                     </span>
                   </div>
                 </div>
@@ -344,7 +348,7 @@ export async function downloadAllSummariesPDF(
                   </span>
                 </div>
                 <span style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; color: #334155;">
-                  📖 ${lesson.pages}
+                  📖 ${lesson.pages || ''}
                 </span>
               </div>
 
@@ -357,7 +361,7 @@ export async function downloadAllSummariesPDF(
                   📌 ملخص المحتوى:
                 </h4>
                 <p style="font-size: 12px; line-height: 1.7; color: #334155; margin: 0; white-space: pre-line;">
-                  ${lesson.summary}
+                  ${lesson.summary || 'ملخص الدرس'}
                 </p>
               </div>
 
@@ -403,30 +407,126 @@ export async function downloadAllSummariesPDF(
       </div>
     `;
 
-    const canvas = await renderHtmlToCanvasIsolated(htmlContent);
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
+    const canvas = await renderHtmlToCanvasDirect(htmlContent);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: 'a4',
+      compress: true
+    });
+
     const pdfWidth = pdf.internal.pageSize.getWidth();
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-
     const pageHeight = pdf.internal.pageSize.getHeight();
+
     let heightLeft = pdfHeight;
     let position = 0;
 
-    pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
     heightLeft -= pageHeight;
 
     while (heightLeft > 0) {
-      position -= pageHeight;
+      position = heightLeft - pdfHeight;
       pdf.addPage();
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
       heightLeft -= pageHeight;
     }
 
-    pdf.save(cleanTitle);
-    return true;
+    const pdfBlob = pdf.output('blob');
+    return triggerFileDownload(pdfBlob, cleanTitle);
   } catch (err) {
     console.error('Error generating booklet PDF:', err);
     return false;
   }
 }
+
+/**
+ * Generates and downloads a booklet summary PDF for a subject.
+ */
+export async function downloadBookletPDF(
+  booklet: SubjectBooklet,
+  subject: Subject,
+  subjectLessons: Lesson[]
+): Promise<boolean> {
+  const cleanTitle = `${booklet.title.replace(/\s+/g, '_')}.pdf`;
+
+  if (booklet.fileDataUrl) {
+    return triggerFileDownload(booklet.fileDataUrl, booklet.fileName || cleanTitle);
+  }
+
+  try {
+    const htmlContent = `
+      <div style="padding: 24px; background: #ffffff; color: #1e293b; direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <!-- Booklet Cover -->
+        <div style="border: 2px solid #059669; border-radius: 16px; padding: 28px 20px; text-align: center; background: #ecfdf5; margin-bottom: 24px;">
+          <div style="font-size: 12px; font-weight: 700; color: #047857; margin-bottom: 6px;">
+            مذكرة وملخص معتمد • أول ثانوي
+          </div>
+          <h1 style="font-size: 24px; font-weight: 900; color: #065f46; margin: 0 0 10px 0;">
+            ${booklet.title}
+          </h1>
+          <p style="font-size: 13px; color: #047857; margin: 0 auto 14px auto;">
+            مادة ${subject.name} • إشراف: ${booklet.supervisorName || subject.supervisorName || 'مشرف المادة'}
+          </p>
+          <div style="display: inline-flex; gap: 8px; justify-content: center;">
+            <span style="background: #ffffff; border: 1px solid #a7f3d0; padding: 4px 12px; border-radius: 16px; font-size: 11px; font-weight: 700; color: #047857;">
+              📄 ${booklet.pagesCount || subjectLessons.length + ' صفحات'}
+            </span>
+          </div>
+        </div>
+
+        <!-- Lessons summary in this booklet -->
+        ${subjectLessons.slice(0, 10).map((l, idx) => `
+          <div style="margin-bottom: 18px; border-bottom: 1px solid #f1f5f9; padding-bottom: 14px;">
+            <div style="font-weight: 800; font-size: 14px; color: #065f46; margin-bottom: 4px;">
+              ${idx + 1}. ${l.title} (${l.pages || ''})
+            </div>
+            <p style="font-size: 12px; line-height: 1.6; color: #334155; margin: 0;">
+              ${l.summary}
+            </p>
+          </div>
+        `).join('')}
+
+        <!-- Footer -->
+        <div style="margin-top: 24px; border-top: 1px solid #e2e8f0; padding-top: 14px; text-align: center; font-size: 11px; color: #94a3b8;">
+          <div>مقررات وملخصات أول ثانوي</div>
+          <div>مع تمنياتنا بالتوفيق والنجاح ✨</div>
+        </div>
+      </div>
+    `;
+
+    const canvas = await renderHtmlToCanvasDirect(htmlContent);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: 'a4',
+      compress: true
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    let heightLeft = pdfHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - pdfHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const pdfBlob = pdf.output('blob');
+    return triggerFileDownload(pdfBlob, cleanTitle);
+  } catch (err) {
+    console.error('Error generating booklet PDF:', err);
+    return false;
+  }
+}
+
