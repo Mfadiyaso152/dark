@@ -87,48 +87,48 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-sm overflow-y-auto">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-slate-900/40 backdrop-blur-sm overflow-y-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl w-full max-h-[92vh] flex flex-col text-right overflow-hidden relative my-auto"
+          className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-xl md:max-w-3xl lg:max-w-4xl w-full max-h-[92vh] flex flex-col text-right overflow-hidden relative my-auto"
         >
           {/* Top Bar / Header */}
-          <div className="p-4 sm:p-5 border-b border-slate-100 bg-[#F8FAFC] flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
+          <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 bg-[#F8FAFC] flex items-center justify-between">
+            <div className="flex items-center gap-1.5 md:gap-2">
               <button
                 onClick={onClose}
-                className="w-9 h-9 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-slate-800 flex items-center justify-center transition"
+                className="w-9 h-9 md:w-10 md:h-10 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-slate-800 flex items-center justify-center transition cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               <button
                 onClick={handleShare}
                 title="مشاركة الملخص"
-                className="w-9 h-9 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-[#3B82F6] flex items-center justify-center transition"
+                className="w-9 h-9 md:w-10 md:h-10 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-[#3B82F6] flex items-center justify-center transition cursor-pointer"
               >
-                <Share2 className="w-4 h-4" />
+                <Share2 className="w-4 h-4 md:w-5 md:h-5" />
               </button>
               <button
                 onClick={() => onToggleBookmark(lesson.id)}
                 title="حفظ في المفضلة"
-                className={`w-9 h-9 rounded-xl flex items-center justify-center transition ${
+                className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
                   isBookmarked
                     ? 'bg-[#FEF3C7] text-[#F59E0B]'
                     : 'hover:bg-slate-200/70 text-slate-400 hover:text-[#F59E0B]'
                 }`}
               >
-                <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+                <Bookmark className={`w-4 h-4 md:w-5 md:h-5 ${isBookmarked ? 'fill-current' : ''}`} />
               </button>
             </div>
 
             <div className="text-right">
               <div className="flex items-center gap-2 justify-end">
-                <span className="text-[11px] font-bold px-3 py-1 rounded-xl bg-[#EFF6FF] text-[#1D4ED8] border border-[#DBEAFE]">
+                <span className="text-[11px] md:text-xs font-bold px-3 py-1 rounded-xl bg-[#EFF6FF] text-[#1D4ED8] border border-[#DBEAFE]">
                   {subject?.name || 'مقرر دراسي'}
                 </span>
-                <span className="text-[11px] font-bold px-2.5 py-1 rounded-xl bg-[#F1F5F9] text-[#475569]">
+                <span className="text-[11px] md:text-xs font-bold px-2.5 py-1 rounded-xl bg-[#F1F5F9] text-[#475569]">
                   {lesson.pages}
                 </span>
               </div>
@@ -136,17 +136,17 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
           </div>
 
           {/* Main Title & Action Strip */}
-          <div className="px-5 pt-4 pb-2">
-            <h1 className="text-lg sm:text-xl font-black text-[#1E293B] leading-snug mb-2">
+          <div className="px-5 md:px-7 pt-4 md:pt-6 pb-2">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-black text-[#1E293B] leading-snug mb-2">
               {lesson.title}
             </h1>
-            <div className="flex items-center justify-between text-xs text-slate-400 flex-wrap gap-2">
+            <div className="flex items-center justify-between text-xs md:text-sm text-slate-400 flex-wrap gap-2">
               <div className="flex items-center gap-1.5 text-slate-500 font-medium">
                 <span>إشراف:</span>
                 <span className="text-slate-800 font-bold">{lesson.supervisorName}</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="bg-[#F1F5F9] text-[#334155] px-2.5 py-1 rounded-xl text-[10px] font-bold">
+                <span className="bg-[#F1F5F9] text-[#334155] px-2.5 py-1 rounded-xl text-[10px] md:text-xs font-bold">
                   {lesson.difficulty === 'easy' ? 'مستوى سهل 🟢' : lesson.difficulty === 'medium' ? 'مستوى متوسط 🟡' : 'مستوى متقدم 🔴'}
                 </span>
               </div>
@@ -154,7 +154,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
           </div>
 
           {/* Navigation Tabs */}
-          <div className="px-5 border-b border-slate-100 flex gap-2 pt-2 overflow-x-auto scrollbar-none">
+          <div className="px-5 md:px-7 border-b border-slate-100 flex gap-2 pt-2 overflow-x-auto scrollbar-none">
             {[
               { id: 'summary', label: 'ملخص الدرس', icon: FileText },
               { id: 'points', label: `أهم النقاط (${lesson.keyPoints?.length || 0})`, icon: Sparkles },
@@ -166,13 +166,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`pb-2.5 pt-1.5 px-3 font-bold text-xs flex items-center gap-1.5 border-b-2 transition whitespace-nowrap ${
+                  className={`pb-2.5 md:pb-3.5 pt-1.5 px-3 md:px-4 font-bold text-xs md:text-sm flex items-center gap-1.5 border-b-2 transition whitespace-nowrap cursor-pointer ${
                     activeTab === tab.id
                       ? 'border-[#3B82F6] text-[#3B82F6]'
                       : 'border-transparent text-slate-400 hover:text-slate-600'
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   <span>{tab.label}</span>
                 </button>
               );

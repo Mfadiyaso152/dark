@@ -37,6 +37,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   const { user, canManageSubject } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadDone, setDownloadDone] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const handleDownload = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -115,16 +116,26 @@ export const LessonCard: React.FC<LessonCardProps> = ({
               )}
               {onDelete && (
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (window.confirm(`هل أنت متأكد من حذف درس: "${lesson.title}"؟`)) {
+                    if (confirmDelete) {
                       onDelete(lesson.id);
+                      setConfirmDelete(false);
+                    } else {
+                      setConfirmDelete(true);
+                      setTimeout(() => setConfirmDelete(false), 3500);
                     }
                   }}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                  title="حذف الدرس"
+                  className={`p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 ${
+                    confirmDelete
+                      ? 'bg-rose-500 text-white hover:bg-rose-600 px-2 shadow-xs'
+                      : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                  }`}
+                  title={confirmDelete ? 'اضغط مرة أخرى لتأكيد الحذف' : 'حذف الدرس'}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
+                  {confirmDelete && <span className="text-[10px] font-bold">تأكيد؟</span>}
                 </button>
               )}
             </div>

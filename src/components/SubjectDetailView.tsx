@@ -11,7 +11,6 @@ import {
   Trash2,
   FileCheck,
   ChevronLeft,
-  AlertTriangle,
   MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -58,11 +57,10 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   const [subView, setSubView] = useState<'lessons' | 'booklets' | null>(null);
   const [isAddBookletModalOpen, setIsAddBookletModalOpen] = useState(false);
   const [isDownloadingAllLessons, setIsDownloadingAllLessons] = useState(false);
-  const [isDownloadingAllBooklets, setIsDownloadingAllBooklets] = useState(false);
 
   // New booklet form state
   const [bookletTitle, setBookletTitle] = useState('');
-  const [bookletPages, setBookletPages] = useState('100 صفحة');
+  const [bookletPages, setBookletPages] = useState('');
   const [bookletDesc, setBookletDesc] = useState('');
   const [bookletFileName, setBookletFileName] = useState('');
   const [bookletFileDataUrl, setBookletFileDataUrl] = useState<string | undefined>();
@@ -80,23 +78,6 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
       console.error('Error downloading all lessons:', err);
     } finally {
       setIsDownloadingAllLessons(false);
-    }
-  };
-
-  const handleDownloadAllBooklets = async () => {
-    if (subjectBooklets.length === 0) return;
-    setIsDownloadingAllBooklets(true);
-    try {
-      for (let i = 0; i < subjectBooklets.length; i++) {
-        handleDownloadBooklet(subjectBooklets[i]);
-        if (i < subjectBooklets.length - 1) {
-          await new Promise((r) => setTimeout(r, 600));
-        }
-      }
-    } catch (err) {
-      console.error('Error downloading all booklets:', err);
-    } finally {
-      setIsDownloadingAllBooklets(false);
     }
   };
 
@@ -120,10 +101,14 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
     e.preventDefault();
     if (!bookletTitle.trim()) return;
 
+    const formattedPages = bookletPages.trim()
+      ? (bookletPages.includes('صفح') ? bookletPages.trim() : `${bookletPages.trim()} صفحة`)
+      : 'غير محدد';
+
     onAddBooklet({
       subjectId: subject.id,
       title: bookletTitle.trim(),
-      pagesCount: bookletPages.trim() || '100 صفحة',
+      pagesCount: formattedPages,
       description: bookletDesc.trim() || 'ملخص شامل ومذكرة لمفاهيم المقرر',
       fileName: bookletFileName || `ملخص_${subject.name}.pdf`,
       fileDataUrl: bookletFileDataUrl,
@@ -132,7 +117,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
 
     // Reset & Close
     setBookletTitle('');
-    setBookletPages('100 صفحة');
+    setBookletPages('');
     setBookletDesc('');
     setBookletFileName('');
     setBookletFileDataUrl(undefined);
@@ -183,25 +168,25 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
 
         {/* Subject Header Banner */}
         <div
-          className={`p-5 rounded-3xl border ${subject.lightBg || 'bg-[#EFF6FF]'} ${
+          className={`p-5 md:p-7 rounded-3xl border ${subject.lightBg || 'bg-[#EFF6FF]'} ${
             subject.borderColor || 'border-[#DBEAFE]'
           } shadow-xs space-y-2`}
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 md:gap-4">
             <div
-              className={`w-12 h-12 rounded-2xl ${
+              className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl ${
                 subject.badgeBg || 'bg-[#3B82F6]'
-              } flex items-center justify-center text-2xl shadow-xs text-white shrink-0`}
+              } flex items-center justify-center text-2xl md:text-3xl shadow-xs text-white shrink-0`}
             >
               {subject.emoji || '📖'}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className={`text-xl font-black ${subject.titleColor || 'text-[#1E3A8A]'}`}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className={`text-xl md:text-2xl font-black ${subject.titleColor || 'text-[#1E3A8A]'}`}>
                   {subject.name}
                 </h2>
                 {subject.isComingSoon && (
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
+                  <span className="text-[11px] md:text-xs px-2.5 py-0.5 rounded-full font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-2xs">
                     قريباً
                   </span>
                 )}
@@ -212,70 +197,70 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
 
         {/* Coming Soon Notice if applicable */}
         {subject.isComingSoon && (
-          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 text-xs text-amber-900 font-bold flex items-center gap-2.5 shadow-2xs">
-            <span className="text-base shrink-0">⏳</span>
+          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 md:p-4 text-xs md:text-sm text-amber-900 font-bold flex items-center gap-2.5 shadow-2xs">
+            <span className="text-base md:text-lg shrink-0">⏳</span>
             <span>مادة {subject.name} قادمة قريباً، ويجري العمل على استكمال الدروس والمذكرات الخاصة بها.</span>
           </div>
         )}
 
         {/* The Two Choices Cards */}
         <div className="pt-1">
-          <h3 className="text-xs font-bold text-slate-500 mb-3 px-1">
+          <h3 className="text-xs md:text-sm font-bold text-slate-500 mb-3 md:mb-4 px-1">
             اختر القسم المطلوب للمتابعة:
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 md:gap-6">
             {/* Option 1: الشروحات والدروس */}
             <div
               onClick={() => setSubView('lessons')}
-              className="bg-white hover:bg-blue-50/40 border-2 border-slate-200/90 hover:border-blue-500 rounded-3xl p-5 shadow-xs transition-all cursor-pointer group text-right flex flex-col justify-between"
+              className="bg-white hover:bg-blue-50/40 border-2 border-slate-200/90 hover:border-blue-500 rounded-3xl p-5 md:p-7 shadow-xs transition-all cursor-pointer group text-right flex flex-col justify-between"
             >
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                  <BookOpen className="w-6 h-6" />
+              <div className="space-y-3 md:space-y-4">
+                <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 md:w-8 md:h-8" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between">
-                    <h4 className="text-base font-black text-slate-900 group-hover:text-blue-600 transition">
+                    <h4 className="text-base md:text-lg font-black text-slate-900 group-hover:text-blue-600 transition">
                       الشروحات والدروس
                     </h4>
-                    <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-xl">
+                    <span className="text-xs md:text-sm font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-xl">
                       {subjectLessons.length} درس
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-blue-600 font-black text-xs">
+              <div className="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-slate-100 flex items-center justify-between text-blue-600 font-black text-xs md:text-sm">
                 <span>فتح صفحة الدروس</span>
-                <ChevronLeft className="w-4 h-4 transition group-hover:-translate-x-1" />
+                <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 transition group-hover:-translate-x-1" />
               </div>
             </div>
 
             {/* Option 2: الملخصات والمذكرات */}
             <div
               onClick={() => setSubView('booklets')}
-              className="bg-white hover:bg-emerald-50/40 border-2 border-slate-200/90 hover:border-emerald-500 rounded-3xl p-5 shadow-xs transition-all cursor-pointer group text-right flex flex-col justify-between"
+              className="bg-white hover:bg-emerald-50/40 border-2 border-slate-200/90 hover:border-emerald-500 rounded-3xl p-5 md:p-7 shadow-xs transition-all cursor-pointer group text-right flex flex-col justify-between"
             >
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <FileText className="w-6 h-6" />
+              <div className="space-y-3 md:space-y-4">
+                <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <FileText className="w-6 h-6 md:w-8 md:h-8" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between">
-                    <h4 className="text-base font-black text-slate-900 group-hover:text-emerald-600 transition">
+                    <h4 className="text-base md:text-lg font-black text-slate-900 group-hover:text-emerald-600 transition">
                       الملخصات والمذكرات
                     </h4>
-                    <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-xl">
+                    <span className="text-xs md:text-sm font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-xl">
                       {subjectBooklets.length} مذكرة
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-emerald-600 font-black text-xs">
+              <div className="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-slate-100 flex items-center justify-between text-emerald-600 font-black text-xs md:text-sm">
                 <span>فتح صفحة الملخصات</span>
-                <ChevronLeft className="w-4 h-4 transition group-hover:-translate-x-1" />
+                <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 transition group-hover:-translate-x-1" />
               </div>
             </div>
           </div>
@@ -306,13 +291,13 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         </div>
 
         {/* Action Row & Title with Download All */}
-        <div className="flex flex-wrap items-center justify-between gap-2.5 bg-blue-50 border border-blue-100 p-4 rounded-2xl">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center">
-              <BookOpen className="w-5 h-5" />
+        <div className="flex flex-wrap items-center justify-between gap-2.5 bg-blue-50 border border-blue-100 p-4 md:p-5 rounded-2xl md:rounded-3xl">
+          <div className="flex items-center gap-2.5 md:gap-3">
+            <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <BookOpen className="w-5 h-5 md:w-6 md:h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-blue-950">شروحات ودروس المنهج</h3>
+              <h3 className="text-sm md:text-base font-black text-blue-950">شروحات ودروس المنهج</h3>
             </div>
           </div>
 
@@ -320,13 +305,13 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             <button
               onClick={handleDownloadAllLessons}
               disabled={isDownloadingAllLessons || subjectLessons.length === 0}
-              className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+              className="py-2 md:py-2.5 px-3.5 md:px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
               title="تنزيل كامل الشروحات والدروس كملف PDF"
             >
               {isDownloadingAllLessons ? (
                 <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
               )}
               <span>{isDownloadingAllLessons ? 'جاري تجهيز الملف...' : 'تنزيل كامل الدروس والشروحات (PDF)'}</span>
             </button>
@@ -334,9 +319,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             {canEditCurrentSubject && (
               <button
                 onClick={onOpenAddLesson}
-                className="py-2 px-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+                className="py-2 md:py-2.5 px-3 md:px-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" />
+                <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 <span>إضافة درس</span>
               </button>
             )}
@@ -344,7 +329,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         </div>
 
         {/* Lessons List (Each card shows ONLY the title and download button) */}
-        <div className="space-y-2.5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-4">
           {subjectLessons.map((lesson) => (
             <LessonCard
               key={lesson.id}
@@ -361,9 +346,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           ))}
 
           {subjectLessons.length === 0 && (
-            <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-              <BookOpen className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p className="text-xs text-slate-500">لا توجد شروحات مضافة حالياً في هذه المادة</p>
+            <div className="col-span-full text-center py-12 md:py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+              <BookOpen className="w-8 h-8 md:w-10 md:h-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs md:text-sm text-slate-500">لا توجد شروحات مضافة حالياً في هذه المادة</p>
             </div>
           )}
         </div>
@@ -374,71 +359,51 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
+          className="w-full py-3 md:py-3.5 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm md:text-base flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
         >
-          <MessageCircle className="w-4 h-4 shrink-0" />
+          <MessageCircle className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
           <span>الدخول لقروب الواتساب</span>
         </a>
-
-        {/* Notice under lessons: site is experimental */}
-        <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold text-center shadow-2xs">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span>تنبيه: هذا الموقع تجريبي</span>
-        </div>
       </div>
     );
   }
 
   // 3) Booklets Page Screen
   return (
-    <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
+    <div className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]">
       {/* Top Navigation: Return to Choices Screen */}
       <div className="flex items-center justify-between gap-3">
         <button
           onClick={() => setSubView(null)}
-          className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group"
+          className="py-2 md:py-2.5 px-3.5 md:px-4 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs md:text-sm font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group"
         >
-          <ArrowRight className="w-4 h-4 text-emerald-600 transition group-hover:-translate-x-0.5" />
+          <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-emerald-600 transition group-hover:-translate-x-0.5" />
           <span>رجوع لخيارات المادة</span>
         </button>
 
-        <span className="text-xs font-bold text-slate-500">
+        <span className="text-xs md:text-sm font-bold text-slate-500">
           {subject.name} • {subjectBooklets.length} مذكرة
         </span>
       </div>
 
-      {/* Action Row & Title with Download All */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-emerald-50 border border-emerald-100 p-4 rounded-2xl">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
-            <FileText className="w-5 h-5" />
+      {/* Action Row & Title */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-emerald-50 border border-emerald-100 p-4 md:p-5 rounded-2xl md:rounded-3xl">
+        <div className="flex items-center gap-2.5 md:gap-3">
+          <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+            <FileText className="w-5 h-5 md:w-6 md:h-6" />
           </div>
           <div>
-            <h3 className="text-sm font-black text-emerald-950">الملخصات والمذكرات</h3>
+            <h3 className="text-sm md:text-base font-black text-emerald-950">الملخصات والمذكرات</h3>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={handleDownloadAllBooklets}
-            disabled={isDownloadingAllBooklets || subjectBooklets.length === 0}
-            className="py-2 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-            title="تنزيل كامل الملخصات والمذكرات"
-          >
-            {isDownloadingAllBooklets ? (
-              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Download className="w-3.5 h-3.5" />
-            )}
-            <span>{isDownloadingAllBooklets ? 'جاري التنزيل...' : 'تنزيل كامل الملخصات (PDF)'}</span>
-          </button>
-
           {canEditCurrentSubject && (
             <button
               onClick={() => setIsAddBookletModalOpen(true)}
-              className="py-2 px-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+              className="py-2 md:py-2.5 px-3 md:px-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
               <span>إضافة ملزمة</span>
             </button>
           )}
@@ -446,26 +411,26 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
       </div>
 
       {/* Booklets List */}
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
         {subjectBooklets.map((b) => (
           <div
             key={b.id}
-            className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs hover:shadow-xs transition space-y-3"
+            className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition space-y-3 md:space-y-4 flex flex-col justify-between"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <FileCheck className="w-5 h-5" />
+                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                  <FileCheck className="w-5 h-5 md:w-6 md:h-6" />
                 </div>
                 <div>
-                  <h4 className="font-black text-slate-900 text-sm sm:text-base">
+                  <h4 className="font-black text-slate-900 text-sm sm:text-base md:text-lg">
                     {b.title}
                   </h4>
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="text-[10px] font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
+                    <span className="text-[10px] md:text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
                       📄 {b.pagesCount}
                     </span>
-                    <span className="text-[10px] font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg">
+                    <span className="text-[10px] md:text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-lg">
                       إشراف: {b.supervisorName}
                     </span>
                   </div>
@@ -478,7 +443,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                   className="p-1.5 rounded-xl text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
                   title="حذف المذكرة"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
                 </button>
               )}
             </div>
@@ -486,9 +451,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             <div className="pt-2 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => handleDownloadBooklet(b)}
-                className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                className="py-2 md:py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 <span>تنزيل PDF</span>
               </button>
             </div>
@@ -496,9 +461,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         ))}
 
         {subjectBooklets.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-            <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-xs text-slate-500">لا توجد مذكرات مضافة حالياً في هذه المادة</p>
+          <div className="col-span-full text-center py-12 md:py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+            <FileText className="w-8 h-8 md:w-10 md:h-10 text-slate-300 mx-auto mb-2" />
+            <p className="text-xs md:text-sm text-slate-500">لا توجد مذكرات مضافة حالياً في هذه المادة</p>
           </div>
         )}
       </div>
@@ -511,7 +476,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl text-right space-y-4"
+              className="bg-white w-full max-w-md md:max-w-xl rounded-3xl p-6 md:p-8 shadow-2xl text-right space-y-4 md:space-y-5"
             >
               <h3 className="text-base font-black text-slate-900">
                 إضافة ملخص أو مذكرة جديدة للمادة
@@ -540,7 +505,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                     type="text"
                     value={bookletPages}
                     onChange={(e) => setBookletPages(e.target.value)}
-                    placeholder="مثال: 50 صفحة"
+                    placeholder="اكتب عدد الصفحات (مثال: 5)"
                     className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>

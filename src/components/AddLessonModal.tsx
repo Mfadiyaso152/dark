@@ -158,26 +158,26 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 text-right"
+        className="bg-white rounded-3xl w-full max-w-md md:max-w-xl lg:max-w-2xl shadow-2xl overflow-hidden border border-slate-100 text-right"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50/70">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
-              <Cloud className="w-5 h-5" />
+        <div className="flex items-center justify-between p-5 md:p-6 border-b border-slate-100 bg-slate-50/70">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="w-9 h-9 md:w-11 md:h-11 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
+              <Cloud className="w-5 h-5 md:w-6 md:h-6" />
             </div>
             <div>
-              <h2 className="text-base font-black text-slate-800">
+              <h2 className="text-base md:text-lg font-black text-slate-800">
                 {editingLesson ? 'تعديل الدرس' : 'إضافة درس جديد'}
               </h2>
-              <p className="text-[11px] text-slate-500">حفظ ونشر مباشر في السحابة</p>
+              <p className="text-[11px] md:text-xs text-slate-500">حفظ ونشر مباشر في السحابة</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl hover:bg-slate-200/80 text-slate-400 hover:text-slate-700 transition cursor-pointer"
+            className="p-1.5 md:p-2 rounded-xl hover:bg-slate-200/80 text-slate-400 hover:text-slate-700 transition cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 md:w-6 md:h-6" />
           </button>
         </div>
 

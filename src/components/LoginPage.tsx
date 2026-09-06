@@ -108,69 +108,69 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
         initial={{ opacity: 0, scale: 0.96, y: 16 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="w-full max-w-md bg-white/95 backdrop-blur-md rounded-3xl shadow-xl border border-slate-200/80 p-6 sm:p-8 space-y-6 relative z-10"
+        className="w-full max-w-md md:max-w-xl lg:max-w-2xl bg-white/95 backdrop-blur-md rounded-3xl shadow-xl border border-slate-200/80 p-6 sm:p-8 md:p-10 space-y-6 md:space-y-8 relative z-10"
       >
         {/* Top Tag & Logo */}
-        <div className="text-center space-y-3">
+        <div className="text-center space-y-3 md:space-y-4">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-xs font-bold shadow-2xs"
+            className="inline-flex items-center gap-1.5 px-3 md:px-4 py-1 md:py-1.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200 text-xs md:text-sm font-bold shadow-2xs"
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-500 animate-pulse" />
+            <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500 animate-pulse" />
             <span>منصة أول ثانوي • نظام المسارات 1446-1447هـ</span>
           </motion.div>
 
-          <div className="relative mx-auto w-16 h-16">
+          <div className="relative mx-auto w-16 h-16 md:w-20 md:h-20">
             <motion.div
               animate={{ rotate: [0, 6, -6, 0] }}
               transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-              className="w-16 h-16 bg-gradient-to-tr from-purple-700 via-indigo-600 to-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md shadow-purple-500/20"
+              className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-purple-700 via-indigo-600 to-blue-600 text-white rounded-2xl md:rounded-3xl flex items-center justify-center mx-auto shadow-md shadow-purple-500/20"
             >
-              <BookOpen className="w-8 h-8 text-white" />
+              <BookOpen className="w-8 h-8 md:w-10 md:h-10 text-white" />
             </motion.div>
           </div>
 
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
               مقررات وملخصات أول ثانوي
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1.5 leading-relaxed">
+            <p className="text-xs sm:text-sm md:text-base text-slate-500 font-medium mt-1.5 leading-relaxed">
               منصتك التعليمية المتكاملة لتصفح المقررات الدراسية، حفظ الشروحات، وتحميل مذكرات ومراجعات الـ PDF المعتمدة.
             </p>
           </div>
         </div>
 
         {/* Features Highlights Pills */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-right">
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-2.5 flex sm:flex-col items-center sm:items-start gap-2 text-slate-700">
-            <div className="w-7 h-7 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-              <BookOpen className="w-3.5 h-3.5" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3 pt-1 text-right">
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-2.5 md:p-3.5 flex sm:flex-col items-center sm:items-start gap-2 text-slate-700">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+              <BookOpen className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </div>
             <div>
-              <span className="text-xs font-bold block">شروحات كاملة</span>
-              <span className="text-[10px] text-slate-400 block sm:mt-0.5">دروس لجميع المواد</span>
+              <span className="text-xs md:text-sm font-bold block">شروحات كاملة</span>
+              <span className="text-[10px] md:text-xs text-slate-400 block sm:mt-0.5">دروس لجميع المواد</span>
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-2.5 flex sm:flex-col items-center sm:items-start gap-2 text-slate-700">
-            <div className="w-7 h-7 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-              <Download className="w-3.5 h-3.5" />
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-2.5 md:p-3.5 flex sm:flex-col items-center sm:items-start gap-2 text-slate-700">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </div>
             <div>
-              <span className="text-xs font-bold block">مذكرات PDF</span>
-              <span className="text-[10px] text-slate-400 block sm:mt-0.5">تحميل للمذاكرة</span>
+              <span className="text-xs md:text-sm font-bold block">مذكرات PDF</span>
+              <span className="text-[10px] md:text-xs text-slate-400 block sm:mt-0.5">تحميل للمذاكرة</span>
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-2.5 flex sm:flex-col items-center sm:items-start gap-2 text-slate-700">
-            <div className="w-7 h-7 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-              <Bookmark className="w-3.5 h-3.5" />
+          <div className="bg-slate-50 border border-slate-100 rounded-2xl p-2.5 md:p-3.5 flex sm:flex-col items-center sm:items-start gap-2 text-slate-700">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+              <Bookmark className="w-3.5 h-3.5 md:w-4 md:h-4" />
             </div>
             <div>
-              <span className="text-xs font-bold block">حفظ وإنجاز</span>
-              <span className="text-[10px] text-slate-400 block sm:mt-0.5">متابعة دراسية</span>
+              <span className="text-xs md:text-sm font-bold block">حفظ وإنجاز</span>
+              <span className="text-[10px] md:text-xs text-slate-400 block sm:mt-0.5">متابعة دراسية</span>
             </div>
           </div>
         </div>
@@ -181,7 +181,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             <motion.div
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-800 leading-relaxed font-medium text-center"
+              className="p-3 bg-amber-50 border border-amber-200 rounded-2xl text-xs md:text-sm text-amber-800 leading-relaxed font-medium text-center"
             >
               {authError}
             </motion.div>
@@ -190,9 +190,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
           <button
             onClick={handleRealGoogleLogin}
             disabled={isLoading}
-            className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-purple-500 text-slate-800 rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all duration-200 shadow-xs hover:shadow-md active:scale-[0.99] group cursor-pointer disabled:opacity-60"
+            className="w-full py-3.5 md:py-4 px-4 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-purple-500 text-slate-800 rounded-2xl font-black text-sm md:text-base flex items-center justify-center gap-3 transition-all duration-200 shadow-xs hover:shadow-md active:scale-[0.99] group cursor-pointer disabled:opacity-60"
           >
-            <svg className="w-5 h-5 transition group-hover:scale-110 shrink-0" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 md:w-6 md:h-6 transition group-hover:scale-110 shrink-0" viewBox="0 0 24 24">
               <path
                 fill="#4285F4"
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -215,7 +215,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             </span>
           </button>
 
-          <p className="text-[11px] text-center text-slate-400 font-medium">
+          <p className="text-[11px] md:text-xs text-center text-slate-400 font-medium">
             يتم تسجيلك تلقائياً كـ <span className="font-bold text-slate-600">طالب</span> لحفظ تقدمك ومحفوظاتك
           </p>
 
@@ -225,9 +225,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
+            className="w-full py-3 md:py-3.5 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm md:text-base flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
           >
-            <MessageCircle className="w-4 h-4 shrink-0" />
+            <MessageCircle className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
             <span>الدخول لقروب الواتساب</span>
           </a>
         </div>
