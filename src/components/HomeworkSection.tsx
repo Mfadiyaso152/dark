@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Subject, Homework } from '../types';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, formatDisplayName } from '../context/AuthContext';
 import {
   ArrowRight,
   ClipboardList,
@@ -37,7 +37,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   onToggleCompleteHomework,
   canEdit
 }) => {
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Form states
@@ -51,12 +51,11 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   const subjectHomeworks = homeworks.filter((h) => h.subjectId === subject.id);
 
   const handleOpenModal = () => {
-    // Default dueDate to tomorrow's date
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const yyyy = tomorrow.getFullYear();
-    const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');
-    const dd = String(tomorrow.getDate()).padStart(2, '0');
+    // Default to today's date (تاريخ أخذ الواجب)
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
     setDueDate(`${yyyy}-${mm}-${dd}`);
     setPageNumber('');
     setQuestionNumber('');
@@ -69,7 +68,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!dueDate.trim()) {
-      setFormError('يرجى تحديد تاريخ الواجب');
+      setFormError('يرجى تحديد تاريخ أخذ الواجب');
       return;
     }
     if (!pageNumber.trim()) {
@@ -81,7 +80,9 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
       return;
     }
 
-    const supervisorName = user?.name || (isSuperAdmin ? 'المشرف العام' : subject.supervisorName);
+    const isTeacher = isSuperAdmin || isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب');
+    const rawSupervisor = user?.name || (isSuperAdmin ? 'المشرف الأساسي' : subject.supervisorName);
+    const supervisorName = formatDisplayName(rawSupervisor, isTeacher);
 
     onAddHomework({
       subjectId: subject.id,
@@ -138,7 +139,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
               </span>
             </div>
             <p className="text-xs md:text-sm text-slate-600 mt-0.5">
-              متابعة الواجبات المدرسية وأرقام الصفحات والأسئلة وتواريخ التسليم
+              متابعة الواجبات المدرسية وتاريخ إعطائها وأرقام الصفحات والأسئلة
             </p>
           </div>
         </div>
@@ -180,7 +181,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-100 text-xs font-bold">
                       <Calendar className="w-3.5 h-3.5 text-purple-600" />
-                      <span>تسليم: {hw.dueDate}</span>
+                      <span>تاريخ أخذ الواجب: {hw.dueDate}</span>
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -270,8 +271,8 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                       ✓ تم الإنجاز
                     </span>
                   ) : (
-                    <span className="font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
-                      مطلوب تسليمه
+                    <span className="font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+                      مطلوب حله
                     </span>
                   )}
                 </div>
@@ -287,7 +288,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
             </div>
             <h4 className="text-base font-black text-slate-800">لا توجد واجبات مسجلة حالياً</h4>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              سيقوم المعلم المشرف لمادة {subject.name} أو المشرف العام بإضافة الواجبات المدرسية وتواريخ تسليمها هنا
+              سيقوم المعلم المشرف لمادة {subject.name} أو المشرف العام بإضافة الواجبات المدرسية وتاريخ أخذها هنا
             </p>
             {canEdit && (
               <motion.button
@@ -343,10 +344,10 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
               )}
 
               <form onSubmit={handleFormSubmit} className="space-y-3.5 text-right">
-                {/* Due Date */}
+                {/* Assignment Date (تاريخ أخذ الواجب) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    تاريخ الواجب / التسليم <span className="text-rose-500">*</span>
+                    تاريخ أخذ الواجب <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
@@ -440,3 +441,4 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
     </motion.div>
   );
 };
+

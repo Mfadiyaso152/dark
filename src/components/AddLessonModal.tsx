@@ -121,32 +121,6 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
       createdAt: editingLesson?.createdAt || new Date().toISOString()
     };
 
-    // Save to Firestore Cloud
-    try {
-      const lessonRef = doc(db, 'lessons', lessonId);
-      await setDoc(lessonRef, {
-        id: newLesson.id,
-        subjectId: newLesson.subjectId,
-        semester: 1,
-        title: newLesson.title,
-        pages: 'مرفق',
-        summary: newLesson.summary,
-        attachedFile: newLesson.attachedFile
-          ? {
-              name: newLesson.attachedFile.name,
-              type: newLesson.attachedFile.type,
-              size: newLesson.attachedFile.size,
-              dataUrl: newLesson.attachedFile.dataUrl
-            }
-          : null,
-        authorId: newLesson.authorId || '',
-        authorName: newLesson.authorName || '',
-        createdAt: newLesson.createdAt
-      }, { merge: true });
-    } catch (err) {
-      console.warn('Firestore lesson cloud save note:', err);
-    }
-
     onSaveLesson(newLesson);
     setIsSaving(false);
     onClose();

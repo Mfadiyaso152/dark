@@ -19,6 +19,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
+import { downloadFileFromCloud } from '../utils/cloudStorage';
 
 interface SubjectDetailViewProps {
   subject: Subject;
@@ -71,6 +72,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   const [subView, setSubView] = useState<'lessons' | 'booklets' | 'homework' | null>(null);
   const [isAddBookletModalOpen, setIsAddBookletModalOpen] = useState(false);
   const [isDownloadingAllLessons, setIsDownloadingAllLessons] = useState(false);
+  const [downloadingBookletId, setDownloadingBookletId] = useState<string | null>(null);
   const [showHomeworkSoonToast, setShowHomeworkSoonToast] = useState(false);
 
   // New booklet form state
@@ -150,50 +152,70 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   };
 
   const handleDownloadBooklet = async (booklet: SubjectBooklet) => {
-    let urlToUse = booklet.fileDataUrl;
-    if (!urlToUse) {
-      const stored = await getLargeFile(booklet.id);
-      if (stored) urlToUse = stored;
-    }
+    setDownloadingBookletId(booklet.id);
+    try {
+      let urlToUse = booklet.fileDataUrl;
+      if (!urlToUse) {
+        // First try local IndexedDB
+        const stored = await getLargeFile(booklet.id);
+        if (stored) {
+          urlToUse = stored;
+        } else {
+          // Then fetch from cloud chunks in Firestore
+          const cloudUrl = await downloadFileFromCloud(booklet.id);
+          if (cloudUrl) urlToUse = cloudUrl;
+        }
+      }
 
-    if (urlToUse) {
-      const a = document.createElement('a');
-      a.href = urlToUse;
-      a.download = booklet.fileName || `${booklet.title}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else {
-      const blob = new Blob(
-        [
-          `%PDF-1.4\n% مذكرة ملخص ${subject.name}\n${booklet.title}\nعدد الصفحات: ${booklet.pagesCount}\nإشراف: ${booklet.supervisorName}`
-        ],
-        { type: 'application/pdf' }
-      );
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${booklet.title.replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (urlToUse) {
+        const a = document.createElement('a');
+        a.href = urlToUse;
+        a.download = booklet.fileName || `${booklet.title}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      } else {
+        const blob = new Blob(
+          [
+            `%PDF-1.4\n% مذكرة ملخص ${subject.name}\n${booklet.title}\nعدد الصفحات: ${booklet.pagesCount}\nإشراف: ${booklet.supervisorName}`
+          ],
+          { type: 'application/pdf' }
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${booklet.title.replace(/\s+/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error('Failed to download booklet:', err);
+    } finally {
+      setDownloadingBookletId(null);
     }
   };
 
   // 1) Main Choices Screen: Gives user two distinct options to open
   if (!subView) {
     return (
-      <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        className="space-y-4 text-right font-['Tajawal',sans-serif]"
+      >
         {/* Top Navigation: Return to all subjects */}
         <div className="flex items-center justify-between gap-3">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={onBack}
-            className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group"
+            className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group active:scale-95"
           >
             <ArrowRight className="w-4 h-4 text-blue-600 transition group-hover:-translate-x-0.5" />
             <span>رجوع للمواد</span>
-          </button>
+          </motion.button>
           <span className="text-xs font-bold text-slate-400">{subject.code}</span>
         </div>
 
@@ -379,7 +401,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
     );
   }
 
@@ -402,16 +424,22 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   // 3) Lessons Page Screen
   if (subView === 'lessons') {
     return (
-      <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
+        className="space-y-4 text-right font-['Tajawal',sans-serif]"
+      >
         {/* Top Navigation: Return to Choices Screen */}
         <div className="flex items-center justify-between gap-3">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={() => setSubView(null)}
-            className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group"
+            className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group active:scale-95"
           >
             <ArrowRight className="w-4 h-4 text-blue-600 transition group-hover:-translate-x-0.5" />
             <span>رجوع لخيارات المادة</span>
-          </button>
+          </motion.button>
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-500">
@@ -494,22 +522,28 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           <MessageCircle className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
           <span>الدخول لقروب الواتساب</span>
         </a>
-      </div>
+      </motion.div>
     );
   }
 
   // 3) Booklets Page Screen
   return (
-    <div className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]">
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]"
+    >
       {/* Top Navigation: Return to Choices Screen */}
       <div className="flex items-center justify-between gap-3">
-        <button
+        <motion.button
+          whileTap={{ scale: 0.95 }}
           onClick={() => setSubView(null)}
-          className="py-2 md:py-2.5 px-3.5 md:px-4 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs md:text-sm font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group"
+          className="py-2 md:py-2.5 px-3.5 md:px-4 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs md:text-sm font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group active:scale-95"
         >
           <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-emerald-600 transition group-hover:-translate-x-0.5" />
           <span>رجوع لخيارات المادة</span>
-        </button>
+        </motion.button>
 
         <span className="text-xs md:text-sm font-bold text-slate-500">
           {subject.name} • {subjectBooklets.length} مذكرة
@@ -581,10 +615,15 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             <div className="pt-2 border-t border-slate-100 flex justify-end">
               <button
                 onClick={() => handleDownloadBooklet(b)}
-                className="py-2 md:py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                disabled={downloadingBookletId === b.id}
+                className="py-2 md:py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
               >
-                <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                <span>تنزيل PDF</span>
+                {downloadingBookletId === b.id ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                )}
+                <span>{downloadingBookletId === b.id ? 'جاري التنزيل...' : 'تنزيل PDF'}</span>
               </button>
             </div>
           </div>
@@ -678,6 +717,6 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, formatDisplayName } from '../context/AuthContext';
 import {
   X,
   LogOut,
@@ -15,7 +15,8 @@ export const AuthModal: React.FC = () => {
     logout,
     isAuthModalOpen,
     setIsAuthModalOpen,
-    authError
+    authError,
+    isTeacherOrSupervisor
   } = useAuth();
 
   const [customEmail, setCustomEmail] = useState('');
@@ -24,6 +25,8 @@ export const AuthModal: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   if (!isAuthModalOpen) return null;
+
+  const displayName = user ? formatDisplayName(user.name, isTeacherOrSupervisor) : '';
 
   const handleRealGoogleLogin = async () => {
     setIsLoading(true);
@@ -66,7 +69,7 @@ export const AuthModal: React.FC = () => {
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               {user
-                ? `أهلاً بك، ${user.name}`
+                ? `أهلاً بك، ${displayName}`
                 : 'اختر حساب Google لتسجيل الدخول والوصول للملخصات'}
             </p>
           </div>
@@ -83,12 +86,12 @@ export const AuthModal: React.FC = () => {
               <div className="p-4 rounded-2xl border bg-slate-50 border-slate-200 flex items-center gap-3.5">
                 <img
                   src={user.avatar}
-                  alt={user.name}
+                  alt={displayName}
                   className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
                 />
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-extrabold text-[#1E293B] text-sm truncate">{user.name}</h3>
+                  <h3 className="font-extrabold text-[#1E293B] text-sm truncate">{displayName}</h3>
                   <p className="text-xs text-slate-400 font-mono truncate">{user.email}</p>
                 </div>
               </div>

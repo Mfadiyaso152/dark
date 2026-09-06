@@ -19,6 +19,7 @@ import {
 import { Lesson, Subject } from '../types';
 import { downloadLessonPDF } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
+import { downloadFileFromCloud } from '../utils/cloudStorage';
 import confetti from 'canvas-confetti';
 
 interface LessonDetailModalProps {
@@ -30,7 +31,7 @@ interface LessonDetailModalProps {
   isBookmarked: boolean;
   onToggleComplete: (id: string) => void;
   onToggleBookmark: (id: string) => void;
-  onOpenAllPdfModal: (subject?: Subject) => void;
+  onOpenAllPdfModal?: (subject?: Subject) => void;
 }
 
 export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
@@ -68,6 +69,10 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     if (!url) {
       const stored = await getLargeFile('lesson-file-' + lesson.id);
       if (stored) url = stored;
+    }
+    if (!url) {
+      const cloudUrl = await downloadFileFromCloud('lesson-file-' + lesson.id);
+      if (cloudUrl) url = cloudUrl;
     }
     if (url) {
       const a = document.createElement('a');

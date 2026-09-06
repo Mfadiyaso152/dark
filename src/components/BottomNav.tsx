@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Home, Bookmark, Users, Sparkles } from 'lucide-react';
+import { motion } from 'motion/react';
 
 export type TabType = 'home' | 'subjects' | 'qudurat' | 'saved' | 'users';
 
@@ -22,9 +23,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       {/* Navigation Items Bar */}
       <div className="h-16 md:h-18 flex items-center justify-around px-2 sm:px-4 md:px-8">
         {/* Home */}
-        <button
+        <motion.button
+          whileTap={{ scale: 0.88 }}
           onClick={() => onTabChange('home')}
-          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition cursor-pointer select-none active:scale-90 ${
             activeTab === 'home'
               ? 'text-[#3B82F6] font-black'
               : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -32,12 +34,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         >
           <Home className="w-5 h-5 md:w-6 md:h-6" />
           <span className="text-[11px] md:text-xs mt-1">الرئيسية</span>
-        </button>
+        </motion.button>
 
         {/* Qudurat (قريباً) */}
-        <button
+        <motion.button
+          whileTap={{ scale: 0.88 }}
           onClick={() => onTabChange('qudurat')}
-          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none active:scale-90 ${
             activeTab === 'qudurat'
               ? 'text-indigo-600 font-black'
               : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -50,12 +53,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             </span>
           </div>
           <span className="text-[11px] md:text-xs mt-1">القدرات</span>
-        </button>
+        </motion.button>
 
         {/* Saved / Bookmarks */}
-        <button
+        <motion.button
+          whileTap={{ scale: 0.88 }}
           onClick={() => onTabChange('saved')}
-          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer ${
+          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none active:scale-90 ${
             activeTab === 'saved'
               ? 'text-[#3B82F6] font-black'
               : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -70,13 +74,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             )}
           </div>
           <span className="text-[11px] md:text-xs mt-1">المحفوظات</span>
-        </button>
+        </motion.button>
 
         {/* Users (For Super Admin) */}
         {isSuperAdmin && (
-          <button
+          <motion.button
+            whileTap={{ scale: 0.88 }}
             onClick={() => onTabChange('users')}
-            className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition cursor-pointer ${
+            className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition cursor-pointer select-none active:scale-90 ${
               activeTab === 'users'
                 ? 'text-[#7C3AED] font-black'
                 : 'text-slate-400 hover:text-slate-600 font-medium'
@@ -84,7 +89,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <Users className="w-5 h-5 md:w-6 md:h-6" />
             <span className="text-[11px] md:text-xs mt-1">المستخدمين</span>
-          </button>
+          </motion.button>
         )}
       </div>
     </div>

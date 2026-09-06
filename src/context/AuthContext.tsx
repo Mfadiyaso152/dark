@@ -19,11 +19,37 @@ import {
 
 export const SUPER_ADMIN_EMAIL = 'mfb.15.f@gmail.com';
 
+export const SUPER_ADMIN_USER: User = {
+  id: 'admin-super-01',
+  name: 'محمد فيصل',
+  email: SUPER_ADMIN_EMAIL,
+  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  role: 'supervisor',
+  jobTitle: 'المشرف الأساسي',
+  grade: 'أول ثانوي',
+  isSuperAdmin: true,
+  isAssistantAdmin: false,
+  joinedAt: '2026-08-15',
+  lastLogin: new Date().toISOString()
+};
+
+export const INITIAL_USERS: User[] = [SUPER_ADMIN_USER];
+
+export const formatDisplayName = (name?: string, isTeacherOrSupervisor?: boolean): string => {
+  if (!name || typeof name !== 'string') return isTeacherOrSupervisor ? 'أ. المعلم' : 'طالبنا العزيز';
+  const clean = name.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+  if (isTeacherOrSupervisor) {
+    return `أ. ${clean}`;
+  }
+  return clean;
+};
+
 export const getSafeUserDocId = (email: string): string => {
-  return email.trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
+  return (email || '').trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
 };
 
 export const deduplicateUsersByEmail = (users: User[]): User[] => {
+
   const map = new Map<string, User>();
 
   for (const u of users) {
@@ -123,6 +149,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
   isAssistantAdmin: boolean;
+  isTeacherOrSupervisor: boolean;
   canAddContent: boolean;
   canManageSubject: (subjectIdOrName?: string) => boolean;
   registeredUsers: User[];
@@ -144,22 +171,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const SUPER_ADMIN_USER: User = {
-  id: 'admin-super-01',
-  name: 'محمد فيصل',
-  email: SUPER_ADMIN_EMAIL,
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  role: 'supervisor',
-  jobTitle: 'المشرف الأساسي',
-  grade: 'أول ثانوي',
-  isSuperAdmin: true,
-  isAssistantAdmin: false,
-  joinedAt: '2026-08-15',
-  lastLogin: new Date().toISOString()
-};
-
-const INITIAL_USERS: User[] = [SUPER_ADMIN_USER];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -215,9 +226,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const isSuper = parsed.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
           const jobTitle = isSuper ? 'المشرف الأساسي' : (parsed.jobTitle || 'طالب');
           const isTeacher = isSuper || (jobTitle !== 'طالب');
+          const cleanName = (parsed.name || parsed.email.split('@')[0] || 'مستخدم')
+            .replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '')
+            .trim();
           return {
             ...parsed,
-            name: parsed.name.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim(),
+            name: cleanName,
             jobTitle,
             isSuperAdmin: isSuper,
             isAssistantAdmin: !isSuper && isTeacher,
@@ -472,6 +486,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user?.role === 'supervisor' ||
     user?.role === 'teacher' ||
     (!!user?.jobTitle && user?.jobTitle !== 'طالب');
+
+  const isTeacherOrSupervisor = isSuperAdmin || isAssistantAdmin || canAddContent;
 
   // Specific Subject Authorization Check:
   // Teachers can ONLY manage their assigned subject.
@@ -806,6 +822,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isSuperAdmin,
         isAssistantAdmin,
+        isTeacherOrSupervisor,
         canAddContent,
         canManageSubject,
         registeredUsers,

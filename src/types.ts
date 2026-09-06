@@ -98,6 +98,8 @@ export interface AttachedFile {
   size: string;
   dataUrl?: string;
   previewUrl?: string;
+  hasFile?: boolean;
+  fileId?: string;
 }
 
 export interface User {
@@ -176,6 +178,8 @@ export interface SubjectBooklet {
   fileName?: string;
   createdAt: string;
   supervisorName: string;
+  hasFile?: boolean;
+  fileSize?: string;
 }
 
 export interface Homework {

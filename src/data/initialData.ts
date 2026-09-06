@@ -1,6 +1,26 @@
 import { Subject, Lesson, SubjectBooklet } from '../types';
 
 export const INITIAL_SUBJECTS: Subject[] = [
+  // ==================== الفصل الدراسي الأول (Semester 1) ====================
+  // 1. رياضيات 1-1
+  {
+    id: 'math-1',
+    name: 'رياضيات 1-1',
+    code: 'MATH-101',
+    semester: 1,
+    icon: 'Calculator',
+    emoji: '📐',
+    color: 'blue',
+    gradient: 'from-[#3B82F6] to-[#2563EB]',
+    lightBg: 'bg-[#EFF6FF]',
+    borderColor: 'border-[#DBEAFE]',
+    badgeBg: 'bg-[#3B82F6]',
+    titleColor: 'text-[#1E3A8A]',
+    countColor: 'text-[#60A5FA]',
+    description: 'التبرير والبرهان، التوازي والتعامد، وتطابق المثلثات والعلاقات في المثلث',
+    supervisorName: 'خالد القحطاني'
+  },
+  // 2. كيمياء 1
   {
     id: 'chem-1',
     name: 'كيمياء 1',
@@ -15,95 +35,28 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#3B82F6]',
     titleColor: 'text-[#1E3A8A]',
     countColor: 'text-[#60A5FA]',
-    description: 'المادة وخواصها، التركيب الذري، والتوزيع الإلكتروني',
+    description: 'المادة وخواصها، التركيب الذري، والتوزيع الإلكتروني والجدول الدوري والتفاعلات',
     supervisorName: 'فهد الشمري'
   },
+  // 3. أحياء 1
   {
-    id: 'math-1',
-    name: 'رياضيات 1-1',
-    code: 'MATH-101',
+    id: 'bio-1',
+    name: 'أحياء 1',
+    code: 'BIO-101',
     semester: 1,
-    icon: 'Calculator',
-    emoji: '📐',
-    color: 'green',
-    gradient: 'from-[#22C55E] to-[#16A34A]',
-    lightBg: 'bg-[#F0FDF4]',
-    borderColor: 'border-[#DCFCE7]',
-    badgeBg: 'bg-[#22C55E]',
-    titleColor: 'text-[#14532D]',
-    countColor: 'text-[#4ADE80]',
-    description: 'التبرير والبرهان، التوازي والتعامد، وتطابق المثلثات',
-    supervisorName: 'خالد القحطاني'
+    icon: 'Dna',
+    emoji: '🧬',
+    color: 'teal',
+    gradient: 'from-[#14B8A6] to-[#0D9488]',
+    lightBg: 'bg-[#F0FDFA]',
+    borderColor: 'border-[#CCFBF1]',
+    badgeBg: 'bg-[#14B8A6]',
+    titleColor: 'text-[#134E4A]',
+    countColor: 'text-[#2DD4BF]',
+    description: 'دراسة الحياة، تنظيم تنوع الحياة، والبكتيريا والفيروسات والطلائعيات والفطريات',
+    supervisorName: 'مشرف الأحياء'
   },
-  {
-    id: 'eco-1',
-    name: 'علم البيئة 1-1',
-    code: 'ECOL-101',
-    semester: 1,
-    icon: 'TreePine',
-    emoji: '🌿',
-    color: 'emerald',
-    gradient: 'from-[#10B981] to-[#059669]',
-    lightBg: 'bg-[#ECFDF5]',
-    borderColor: 'border-[#D1FAE5]',
-    badgeBg: 'bg-[#10B981]',
-    titleColor: 'text-[#064E3B]',
-    countColor: 'text-[#34D399]',
-    description: 'مبادئ علم البيئة، المجتمعات الحيوية، وديناميكية الجماعات',
-    supervisorName: 'ناصر السبيعي'
-  },
-  {
-    id: 'digi-1',
-    name: 'تقنية رقمية 1-1',
-    code: 'TECH-101',
-    semester: 1,
-    icon: 'Cpu',
-    emoji: '💻',
-    color: 'purple',
-    gradient: 'from-[#8B5CF6] to-[#7C3AED]',
-    lightBg: 'bg-[#F5F3FF]',
-    borderColor: 'border-[#EDE9FE]',
-    badgeBg: 'bg-[#8B5CF6]',
-    titleColor: 'text-[#4C1D95]',
-    countColor: 'text-[#A78BFA]',
-    description: 'أساسيات علم الحاسب، الحوسبة السحابية، والبرمجة بلغة بايثون',
-    supervisorName: 'راكان العتيبي'
-  },
-  {
-    id: 'think-1',
-    name: 'تفكير ناقد',
-    code: 'CRIT-101',
-    semester: 1,
-    icon: 'Brain',
-    emoji: '🧠',
-    color: 'red',
-    gradient: 'from-[#EF4444] to-[#DC2626]',
-    lightBg: 'bg-[#FEF2F2]',
-    borderColor: 'border-[#FEE2E2]',
-    badgeBg: 'bg-[#EF4444]',
-    titleColor: 'text-[#7F1D1D]',
-    countColor: 'text-[#F87171]',
-    description: 'مستويات التفكير، معايير وخطوات التفكير الناقد، والاستدلال',
-    supervisorName: 'مشرف المادة'
-  },
-  {
-    id: 'tafsir-1',
-    name: 'التفسير',
-    code: 'TAF-101',
-    semester: 1,
-    isComingSoon: true,
-    icon: 'BookOpenCheck',
-    emoji: '📖',
-    color: 'emerald',
-    gradient: 'from-[#059669] to-[#047857]',
-    lightBg: 'bg-[#ECFDF5]',
-    borderColor: 'border-[#A7F3D0]',
-    badgeBg: 'bg-[#059669]',
-    titleColor: 'text-[#065F46]',
-    countColor: 'text-[#10B981]',
-    description: 'علوم القرآن وأصول التفسير وقواعده، وتدبر السور والآيات المقررة وهداياتها',
-    supervisorName: 'مشرف المادة'
-  },
+  // 4. إنجليزي 1-1
   {
     id: 'eng-1',
     name: 'إنجليزي 1-1 (Mega Goal)',
@@ -121,13 +74,32 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: 'Grammar, Vocabulary, Reading & Writing for 1st Secondary',
     supervisorName: 'أحمد & David'
   },
+  // 5. تقنية رقمية 1-1
+  {
+    id: 'digi-1',
+    name: 'تقنية رقمية 1-1',
+    code: 'TECH-101',
+    semester: 1,
+    icon: 'Cpu',
+    emoji: '💻',
+    color: 'purple',
+    gradient: 'from-[#8B5CF6] to-[#7C3AED]',
+    lightBg: 'bg-[#F5F3FF]',
+    borderColor: 'border-[#EDE9FE]',
+    badgeBg: 'bg-[#8B5CF6]',
+    titleColor: 'text-[#4C1D95]',
+    countColor: 'text-[#A78BFA]',
+    description: 'أساسيات علم الحاسب، الحوسبة السحابية، والبرمجة بلغة بايثون وتصميم المستندات',
+    supervisorName: 'راكان العتيبي'
+  },
+  // 6. كفايات لغوية 1-1
   {
     id: 'lang-1',
-    name: 'الكفايات اللغوية 1-1',
+    name: 'كفايات لغوية 1-1',
     code: 'LANG-101',
     semester: 1,
     icon: 'PenTool',
-    emoji: '📖',
+    emoji: '✍️',
     color: 'pink',
     gradient: 'from-[#EC4899] to-[#DB2777]',
     lightBg: 'bg-[#FDF2F9]',
@@ -135,10 +107,30 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#EC4899]',
     titleColor: 'text-[#831843]',
     countColor: 'text-[#F472B6]',
-    description: 'الجملة الاسمية ونواسخها، همزتا الوصل والقطع، والقراءة السريعة',
+    description: 'الجملة الاسمية ونواسخها، همزتا الوصل والقطع، والقراءة السريعة والمهارات الإملائية',
     supervisorName: 'فاطمة الغامدي'
   },
-  // ==================== الفصل الدراسي الثاني (Part 2 - P2) ====================
+  // 7. قرآن و تفسير
+  {
+    id: 'tafsir-1',
+    name: 'قرآن و تفسير',
+    code: 'TAF-101',
+    semester: 1,
+    icon: 'BookOpenCheck',
+    emoji: '📖',
+    color: 'emerald',
+    gradient: 'from-[#059669] to-[#047857]',
+    lightBg: 'bg-[#ECFDF5]',
+    borderColor: 'border-[#A7F3D0]',
+    badgeBg: 'bg-[#059669]',
+    titleColor: 'text-[#065F46]',
+    countColor: 'text-[#10B981]',
+    description: 'تلاوة وحفظ القرآن الكريم وتدبر معاني الآيات وأسباب النزول وأصول التفسير',
+    supervisorName: 'مشرف المادة'
+  },
+
+  // ==================== الفصل الدراسي الثاني (Semester 2 - P2) (كلها قريباً) ====================
+  // 1. رياضيات 1-2
   {
     id: 'math-2',
     name: 'رياضيات 1-2',
@@ -157,6 +149,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: 'العلاقات والدوال العكسية والجذرية، والمحددات والمصفوفات',
     supervisorName: 'خالد القحطاني'
   },
+  // 2. فيزياء 1
   {
     id: 'phys-1',
     name: 'فيزياء 1',
@@ -175,14 +168,15 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: 'مدخل إلى علم الفيزياء، الحركة المتسارعة، والقوى في بعد واحد',
     supervisorName: 'فهد الشمري'
   },
+  // 3. علم البيئة
   {
-    id: 'bio-1',
-    name: 'علم الأحياء 1',
-    code: 'BIO-101',
+    id: 'eco-1',
+    name: 'علم البيئة',
+    code: 'ECOL-101',
     semester: 2,
     isComingSoon: true,
-    icon: 'Dna',
-    emoji: '🧬',
+    icon: 'TreePine',
+    emoji: '🌿',
     color: 'emerald',
     gradient: 'from-[#10B981] to-[#059669]',
     lightBg: 'bg-[#ECFDF5]',
@@ -190,9 +184,10 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#10B981]',
     titleColor: 'text-[#064E3B]',
     countColor: 'text-[#34D399]',
-    description: 'دراسة الحياة، تنظيم تنوع الحياة، والبكتيريا والفيروسات',
+    description: 'مبادئ علم البيئة، المجتمعات الحيوية، وديناميكية الجماعات الحيوية والتنوع الحيوي',
     supervisorName: 'ناصر السبيعي'
   },
+  // 4. إنجليزي 1-2
   {
     id: 'eng-2',
     name: 'إنجليزي 1-2 (Mega Goal)',
@@ -208,17 +203,56 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#F97316]',
     titleColor: 'text-[#7C2D12]',
     countColor: 'text-[#FB923C]',
-    description: 'Mega Goal 1.2 for 1st Secondary Semester 2',
+    description: 'Mega Goal 1.2 Grammar, Vocabulary & Communication Skills',
     supervisorName: 'David & أحمد'
   },
+  // 5. تقنية رقمية 1-2
+  {
+    id: 'digi-2',
+    name: 'تقنية رقمية 1-2',
+    code: 'TECH-102',
+    semester: 2,
+    isComingSoon: true,
+    icon: 'Cpu',
+    emoji: '💻',
+    color: 'purple',
+    gradient: 'from-[#8B5CF6] to-[#7C3AED]',
+    lightBg: 'bg-[#F5F3FF]',
+    borderColor: 'border-[#EDE9FE]',
+    badgeBg: 'bg-[#8B5CF6]',
+    titleColor: 'text-[#4C1D95]',
+    countColor: 'text-[#A78BFA]',
+    description: 'تصميم المواقع، قواعد البيانات، وتحليل البيانات البرمجية',
+    supervisorName: 'راكان العتيبي'
+  },
+  // 6. المعرفة المالية
+  {
+    id: 'fin-1',
+    name: 'المعرفة المالية',
+    code: 'FIN-101',
+    semester: 2,
+    isComingSoon: true,
+    icon: 'Coins',
+    emoji: '💰',
+    color: 'indigo',
+    gradient: 'from-[#6366F1] to-[#4F46E5]',
+    lightBg: 'bg-[#EEF2FF]',
+    borderColor: 'border-[#E0E7FF]',
+    badgeBg: 'bg-[#6366F1]',
+    titleColor: 'text-[#312E81]',
+    countColor: 'text-[#818CF8]',
+    description: 'إدارة الأموال الشخصية، الميزانية، الاستثمار، والادخار الذكي',
+    supervisorName: 'مشرف المادة'
+  },
+  // 7. كفايات لغوية 1-2
   {
     id: 'lang-2',
-    name: 'الكفايات اللغوية 1-2',
+    name: 'كفايات لغوية 1-2',
     code: 'LANG-102',
     semester: 2,
     isComingSoon: true,
     icon: 'PenTool',
-    emoji: '📖',
+    emoji: '✍️',
     color: 'pink',
     gradient: 'from-[#EC4899] to-[#DB2777]',
     lightBg: 'bg-[#FDF2F9]',
@@ -226,9 +260,10 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#EC4899]',
     titleColor: 'text-[#831843]',
     countColor: 'text-[#F472B6]',
-    description: 'الكفاية الإملائية والكتابية والتواصل الإقناعي',
+    description: 'الكفاية الإملائية والكتابية والتواصل الإقناعي والقراءة النقدية',
     supervisorName: 'فاطمة الغامدي'
   },
+  // 8. الدراسات الاجتماعية
   {
     id: 'soc-1',
     name: 'الدراسات الاجتماعية',
@@ -237,19 +272,20 @@ export const INITIAL_SUBJECTS: Subject[] = [
     isComingSoon: true,
     icon: 'GraduationCap',
     emoji: '🌍',
-    color: 'purple',
-    gradient: 'from-[#8B5CF6] to-[#7C3AED]',
-    lightBg: 'bg-[#F5F3FF]',
-    borderColor: 'border-[#EDE9FE]',
-    badgeBg: 'bg-[#8B5CF6]',
-    titleColor: 'text-[#4C1D95]',
-    countColor: 'text-[#A78BFA]',
+    color: 'rose',
+    gradient: 'from-[#F43F5E] to-[#E11D48]',
+    lightBg: 'bg-[#FFF1F2]',
+    borderColor: 'border-[#FFE4E6]',
+    badgeBg: 'bg-[#F43F5E]',
+    titleColor: 'text-[#881337]',
+    countColor: 'text-[#FB7185]',
     description: 'المملكة العربية السعودية والعالم، والتنمية الاقتصادية والمجتمعية',
     supervisorName: 'مشرف المادة'
   },
+  // 9. حديث 1
   {
     id: 'hadith-1',
-    name: 'الحديث والثقافة الإسلامية',
+    name: 'حديث 1',
     code: 'HAD-101',
     semester: 2,
     isComingSoon: true,
@@ -262,7 +298,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#059669]',
     titleColor: 'text-[#065F46]',
     countColor: 'text-[#10B981]',
-    description: 'السنة النبوية وأهميتها، وقيم وأخلاق المسلم في الحياة',
+    description: 'السنة النبوية وأهميتها، وقيم وأخلاق المسلم في الحياة والمعاملات',
     supervisorName: 'مشرف المادة'
   }
 ];

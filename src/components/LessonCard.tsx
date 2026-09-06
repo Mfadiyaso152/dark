@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { downloadLessonPDF } from '../utils/pdfGenerator';
 import { useAuth } from '../context/AuthContext';
+import { getLargeFile } from '../utils/fileStorage';
+import { downloadFileFromCloud } from '../utils/cloudStorage';
 import confetti from 'canvas-confetti';
 
 interface LessonCardProps {
@@ -42,11 +44,41 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   const handleDownload = async (e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     setIsDownloading(true);
-    const ok = await downloadLessonPDF(lesson, subject);
-    setIsDownloading(false);
-    if (ok) {
-      setDownloadDone(true);
-      setTimeout(() => setDownloadDone(false), 2500);
+
+    try {
+      // If lesson has an attached file from supervisor/teacher
+      if (lesson.attachedFile) {
+        let fileUrl = lesson.attachedFile.dataUrl;
+        if (!fileUrl) {
+          fileUrl = await getLargeFile('lesson-file-' + lesson.id);
+        }
+        if (!fileUrl) {
+          fileUrl = await downloadFileFromCloud('lesson-file-' + lesson.id);
+        }
+        if (fileUrl) {
+          const link = document.createElement('a');
+          link.href = fileUrl;
+          link.download = lesson.attachedFile.name || `${lesson.title}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setIsDownloading(false);
+          setDownloadDone(true);
+          setTimeout(() => setDownloadDone(false), 2500);
+          return;
+        }
+      }
+
+      // Fallback: Generate summary PDF
+      const ok = await downloadLessonPDF(lesson, subject);
+      setIsDownloading(false);
+      if (ok) {
+        setDownloadDone(true);
+        setTimeout(() => setDownloadDone(false), 2500);
+      }
+    } catch (err) {
+      console.error('Error downloading lesson file:', err);
+      setIsDownloading(false);
     }
   };
 
@@ -119,23 +151,12 @@ export const LessonCard: React.FC<LessonCardProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirmDelete) {
-                      onDelete(lesson.id);
-                      setConfirmDelete(false);
-                    } else {
-                      setConfirmDelete(true);
-                      setTimeout(() => setConfirmDelete(false), 3500);
-                    }
+                    onDelete(lesson.id);
                   }}
-                  className={`p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 ${
-                    confirmDelete
-                      ? 'bg-rose-500 text-white hover:bg-rose-600 px-2 shadow-xs'
-                      : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                  }`}
-                  title={confirmDelete ? 'اضغط مرة أخرى لتأكيد الحذف' : 'حذف الدرس'}
+                  className="p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-90"
+                  title="حذف الدرس مباشرة"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  {confirmDelete && <span className="text-[10px] font-bold">تأكيد؟</span>}
                 </button>
               )}
             </div>

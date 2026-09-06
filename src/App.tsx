@@ -24,6 +24,7 @@ import {
   sanitizeExistingLocalStorage
 } from './utils/storage';
 import { storeLargeFile, deleteLargeFile } from './utils/fileStorage';
+import { uploadFileToCloud, deleteFileFromCloud } from './utils/cloudStorage';
 
 export default function App() {
   const { user, isSuperAdmin, canAddContent, canManageSubject } = useAuth();
@@ -36,37 +37,56 @@ export default function App() {
 
   const [subjects] = useState<Subject[]>(INITIAL_SUBJECTS);
 
-  // Lessons: Always ensure all authentic curriculum lessons are present
+  // Lessons: Always ensure all authentic curriculum lessons are present unless deleted
   const [lessons, setLessons] = useState<Lesson[]>(() => {
+    const deletedIds = new Set<string>();
+    try {
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_lesson_ids') || '[]');
+      if (Array.isArray(storedDeleted)) {
+        storedDeleted.forEach((id) => deletedIds.add(id));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+
     try {
       const saved = safeGetItem('thanaweya_lessons_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_LESSONS.length) {
-          const hasVoc = parsed.some((l) => l.subjectId === 'voc-1');
-          if (!hasVoc) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((l) => !deletedIds.has(l.id));
         }
       }
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_LESSONS;
+    return INITIAL_LESSONS.filter((l) => !deletedIds.has(l.id));
   });
 
   // Booklets (مذكرات وملخصات)
   const [booklets, setBooklets] = useState<SubjectBooklet[]>(() => {
+    const deletedIds = new Set<string>();
+    try {
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_booklet_ids') || '[]');
+      if (Array.isArray(storedDeleted)) {
+        storedDeleted.forEach((id) => deletedIds.add(id));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+
     try {
       const saved = safeGetItem('thanaweya_subject_booklets_v4');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.filter((b) => !deletedIds.has(b.id));
         }
       }
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_BOOKLETS;
+    return INITIAL_BOOKLETS.filter((b) => !deletedIds.has(b.id));
   });
 
   // Sync booklets safely to localStorage (stripping heavy base64 to protect quota)
@@ -81,6 +101,15 @@ export default function App() {
       const cloudLessons: Lesson[] = [];
       const deletedIds = new Set<string>();
 
+      try {
+        const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_lesson_ids') || '[]');
+        if (Array.isArray(storedDeleted)) {
+          storedDeleted.forEach((id) => deletedIds.add(id));
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         if (data.isDeleted) {
@@ -89,6 +118,13 @@ export default function App() {
           cloudLessons.push(data as Lesson);
         }
       });
+
+      // Save merged deleted IDs permanently so deleted lessons NEVER return
+      try {
+        safeSetItem('thanaweya_deleted_lesson_ids', JSON.stringify(Array.from(deletedIds)));
+      } catch (e) {
+        console.warn(e);
+      }
 
       setLessons((prev) => {
         const map = new Map<string, Lesson>();
@@ -415,11 +451,30 @@ export default function App() {
       return;
     }
 
-    // If attached file exists, store in IndexedDB to avoid quota issues
-    if (newLesson.attachedFile?.dataUrl) {
-      await storeLargeFile('lesson-file-' + newLesson.id, newLesson.attachedFile.dataUrl);
-    }
+    const fileId = 'lesson-file-' + newLesson.id;
+    const hasFileData = !!newLesson.attachedFile?.dataUrl;
+    const attachedFileDataUrl = newLesson.attachedFile?.dataUrl;
 
+    // 1. Cloud-safe document: strictly metadata (no bulky dataUrl)
+    // Small payload (<1KB) writes to Firestore in milliseconds (~50ms), triggering onSnapshot instantly for all students!
+    const cloudLesson: Lesson = {
+      ...newLesson,
+      attachedFile: newLesson.attachedFile
+        ? {
+            name: newLesson.attachedFile.name,
+            type: newLesson.attachedFile.type,
+            size: newLesson.attachedFile.size,
+            hasFile: true,
+            fileId,
+            previewUrl:
+              newLesson.attachedFile.previewUrl && newLesson.attachedFile.previewUrl.length < 50000
+                ? newLesson.attachedFile.previewUrl
+                : undefined
+          }
+        : undefined
+    };
+
+    // 2. Immediate local state update for uploader (maintaining dataUrl in memory)
     setLessons((prev) => {
       const existingIndex = prev.findIndex((l) => l.id === newLesson.id);
       if (existingIndex >= 0) {
@@ -430,11 +485,18 @@ export default function App() {
       return [newLesson, ...prev];
     });
 
-    // Cloud Firestore save: pushes immediately to all other users in real time
+    // 3. Instant cloud push: reaches all students at the exact moment of addition!
     try {
-      await setDoc(doc(db, 'lessons', newLesson.id), newLesson, { merge: true });
+      await setDoc(doc(db, 'lessons', newLesson.id), cloudLesson, { merge: true });
     } catch (err) {
-      console.warn('Firestore lesson save error:', err);
+      console.error('Firestore lesson save error:', err);
+    }
+
+    // 4. Upload file in safe chunks to Firestore & cache in IndexedDB
+    if (hasFileData && attachedFileDataUrl) {
+      uploadFileToCloud(fileId, attachedFileDataUrl).catch((err) => {
+        console.error('Error uploading lesson file chunks:', err);
+      });
     }
   };
 
@@ -443,16 +505,28 @@ export default function App() {
     if (target && !canManageSubject(target.subjectId)) {
       return;
     }
-    // Delete file from IndexedDB
-    deleteLargeFile('lesson-file-' + lessonId);
-
-    // Immediate local state update
-    setLessons((prev) => prev.filter((l) => l.id !== lessonId));
-
-    // Cloud Firestore deletion: marks deleted & deletes doc so all clients update instantly
+    // 1. Permanently remember deleted ID in localStorage
     try {
-      await setDoc(doc(db, 'lessons', lessonId), { id: lessonId, isDeleted: true }, { merge: true });
-      await deleteDoc(doc(db, 'lessons', lessonId));
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_lesson_ids') || '[]');
+      const updatedDeleted = Array.from(new Set([...storedDeleted, lessonId]));
+      safeSetItem('thanaweya_deleted_lesson_ids', JSON.stringify(updatedDeleted));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // 2. Delete file chunks and local cache
+    deleteFileFromCloud('lesson-file-' + lessonId).catch(console.warn);
+
+    // 3. Immediate local state update
+    setLessons((prev) => {
+      const updated = prev.filter((l) => l.id !== lessonId);
+      safeSetItem('thanaweya_lessons_v3', JSON.stringify(sanitizeLessonsForStorage(updated)));
+      return updated;
+    });
+
+    // 4. Cloud Firestore deletion: persist tombstone so all connected devices know it is deleted
+    try {
+      await setDoc(doc(db, 'lessons', lessonId), { id: lessonId, isDeleted: true, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
       console.warn('Firestore lesson delete error:', err);
     }
@@ -464,25 +538,42 @@ export default function App() {
       return;
     }
     const bookletId = 'booklet-' + Date.now();
-    const b: SubjectBooklet = {
-      ...newBooklet,
+    const hasFileData = !!newBooklet.fileDataUrl;
+    const fileDataUrl = newBooklet.fileDataUrl;
+
+    // 1. Cloud-safe metadata document: strictly metadata (no bulky dataUrl)
+    // Saves to Firestore in milliseconds (~50ms), triggering onSnapshot instantly on all student devices!
+    const cloudBooklet: SubjectBooklet = {
       id: bookletId,
+      subjectId: newBooklet.subjectId,
+      title: newBooklet.title,
+      pagesCount: newBooklet.pagesCount,
+      description: newBooklet.description,
+      fileName: newBooklet.fileName,
+      supervisorName: newBooklet.supervisorName,
+      hasFile: hasFileData,
       createdAt: new Date().toISOString().split('T')[0]
     };
 
-    // Store PDF in IndexedDB
-    if (b.fileDataUrl) {
-      await storeLargeFile(bookletId, b.fileDataUrl);
+    // 2. Immediate local state update for uploader (with fileDataUrl)
+    const localBooklet: SubjectBooklet = {
+      ...cloudBooklet,
+      fileDataUrl
+    };
+    setBooklets((prev) => [localBooklet, ...prev]);
+
+    // 3. Instant cloud push: arrives on all student devices at the exact moment of addition!
+    try {
+      await setDoc(doc(db, 'booklets', bookletId), cloudBooklet, { merge: true });
+    } catch (err) {
+      console.error('Firestore booklet save error:', err);
     }
 
-    // Immediate local state update
-    setBooklets((prev) => [b, ...prev]);
-
-    // Cloud Firestore save: pushes immediately to all students in real time
-    try {
-      await setDoc(doc(db, 'booklets', bookletId), b, { merge: true });
-    } catch (err) {
-      console.warn('Firestore booklet save error:', err);
+    // 4. Upload file in safe chunks to Firestore & store in IndexedDB
+    if (fileDataUrl) {
+      uploadFileToCloud(bookletId, fileDataUrl).catch((err) => {
+        console.error('Error uploading booklet chunks:', err);
+      });
     }
   };
 
@@ -491,15 +582,28 @@ export default function App() {
     if (target && !canManageSubject(target.subjectId)) {
       return;
     }
-    deleteLargeFile(id);
-
-    // Immediate local state update
-    setBooklets((prev) => prev.filter((b) => b.id !== id));
-
-    // Cloud Firestore deletion: marks deleted & deletes doc
+    // 1. Permanently remember deleted ID in localStorage
     try {
-      await setDoc(doc(db, 'booklets', id), { id, isDeleted: true }, { merge: true });
-      await deleteDoc(doc(db, 'booklets', id));
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_booklet_ids') || '[]');
+      const updatedDeleted = Array.from(new Set([...storedDeleted, id]));
+      safeSetItem('thanaweya_deleted_booklet_ids', JSON.stringify(updatedDeleted));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // 2. Delete file chunks and local cache
+    deleteFileFromCloud(id).catch(console.warn);
+
+    // 3. Immediate local state update
+    setBooklets((prev) => {
+      const updated = prev.filter((b) => b.id !== id);
+      safeSetItem('thanaweya_subject_booklets_v4', JSON.stringify(sanitizeBookletsForStorage(updated)));
+      return updated;
+    });
+
+    // 4. Cloud Firestore deletion
+    try {
+      await setDoc(doc(db, 'booklets', id), { id, isDeleted: true, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
       console.warn('Firestore booklet delete error:', err);
     }
@@ -534,13 +638,25 @@ export default function App() {
       return;
     }
 
-    // Immediate local state update
-    setHomeworks((prev) => prev.filter((h) => h.id !== id));
-
-    // Cloud Firestore deletion
+    // 1. Permanently remember deleted ID in localStorage
     try {
-      await setDoc(doc(db, 'homeworks', id), { id, isDeleted: true }, { merge: true });
-      await deleteDoc(doc(db, 'homeworks', id));
+      const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_hw_ids') || '[]');
+      const updatedDeleted = Array.from(new Set([...storedDeleted, id]));
+      safeSetItem('thanaweya_deleted_hw_ids', JSON.stringify(updatedDeleted));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // 2. Immediate local state update
+    setHomeworks((prev) => {
+      const updated = prev.filter((h) => h.id !== id);
+      safeSetItem('thanaweya_homeworks_v2', JSON.stringify(updated));
+      return updated;
+    });
+
+    // 3. Cloud Firestore deletion
+    try {
+      await setDoc(doc(db, 'homeworks', id), { id, isDeleted: true, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
       console.warn('Firestore homework delete error:', err);
     }
@@ -718,8 +834,8 @@ export default function App() {
                     <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 absolute right-3.5 md:right-4 top-3 md:top-3.5" />
                   </div>
 
-                  {/* Responsive Subject Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4 md:gap-5 lg:gap-6">
+                  {/* Responsive Subject List (Rectangular & Stacked) */}
+                  <div className="flex flex-col gap-3 md:gap-3.5 w-full">
                     {displayedSubjects.map((sub) => {
                       const subjectLessons = safeLessons.filter((l) => l.subjectId === sub.id);
                       return (

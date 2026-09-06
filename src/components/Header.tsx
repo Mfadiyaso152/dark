@@ -1,13 +1,15 @@
 import React from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, formatDisplayName } from '../context/AuthContext';
 import { LogOut } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, canAddContent, isSuperAdmin, isAssistantAdmin } = useAuth();
 
-  // Clean greeting: no titles, no prefixes
-  const cleanName = user?.name
-    ? user.name.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim()
+  const isTeacherOrSupervisor = isSuperAdmin || isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب');
+
+  // If user is a teacher/supervisor, prefix with 'أ.'
+  const displayName = user?.name
+    ? formatDisplayName(user.name, isTeacherOrSupervisor)
     : 'طالبنا العزيز';
 
   return (
@@ -20,7 +22,7 @@ export const Header: React.FC = () => {
             {user?.avatar ? (
               <img
                 src={user.avatar}
-                alt={cleanName}
+                alt={displayName}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -35,7 +37,7 @@ export const Header: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-xl md:text-2xl font-black text-[#1E293B] leading-tight truncate">
-                أهلاً {cleanName}
+                أهلاً {displayName}
               </h1>
 
               {/* Small Logout Button next to user name - Icon Only */}
@@ -58,3 +60,4 @@ export const Header: React.FC = () => {
     </header>
   );
 };
+
