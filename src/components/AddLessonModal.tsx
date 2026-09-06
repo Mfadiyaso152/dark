@@ -31,12 +31,18 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
   editingLesson,
   defaultSubjectId
 }) => {
-  const { user } = useAuth();
+  const { user, canManageSubject } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [subjectId, setSubjectId] = useState<string>(
-    editingLesson ? editingLesson.subjectId : defaultSubjectId || (subjects[0]?.id || '')
-  );
+  // Filter subjects to only those the teacher/supervisor is authorized to manage
+  const allowedSubjects = subjects.filter((s) => canManageSubject(s.id));
+  const fallbackSubjectId = allowedSubjects[0]?.id || defaultSubjectId || (subjects[0]?.id || '');
+
+  const [subjectId, setSubjectId] = useState<string>(() => {
+    if (editingLesson) return editingLesson.subjectId;
+    if (defaultSubjectId && canManageSubject(defaultSubjectId)) return defaultSubjectId;
+    return fallbackSubjectId;
+  });
   const [title, setTitle] = useState<string>(editingLesson ? editingLesson.title : '');
   const [attachedFile, setAttachedFile] = useState<AttachedFile | undefined>(
     editingLesson?.attachedFile
@@ -88,6 +94,10 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
     }
     if (!subjectId) {
       setError('يرجى اختيار المادة');
+      return;
+    }
+    if (!canManageSubject(subjectId)) {
+      setError('عذراً، لا تملك صلاحية النشر في هذه المادة.');
       return;
     }
 
@@ -189,7 +199,7 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
               onChange={(e) => setSubjectId(e.target.value)}
               className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none"
             >
-              {subjects.map((sub) => (
+              {(allowedSubjects.length > 0 ? allowedSubjects : subjects).map((sub) => (
                 <option key={sub.id} value={sub.id}>
                   {sub.emoji} {sub.name}
                 </option>

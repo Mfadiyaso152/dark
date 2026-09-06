@@ -49,8 +49,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   completedLessonIds,
   bookmarkedLessonIds
 }) => {
-  const { user, canAddContent } = useAuth();
-  const isSupervisor = canAddContent;
+  const { user, canManageSubject } = useAuth();
+  // Check if current user is authorized to add/edit/delete content for THIS specific subject
+  const canEditCurrentSubject = canManageSubject(subject.id);
 
   // Sub-view: null = show the two main choices, 'lessons' = show lessons page, 'booklets' = show booklets page
   const [subView, setSubView] = useState<'lessons' | 'booklets' | null>(null);
@@ -329,7 +330,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               <span>{isDownloadingAllLessons ? 'جاري تجهيز الملف...' : 'تنزيل كامل الدروس والشروحات (PDF)'}</span>
             </button>
 
-            {isSupervisor && (
+            {canEditCurrentSubject && (
               <button
                 onClick={onOpenAddLesson}
                 className="py-2 px-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
@@ -353,8 +354,8 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               onSelect={onSelectLesson}
               onToggleComplete={onToggleComplete}
               onToggleBookmark={onToggleBookmark}
-              onEdit={onOpenEditLesson}
-              onDelete={onDeleteLesson}
+              onEdit={canEditCurrentSubject ? onOpenEditLesson : undefined}
+              onDelete={canEditCurrentSubject ? onDeleteLesson : undefined}
             />
           ))}
 
@@ -419,7 +420,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             <span>{isDownloadingAllBooklets ? 'جاري التنزيل...' : 'تنزيل كامل الملخصات (PDF)'}</span>
           </button>
 
-          {isSupervisor && (
+          {canEditCurrentSubject && (
             <button
               onClick={() => setIsAddBookletModalOpen(true)}
               className="py-2 px-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
@@ -458,7 +459,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                 </div>
               </div>
 
-              {isSupervisor && (
+              {canEditCurrentSubject && (
                 <button
                   onClick={() => onDeleteBooklet(b.id)}
                   className="p-1.5 rounded-xl text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"

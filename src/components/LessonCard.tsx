@@ -34,7 +34,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   onEdit,
   onDelete
 }) => {
-  const { user, canAddContent } = useAuth();
+  const { user, canManageSubject } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadDone, setDownloadDone] = useState(false);
 
@@ -70,7 +70,8 @@ export const LessonCard: React.FC<LessonCardProps> = ({
     onToggleBookmark(lesson.id);
   };
 
-  const isSupervisor = canAddContent;
+  const targetSubjectId = subject?.id || lesson.subjectId;
+  const canEditThisLesson = canManageSubject(targetSubjectId);
 
   return (
     <div
@@ -97,8 +98,8 @@ export const LessonCard: React.FC<LessonCardProps> = ({
             <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
           </button>
 
-          {/* Supervisor Actions */}
-          {isSupervisor && (
+          {/* Teacher/Supervisor Actions */}
+          {canEditThisLesson && (
             <div className="flex items-center gap-1 mr-1">
               {onEdit && (
                 <button

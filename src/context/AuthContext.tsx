@@ -123,6 +123,7 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   isAssistantAdmin: boolean;
   canAddContent: boolean;
+  canManageSubject: (subjectIdOrName?: string) => boolean;
   registeredUsers: User[];
   assistantAdminEmails: string[];
   isRealtimeConnected: boolean;
@@ -475,6 +476,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user?.role === 'teacher' ||
     (!!user?.jobTitle && user?.jobTitle !== 'طالب');
 
+  // Specific Subject Authorization Check:
+  // Teachers can ONLY manage their assigned subject.
+  // Super Admin and Assistant Supervisor ("مشرف مساعد") can manage all subjects.
+  // Students cannot manage any subject.
+  const canManageSubject = useCallback((subjectIdOrName?: string): boolean => {
+    if (!user || !user.email) return false;
+    const cleanEmail = user.email.trim().toLowerCase();
+
+    // 1. Super Admin has full permissions across all subjects
+    if (isSuperAdmin || cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      return true;
+    }
+
+    // 2. Assistant Supervisor has full permissions across all subjects
+    if (user.role === 'supervisor' || user.jobTitle === 'مشرف مساعد') {
+      return true;
+    }
+
+    // 3. Student has NO manage permissions anywhere
+    if (user.jobTitle === 'طالب' || !user.jobTitle) {
+      return false;
+    }
+
+    // 4. If checking general capability (e.g. is user a teacher?)
+    if (!subjectIdOrName) {
+      return user.role === 'teacher' || user.jobTitle !== 'طالب';
+    }
+
+    const job = user.jobTitle.trim().toLowerCase();
+    const target = subjectIdOrName.trim().toLowerCase();
+
+    // 5. Check specific subject assignment:
+    if (job.includes('رياضيات')) {
+      return target === 'math-1' || target.includes('رياضيات') || target.includes('math');
+    }
+    if (job.includes('كيمياء')) {
+      return target === 'chem-1' || target.includes('كيمياء') || target.includes('chem');
+    }
+    if (job.includes('بيئة') || job.includes('أحياء') || job.includes('احياء')) {
+      return target === 'eco-1' || target.includes('بيئة') || target.includes('بيئه') || target.includes('eco');
+    }
+    if (job.includes('تقنية') || job.includes('رقمية') || job.includes('حاسب')) {
+      return target === 'digi-1' || target.includes('تقنية') || target.includes('رقمية') || target.includes('tech') || target.includes('digi');
+    }
+    if (job.includes('تفكير') || job.includes('ناقد')) {
+      return target === 'think-1' || target.includes('تفكير') || target.includes('ناقد') || target.includes('think') || target.includes('crit');
+    }
+    if (job.includes('تفسير') || job.includes('قرآن')) {
+      return target === 'tafsir-1' || target.includes('تفسير') || target.includes('taf');
+    }
+    if (job.includes('إنجليزي') || job.includes('انجليزي') || job.includes('english')) {
+      return target === 'eng-1' || target.includes('إنجليزي') || target.includes('انجليزي') || target.includes('eng');
+    }
+    if (job.includes('كفايات') || job.includes('عربي') || job.includes('لغوية')) {
+      return target === 'lang-1' || target.includes('كفايات') || target.includes('لغوية') || target.includes('lang');
+    }
+
+    return false;
+  }, [user, isSuperAdmin]);
+
   // Real Google Sign-In with Firebase Auth
   const loginWithGoogle = async (): Promise<boolean> => {
     setAuthError(null);
@@ -749,6 +810,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSuperAdmin,
         isAssistantAdmin,
         canAddContent,
+        canManageSubject,
         registeredUsers,
         assistantAdminEmails,
         isRealtimeConnected,

@@ -17,7 +17,7 @@ import { useAuth } from './context/AuthContext';
 import { db, doc, setDoc, getDoc } from './lib/firebase';
 
 export default function App() {
-  const { user, isSuperAdmin, canAddContent } = useAuth();
+  const { user, isSuperAdmin, canAddContent, canManageSubject } = useAuth();
   const isSupervisorRole = canAddContent;
 
   const [subjects] = useState<Subject[]>(INITIAL_SUBJECTS);
@@ -245,6 +245,9 @@ export default function App() {
   };
 
   const handleSaveLesson = (newLesson: Lesson) => {
+    if (!canManageSubject(newLesson.subjectId)) {
+      return;
+    }
     setLessons((prev) => {
       const existingIndex = prev.findIndex((l) => l.id === newLesson.id);
       if (existingIndex >= 0) {
@@ -257,11 +260,18 @@ export default function App() {
   };
 
   const handleDeleteLesson = (lessonId: string) => {
+    const target = lessons.find((l) => l.id === lessonId);
+    if (target && !canManageSubject(target.subjectId)) {
+      return;
+    }
     setLessons((prev) => prev.filter((l) => l.id !== lessonId));
   };
 
   // Booklet actions
   const handleAddBooklet = (newBooklet: Omit<SubjectBooklet, 'id' | 'createdAt'>) => {
+    if (!canManageSubject(newBooklet.subjectId)) {
+      return;
+    }
     const b: SubjectBooklet = {
       ...newBooklet,
       id: 'booklet-' + Date.now(),
@@ -271,6 +281,10 @@ export default function App() {
   };
 
   const handleDeleteBooklet = (id: string) => {
+    const target = booklets.find((b) => b.id === id);
+    if (target && !canManageSubject(target.subjectId)) {
+      return;
+    }
     setBooklets((prev) => prev.filter((b) => b.id !== id));
   };
 
@@ -289,6 +303,7 @@ export default function App() {
   };
 
   const openEditLessonModal = (lesson: Lesson) => {
+    if (!canManageSubject(lesson.subjectId)) return;
     setEditingLesson(lesson);
     setIsAddLessonModalOpen(true);
   };
@@ -328,6 +343,7 @@ export default function App() {
                 <div className="space-y-2.5">
                   {filteredLessons.map((lesson) => {
                     const subject = subjects.find((s) => s.id === lesson.subjectId);
+                    const canEditThis = canManageSubject(lesson.subjectId);
                     return (
                       <LessonCard
                         key={lesson.id}
@@ -338,8 +354,8 @@ export default function App() {
                         onSelect={openLessonDetail}
                         onToggleComplete={handleToggleComplete}
                         onToggleBookmark={handleToggleBookmark}
-                        onEdit={isSupervisorRole ? openEditLessonModal : undefined}
-                        onDelete={isSupervisorRole ? handleDeleteLesson : undefined}
+                        onEdit={canEditThis ? openEditLessonModal : undefined}
+                        onDelete={canEditThis ? handleDeleteLesson : undefined}
                       />
                     );
                   })}
