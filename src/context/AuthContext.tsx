@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User, UserRole } from '../types';
+import { User, UserRole, USER_JOB_OPTIONS } from '../types';
 import {
   auth,
   googleProvider,
@@ -31,13 +31,17 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
     if (isInvalidOrFakeUser(u.name, emailKey)) continue;
 
     const isSuper = emailKey === SUPER_ADMIN_EMAIL.toLowerCase();
+    const jobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || (u.role === 'supervisor' ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب')));
+    const isTeacherOrSupervisor = isSuper || (jobTitle !== 'طالب');
 
     if (!map.has(emailKey)) {
       map.set(emailKey, {
         ...u,
         email: emailKey,
+        jobTitle,
         isSuperAdmin: isSuper,
-        role: isSuper ? 'supervisor' : u.role
+        isAssistantAdmin: !isSuper && isTeacherOrSupervisor,
+        role: isSuper ? 'supervisor' : (u.role || (isTeacherOrSupervisor ? 'teacher' : 'student'))
       });
     } else {
       const existing = map.get(emailKey)!;
@@ -46,13 +50,17 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
           ? u.lastLogin
           : existing.lastLogin;
       const avatar = u.avatar && !u.avatar.includes('dicebear') ? u.avatar : existing.avatar;
+      const finalJobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || existing.jobTitle || 'طالب');
+      const finalIsTeacher = isSuper || finalJobTitle !== 'طالب';
 
       map.set(emailKey, {
         ...existing,
         ...u,
         name: isSuper ? (u.name || existing.name) : (existing.name || u.name),
+        jobTitle: finalJobTitle,
         isSuperAdmin: isSuper,
-        role: isSuper ? 'supervisor' : (u.role === 'supervisor' || existing.role === 'supervisor' ? 'supervisor' : 'student'),
+        isAssistantAdmin: !isSuper && finalIsTeacher,
+        role: isSuper ? 'supervisor' : (finalIsTeacher ? (u.role === 'supervisor' ? 'supervisor' : 'teacher') : 'student'),
         avatar,
         lastLogin
       });
@@ -70,6 +78,7 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
       ...existingSuper,
       email: SUPER_ADMIN_EMAIL,
       isSuperAdmin: true,
+      jobTitle: 'المشرف الأساسي',
       role: 'supervisor'
     });
   }
@@ -113,6 +122,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
   isAssistantAdmin: boolean;
+  canAddContent: boolean;
   registeredUsers: User[];
   assistantAdminEmails: string[];
   isRealtimeConnected: boolean;
@@ -121,6 +131,7 @@ interface AuthContextType {
   loginWithGoogleEmail: (email: string, name?: string, avatar?: string) => Promise<void>;
   logout: () => Promise<void>;
   switchRole: (role: UserRole) => void;
+  updateUserJob: (email: string, jobTitle: string) => Promise<{ success: boolean; message: string }>;
   addAssistantAdmin: (email: string, name: string) => { success: boolean; message: string };
   removeAssistantAdmin: (email: string) => { success: boolean; message: string };
   toggleUserRole: (userId: string) => { success: boolean; message: string };
@@ -138,6 +149,7 @@ export const SUPER_ADMIN_USER: User = {
   email: SUPER_ADMIN_EMAIL,
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
   role: 'supervisor',
+  jobTitle: 'المشرف الأساسي',
   grade: 'أول ثانوي',
   isSuperAdmin: true,
   isAssistantAdmin: false,
@@ -199,13 +211,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const parsed = JSON.parse(saved);
         if (parsed && parsed.email) {
           const isSuper = parsed.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-          const isAsst = !isSuper && (parsed.isAssistantAdmin || parsed.role === 'supervisor');
+          const jobTitle = isSuper ? 'المشرف الأساسي' : (parsed.jobTitle || 'طالب');
+          const isTeacher = isSuper || (jobTitle !== 'طالب');
           return {
             ...parsed,
             name: parsed.name.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim(),
+            jobTitle,
             isSuperAdmin: isSuper,
-            isAssistantAdmin: isAsst,
-            role: isSuper || isAsst ? 'supervisor' : parsed.role || 'student'
+            isAssistantAdmin: !isSuper && isTeacher,
+            role: isSuper ? 'supervisor' : (isTeacher ? (parsed.role || 'teacher') : 'student')
           };
         }
       } catch (e) {
@@ -235,6 +249,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: cleanEmail,
           avatar: userObj.avatar,
           role: userObj.role,
+          jobTitle: userObj.jobTitle || 'طالب',
           grade: userObj.grade || 'أول ثانوي',
           isSuperAdmin: !!userObj.isSuperAdmin,
           isAssistantAdmin: !!userObj.isAssistantAdmin,
@@ -256,8 +271,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (fbUser && fbUser.email) {
         const cleanEmail = fbUser.email.toLowerCase().trim();
         const isSuper = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase();
-        const isAsst = !isSuper && assistantAdminEmails.some((e) => e.toLowerCase() === cleanEmail);
-        
+
+        // Check if there is existing cloud data for this user
+        let existingJobTitle = isSuper ? 'المشرف الأساسي' : 'طالب';
+        let existingRole: UserRole = isSuper ? 'supervisor' : 'student';
+
+        try {
+          const docSnap = await getDoc(doc(db, 'users', getSafeUserDocId(cleanEmail)));
+          if (docSnap.exists()) {
+            const d = docSnap.data();
+            if (d && d.jobTitle) {
+              existingJobTitle = d.jobTitle;
+              existingRole = d.role || (d.jobTitle === 'طالب' ? 'student' : 'teacher');
+            }
+          }
+        } catch (e) {
+          console.warn('Cloud user lookup note:', e);
+        }
+
+        const isTeacher = isSuper || (existingJobTitle !== 'طالب');
         const rawName = fbUser.displayName || cleanEmail.split('@')[0];
         const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
 
@@ -268,10 +300,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatar:
             fbUser.photoURL ||
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
-          role: isSuper || isAsst ? 'supervisor' : 'student',
+          role: isSuper ? 'supervisor' : existingRole,
+          jobTitle: existingJobTitle,
           grade: 'أول ثانوي',
           isSuperAdmin: isSuper,
-          isAssistantAdmin: isAsst,
+          isAssistantAdmin: !isSuper && isTeacher,
           joinedAt: new Date().toISOString().split('T')[0],
           lastLogin: new Date().toISOString()
         };
@@ -285,7 +318,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
-  }, [assistantAdminEmails, syncUserToCloud]);
+  }, [syncUserToCloud]);
 
   // Real-time Firestore Listener: Instantly captures any user logging in anywhere!
   useEffect(() => {
@@ -310,11 +343,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (isInvalidOrFakeUser(cleanName, email)) return;
 
             const isSuper = email === SUPER_ADMIN_EMAIL.toLowerCase();
-            const isAsst =
-              !isSuper &&
-              (assistantAdminEmails.some((e) => e.toLowerCase() === email) ||
-                data.role === 'supervisor' ||
-                data.isAssistantAdmin === true);
+            const jobTitle = isSuper ? 'المشرف الأساسي' : (data.jobTitle || (data.role === 'supervisor' ? 'مشرف مساعد' : 'طالب'));
+            const isTeacher = isSuper || jobTitle !== 'طالب';
 
             cloudUsers.push({
               id: docSnap.id,
@@ -323,10 +353,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar:
                 data.avatar ||
                 `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName || email)}`,
-              role: isSuper || isAsst ? 'supervisor' : 'student',
+              role: isSuper ? 'supervisor' : (data.role || (isTeacher ? 'teacher' : 'student')),
+              jobTitle,
               grade: data.grade || 'أول ثانوي',
               isSuperAdmin: isSuper,
-              isAssistantAdmin: isAsst,
+              isAssistantAdmin: !isSuper && isTeacher,
               joinedAt:
                 data.joinedAt ||
                 (data.lastLogin ? data.lastLogin.split('T')[0] : new Date().toISOString().split('T')[0]),
@@ -343,6 +374,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (e) {
             console.error(e);
           }
+
+          // If current logged-in user's role was updated by super admin in real-time, sync it
+          setUser((currentUser) => {
+            if (!currentUser || !currentUser.email) return currentUser;
+            const myEmail = currentUser.email.toLowerCase();
+            const foundInCloud = merged.find((u) => u.email.toLowerCase() === myEmail);
+            if (foundInCloud && (foundInCloud.jobTitle !== currentUser.jobTitle || foundInCloud.role !== currentUser.role)) {
+              const updated = {
+                ...currentUser,
+                jobTitle: foundInCloud.jobTitle,
+                role: foundInCloud.role,
+                isAssistantAdmin: foundInCloud.isAssistantAdmin
+              };
+              localStorage.setItem('thanaweya_user', JSON.stringify(updated));
+              return updated;
+            }
+            return currentUser;
+          });
         },
         (error) => {
           console.warn('Firestore real-time listener notice:', error);
@@ -358,7 +407,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Firestore real-time onSnapshot init error:', e);
       setIsRealtimeConnected(false);
     }
-  }, [assistantAdminEmails]);
+  }, []);
 
   // Manual refresh from Firestore cloud
   const refreshUsers = async () => {
@@ -372,16 +421,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const cleanName = String(data.name || email.split('@')[0]).replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
           if (isInvalidOrFakeUser(cleanName, email)) return;
           const isSuper = email === SUPER_ADMIN_EMAIL.toLowerCase();
-          const isAsst = !isSuper && (assistantAdminEmails.includes(email) || data.role === 'supervisor');
+          const jobTitle = isSuper ? 'المشرف الأساسي' : (data.jobTitle || 'طالب');
+          const isTeacher = isSuper || jobTitle !== 'طالب';
           cloudUsers.push({
             id: docSnap.id,
             name: cleanName,
             email,
             avatar: data.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
-            role: isSuper || isAsst ? 'supervisor' : 'student',
+            role: isSuper ? 'supervisor' : (data.role || (isTeacher ? 'teacher' : 'student')),
+            jobTitle,
             grade: data.grade || 'أول ثانوي',
             isSuperAdmin: isSuper,
-            isAssistantAdmin: isAsst,
+            isAssistantAdmin: !isSuper && isTeacher,
             joinedAt: data.joinedAt || new Date().toISOString().split('T')[0],
             lastLogin: data.lastLogin
           });
@@ -416,7 +467,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isSuperAdmin = user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
   const isAssistantAdmin =
     !isSuperAdmin &&
-    (user?.role === 'supervisor' || assistantAdminEmails.some((e) => e.toLowerCase() === user?.email?.toLowerCase()));
+    (user?.role === 'supervisor' || user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
+
+  const canAddContent =
+    isSuperAdmin ||
+    user?.role === 'supervisor' ||
+    user?.role === 'teacher' ||
+    (!!user?.jobTitle && user?.jobTitle !== 'طالب');
 
   // Real Google Sign-In with Firebase Auth
   const loginWithGoogle = async (): Promise<boolean> => {
@@ -426,9 +483,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (result.user && result.user.email) {
         const cleanEmail = result.user.email.toLowerCase().trim();
         const isSuper = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase();
-        const isAsst = !isSuper && assistantAdminEmails.some((e) => e.toLowerCase() === cleanEmail);
+        
+        let existingJob = isSuper ? 'المشرف الأساسي' : 'طالب';
+        let existingRole: UserRole = isSuper ? 'supervisor' : 'student';
+
+        // Check if user already exists
+        const found = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
+        if (found && found.jobTitle) {
+          existingJob = found.jobTitle;
+          existingRole = found.role;
+        }
+
         const rawName = result.user.displayName || cleanEmail.split('@')[0];
         const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+        const isTeacher = isSuper || (existingJob !== 'طالب');
 
         const newUserObj: User = {
           id: result.user.uid,
@@ -437,10 +505,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatar:
             result.user.photoURL ||
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
-          role: isSuper || isAsst ? 'supervisor' : 'student',
+          role: isSuper ? 'supervisor' : existingRole,
+          jobTitle: existingJob,
           grade: 'أول ثانوي',
           isSuperAdmin: isSuper,
-          isAssistantAdmin: isAsst,
+          isAssistantAdmin: !isSuper && isTeacher,
           joinedAt: new Date().toISOString().split('T')[0],
           lastLogin: new Date().toISOString()
         };
@@ -470,7 +539,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     const cleanEmail = email.trim().toLowerCase();
     const isSuper = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase();
-    const isAsst = !isSuper && assistantAdminEmails.some((e) => e.toLowerCase() === cleanEmail);
 
     let existing = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
     let targetUser: User;
@@ -480,15 +548,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nowIso = new Date().toISOString();
 
     if (existing) {
+      const jobTitle = isSuper ? 'المشرف الأساسي' : (existing.jobTitle || 'طالب');
+      const isTeacher = isSuper || jobTitle !== 'طالب';
       targetUser = {
         ...existing,
         name: cleanName,
+        jobTitle,
         isSuperAdmin: isSuper,
-        isAssistantAdmin: isAsst,
-        role: isSuper || isAsst ? 'supervisor' : existing.role,
+        isAssistantAdmin: !isSuper && isTeacher,
+        role: isSuper ? 'supervisor' : (isTeacher ? (existing.role === 'supervisor' ? 'supervisor' : 'teacher') : 'student'),
         lastLogin: nowIso
       };
     } else {
+      // First time registering -> Guaranteed 'طالب'
+      const jobTitle = isSuper ? 'المشرف الأساسي' : 'طالب';
+      const isTeacher = isSuper;
       targetUser = {
         id: `user-${Date.now()}`,
         name: cleanName,
@@ -496,10 +570,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         avatar:
           avatar ||
           `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
-        role: isSuper || isAsst ? 'supervisor' : 'student',
+        role: isSuper ? 'supervisor' : 'student',
+        jobTitle,
         grade: 'أول ثانوي',
         isSuperAdmin: isSuper,
-        isAssistantAdmin: isAsst,
+        isAssistantAdmin: isTeacher,
         joinedAt: nowIso.split('T')[0],
         lastLogin: nowIso
       };
@@ -535,6 +610,78 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     syncUserToCloud(updated);
   };
 
+  // Update user role / job title (Only Super Admin can do this)
+  const updateUserJob = async (email: string, jobTitle: string): Promise<{ success: boolean; message: string }> => {
+    if (!isSuperAdmin) {
+      return { success: false, message: 'عذراً، فقط المشرف الأساسي يملك صلاحية تعيين وظائف المستخدمين.' };
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      return { success: false, message: 'لا يمكن تعديل وظيفة المشرف الأساسي.' };
+    }
+
+    const jobOption = USER_JOB_OPTIONS.find((j) => j.value === jobTitle) || USER_JOB_OPTIONS[0];
+    const newRole: UserRole = jobOption.role;
+    const isTeacherOrSupervisor = jobOption.isSupervisorOrTeacher;
+
+    // Update assistantAdminEmails
+    let nextAssistants = assistantAdminEmails.filter((e) => e.toLowerCase() !== cleanEmail);
+    if (isTeacherOrSupervisor) {
+      nextAssistants.push(cleanEmail);
+    }
+    setAssistantAdminEmails(nextAssistants);
+
+    // Update registeredUsers state
+    setRegisteredUsers((prev) =>
+      prev.map((u) => {
+        if (u.email.toLowerCase() === cleanEmail) {
+          return {
+            ...u,
+            jobTitle: jobOption.value,
+            role: newRole,
+            isAssistantAdmin: isTeacherOrSupervisor
+          };
+        }
+        return u;
+      })
+    );
+
+    // If target user is the currently active user (e.g. self-testing)
+    if (user && user.email.toLowerCase() === cleanEmail) {
+      const updatedSelf = {
+        ...user,
+        jobTitle: jobOption.value,
+        role: newRole,
+        isAssistantAdmin: isTeacherOrSupervisor
+      };
+      setUser(updatedSelf);
+      localStorage.setItem('thanaweya_user', JSON.stringify(updatedSelf));
+    }
+
+    // Sync to Firestore Cloud immediately
+    try {
+      const docId = getSafeUserDocId(cleanEmail);
+      await setDoc(
+        doc(db, 'users', docId),
+        {
+          jobTitle: jobOption.value,
+          role: newRole,
+          isAssistantAdmin: isTeacherOrSupervisor,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn('Error updating user job in Firestore:', err);
+    }
+
+    return {
+      success: true,
+      message: `تم تعيين وظيفة (${jobOption.label}) للمستخدم بنجاح.`
+    };
+  };
+
   // Only Super Admin can add assistant admins
   const addAssistantAdmin = (email: string, name: string): { success: boolean; message: string } => {
     if (!isSuperAdmin) {
@@ -550,42 +697,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'هذا البريد مسجل بالفعل' };
     }
 
-    if (assistantAdminEmails.some((e) => e.toLowerCase() === cleanEmail)) {
-      return { success: false, message: 'هذا المستخدم مضاف بالفعل كمساعد' };
-    }
-
-    const updatedAssistants = [...assistantAdminEmails, cleanEmail];
-    setAssistantAdminEmails(updatedAssistants);
-
-    setRegisteredUsers((prev) => {
-      const exists = prev.find((u) => u.email.toLowerCase() === cleanEmail);
-      if (exists) {
-        return prev.map((u) =>
-          u.email.toLowerCase() === cleanEmail
-            ? { ...u, role: 'supervisor', isAssistantAdmin: true }
-            : u
-        );
-      } else {
-        const cleanName = (name || cleanEmail.split('@')[0]).replace(/^(أ\.|أستاذ\s*)/g, '').trim();
-        const newUser: User = {
-          id: `asst-${Date.now()}`,
-          name: cleanName,
-          email: cleanEmail,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
-          role: 'supervisor',
-          grade: 'أول ثانوي',
-          isSuperAdmin: false,
-          isAssistantAdmin: true,
-          joinedAt: new Date().toISOString().split('T')[0],
-          lastLogin: new Date().toISOString()
-        };
-        return [newUser, ...prev];
-      }
-    });
-
-    // Also update in Firestore cloud
-    const docId = getSafeUserDocId(cleanEmail);
-    setDoc(doc(db, 'users', docId), { role: 'supervisor', isAssistantAdmin: true }, { merge: true }).catch(console.warn);
+    updateUserJob(cleanEmail, 'مشرف مساعد');
 
     return {
       success: true,
@@ -600,24 +712,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const updatedAssistants = assistantAdminEmails.filter((e) => e.toLowerCase() !== cleanEmail);
-    setAssistantAdminEmails(updatedAssistants);
-
-    setRegisteredUsers((prev) =>
-      prev.map((u) =>
-        u.email.toLowerCase() === cleanEmail
-          ? { ...u, role: 'student', isAssistantAdmin: false }
-          : u
-      )
-    );
-
-    // Also update in Firestore cloud
-    const docId = getSafeUserDocId(cleanEmail);
-    setDoc(doc(db, 'users', docId), { role: 'student', isAssistantAdmin: false }, { merge: true }).catch(console.warn);
+    updateUserJob(cleanEmail, 'طالب');
 
     return {
       success: true,
-      message: `تم إلغاء الصلاحية عن (${cleanEmail}).`
+      message: `تم تعيين المستخدم كطالب (مشاهدة وتحميل فقط).`
     };
   };
 
@@ -632,16 +731,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'لا يمكن تغيير دور المشرف الأساسي' };
     }
 
-    const newRole: UserRole = target.role === 'supervisor' ? 'student' : 'supervisor';
-    const isAsst = newRole === 'supervisor';
-
-    setRegisteredUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, role: newRole, isAssistantAdmin: isAsst } : u))
-    );
-
-    // Also update in Firestore cloud
-    const docId = getSafeUserDocId(target.email);
-    setDoc(doc(db, 'users', docId), { role: newRole, isAssistantAdmin: isAsst }, { merge: true }).catch(console.warn);
+    const newJob = target.jobTitle === 'طالب' ? 'أ. رياضيات' : 'طالب';
+    updateUserJob(target.email, newJob);
 
     return {
       success: true,
@@ -657,6 +748,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!user,
         isSuperAdmin,
         isAssistantAdmin,
+        canAddContent,
         registeredUsers,
         assistantAdminEmails,
         isRealtimeConnected,
@@ -665,6 +757,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogleEmail,
         logout,
         switchRole,
+        updateUserJob,
         addAssistantAdmin,
         removeAssistantAdmin,
         toggleUserRole,
@@ -686,3 +779,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

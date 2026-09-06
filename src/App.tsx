@@ -17,8 +17,8 @@ import { useAuth } from './context/AuthContext';
 import { db, doc, setDoc, getDoc } from './lib/firebase';
 
 export default function App() {
-  const { user } = useAuth() as any;
-  const isSupervisorRole = user?.role === 'supervisor';
+  const { user, isSuperAdmin, canAddContent } = useAuth();
+  const isSupervisorRole = canAddContent;
 
   const [subjects] = useState<Subject[]>(INITIAL_SUBJECTS);
 
@@ -42,10 +42,10 @@ export default function App() {
   // Booklets (مذكرات وملخصات)
   const [booklets, setBooklets] = useState<SubjectBooklet[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_subject_booklets_v2');
+      const saved = localStorage.getItem('thanaweya_subject_booklets_v4');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_BOOKLETS.length) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       }
@@ -54,6 +54,15 @@ export default function App() {
     }
     return INITIAL_BOOKLETS;
   });
+
+  // Sync booklets to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('thanaweya_subject_booklets_v4', JSON.stringify(booklets));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [booklets]);
 
   // User-specific cloud progress key
   const userStorageKey = useMemo(() => {
@@ -258,27 +267,11 @@ export default function App() {
       id: 'booklet-' + Date.now(),
       createdAt: new Date().toISOString().split('T')[0]
     };
-    setBooklets((prev) => {
-      const updated = [b, ...prev];
-      try {
-        localStorage.setItem('thanaweya_subject_booklets', JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
-      return updated;
-    });
+    setBooklets((prev) => [b, ...prev]);
   };
 
   const handleDeleteBooklet = (id: string) => {
-    setBooklets((prev) => {
-      const updated = prev.filter((b) => b.id !== id);
-      try {
-        localStorage.setItem('thanaweya_subject_booklets', JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
-      return updated;
-    });
+    setBooklets((prev) => prev.filter((b) => b.id !== id));
   };
 
   const openLessonDetail = (lesson: Lesson) => {
@@ -319,7 +312,7 @@ export default function App() {
           {/* TAB: Qudurat (القدرات - قريباً) */}
           {activeTab === 'qudurat' ? (
             <QuduratView />
-          ) : activeTab === 'users' && isSupervisorRole ? (
+          ) : activeTab === 'users' && isSuperAdmin ? (
             /* TAB: User Management */
             <UserManagementView />
           ) : activeTab === 'saved' ? (

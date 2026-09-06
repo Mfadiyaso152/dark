@@ -34,7 +34,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   onEdit,
   onDelete
 }) => {
-  const { user } = useAuth();
+  const { user, canAddContent } = useAuth();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadDone, setDownloadDone] = useState(false);
 
@@ -70,7 +70,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
     onToggleBookmark(lesson.id);
   };
 
-  const isSupervisor = user?.role === 'supervisor';
+  const isSupervisor = canAddContent;
 
   return (
     <div

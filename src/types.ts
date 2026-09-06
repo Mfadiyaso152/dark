@@ -1,4 +1,120 @@
-export type UserRole = 'student' | 'supervisor';
+export type UserRole = 'student' | 'supervisor' | 'teacher';
+
+export interface UserJobOption {
+  value: string;
+  label: string;
+  role: UserRole;
+  isSupervisorOrTeacher: boolean;
+  colorClass: string;
+  description: string;
+}
+
+export const USER_JOB_OPTIONS: UserJobOption[] = [
+  {
+    value: 'طالب',
+    label: 'طالب',
+    role: 'student',
+    isSupervisorOrTeacher: false,
+    colorClass: 'bg-slate-100 text-slate-700 border-slate-200',
+    description: 'مشاهدة وتحميل فقط'
+  },
+  {
+    value: 'أ. رياضيات',
+    label: 'أ. رياضيات',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. كيمياء',
+    label: 'أ. كيمياء',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-blue-100 text-blue-800 border-blue-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. فيزياء',
+    label: 'أ. فيزياء',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. أحياء / علم بيئة',
+    label: 'أ. أحياء / علم بيئة',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-teal-100 text-teal-800 border-teal-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. تقنية رقمية',
+    label: 'أ. تقنية رقمية',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. تفكير ناقد',
+    label: 'أ. تفكير ناقد',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-rose-100 text-rose-800 border-rose-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. لغة إنجليزية',
+    label: 'أ. لغة إنجليزية',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-orange-100 text-orange-800 border-orange-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. كفايات لغوية',
+    label: 'أ. كفايات لغوية',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-pink-100 text-pink-800 border-pink-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. دراسات إسلامية',
+    label: 'أ. دراسات إسلامية',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. اجتماعيات',
+    label: 'أ. اجتماعيات',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-amber-100 text-amber-800 border-amber-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'معلم / مشرف مادة',
+    label: 'معلم / مشرف مادة',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-violet-100 text-violet-800 border-violet-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'مشرف مساعد',
+    label: 'مشرف مساعد',
+    role: 'supervisor',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    description: 'صلاحيات إشرافية كاملة'
+  }
+];
 
 export interface AttachedFile {
   name: string;
@@ -14,6 +130,7 @@ export interface User {
   email: string;
   avatar: string;
   role: UserRole;
+  jobTitle?: string;
   grade: string;
   isSuperAdmin?: boolean;
   isAssistantAdmin?: boolean;

@@ -49,8 +49,8 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   completedLessonIds,
   bookmarkedLessonIds
 }) => {
-  const { user } = useAuth();
-  const isSupervisor = user?.role === 'supervisor';
+  const { user, canAddContent } = useAuth();
+  const isSupervisor = canAddContent;
 
   // Sub-view: null = show the two main choices, 'lessons' = show lessons page, 'booklets' = show booklets page
   const [subView, setSubView] = useState<'lessons' | 'booklets' | null>(null);

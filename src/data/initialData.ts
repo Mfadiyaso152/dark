@@ -1,4 +1,4 @@
-import { Subject, Lesson } from '../types';
+import { Subject, Lesson, SubjectBooklet } from '../types';
 
 export const INITIAL_SUBJECTS: Subject[] = [
   {
@@ -1193,45 +1193,4 @@ export const INITIAL_LESSONS: Lesson[] = [
   }
 ];
 
-export const INITIAL_BOOKLETS = [
-  {
-    id: 'b-chem-1',
-    subjectId: 'chem-1',
-    title: 'مذكرة كيمياء 1 الشاملة (جميع الفصول والمسائل)',
-    pagesCount: '65 صفحة',
-    description: 'ملزمة مراجعة نهائية لجميع تعاريف وقوانين وتجارب كيمياء 1 مع بنك أسئلة تدريبية واختبارات تجريبية.',
-    supervisorName: 'فهد الشمري'
-  },
-  {
-    id: 'b-math-1',
-    subjectId: 'math-1',
-    title: 'ملزمة براهين وتمارين رياضيات 1-1 المحلولة',
-    pagesCount: '80 صفحة',
-    description: 'دليل شامل للبراهين الجبرية والهندسية، وإثبات علاقات الزوايا وتطابق المثلثات بالخطوات الكاملة.',
-    supervisorName: 'خالد القحطاني'
-  },
-  {
-    id: 'b-eco-1',
-    subjectId: 'eco-1',
-    title: 'مذكرة علم البيئة 1-1 المصورة والملخصة',
-    pagesCount: '45 صفحة',
-    description: 'خرائط مفاهيم ملونة لجميع الدورات الجيوكيميائية الحيوية وسلاسل وشبكات الغذاء والتنوع الحيوي.',
-    supervisorName: 'ناصر السبيعي'
-  },
-  {
-    id: 'b-digi-1',
-    subjectId: 'digi-1',
-    title: 'دليل بايثون العملي وتقنية رقمية 1-1',
-    pagesCount: '50 صفحة',
-    description: 'شروحات أكواد بايثون المقررة مع أمثلة عملية وتمارين تطبيقية خطوة بخطوة.',
-    supervisorName: 'راكان العتيبي'
-  },
-  {
-    id: 'b-tafsir-1',
-    subjectId: 'tafsir-1',
-    title: 'مذكرة التفسير 1 الشاملة وخرائط مفاهيم الآيات المقررة',
-    pagesCount: '52 صفحة',
-    description: 'ملخص شامل لأصول التفسير وموضوعات سورتي الكهف ومريم وهدايات الآيات.',
-    supervisorName: 'مشرف المادة'
-  }
-];
+export const INITIAL_BOOKLETS: SubjectBooklet[] = [];

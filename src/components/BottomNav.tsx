@@ -15,8 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onTabChange,
   savedCount
 }) => {
-  const { user } = useAuth();
-  const isSupervisor = user?.role === 'supervisor';
+  const { isSuperAdmin } = useAuth();
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 max-w-2xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl transition-all font-['Tajawal',sans-serif]">
@@ -73,8 +72,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <span className="text-[11px] mt-1">المحفوظات</span>
         </button>
 
-        {/* Users (For Supervisor) */}
-        {isSupervisor && (
+        {/* Users (For Super Admin) */}
+        {isSuperAdmin && (
           <button
             onClick={() => onTabChange('users')}
             className={`flex flex-col items-center justify-center py-1 px-3 rounded-2xl transition cursor-pointer ${
