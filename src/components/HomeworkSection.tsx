@@ -108,51 +108,35 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
       <div className="flex items-center justify-between gap-3">
         <motion.button
           whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ scale: 0.95 }}
           onClick={onBack}
-          className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs md:text-sm font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group"
+          className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs md:text-sm font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group active:scale-95"
         >
           <ArrowRight className="w-4 h-4 text-purple-600 transition group-hover:-translate-x-0.5" />
           <span>رجوع لخيارات المادة</span>
         </motion.button>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs md:text-sm font-bold text-slate-500">
-            {subject.name} • {subjectHomeworks.length} واجب
-          </span>
-        </div>
       </div>
 
       {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-purple-50 via-indigo-50/70 to-blue-50 border border-purple-100/80 p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl shadow-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/80 p-4 sm:p-5 rounded-2xl shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-xs">
-            <ClipboardList className="w-5 h-5 md:w-6 md:h-6" />
+          <div className="w-10 h-10 rounded-2xl bg-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
+            <ClipboardList className="w-5 h-5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-base sm:text-lg md:text-xl font-black text-purple-950">
-                واجبات {subject.name}
-              </h3>
-              <span className="px-2 py-0.5 bg-purple-200/60 text-purple-900 text-[10px] md:text-xs font-black rounded-lg">
-                مفعل
-              </span>
-            </div>
-            <p className="text-xs md:text-sm text-slate-600 mt-0.5">
-              متابعة الواجبات المدرسية وتاريخ إعطائها وأرقام الصفحات والأسئلة
-            </p>
-          </div>
+          <h3 className="text-base sm:text-lg font-black text-slate-900">
+            واجبات {subject.name}
+          </h3>
         </div>
 
         {canEdit && (
           <motion.button
             whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.96 }}
+            whileTap={{ scale: 0.95 }}
             onClick={handleOpenModal}
-            className="py-2.5 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center gap-2 shadow-md cursor-pointer shrink-0"
+            className="py-2 px-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs sm:text-sm font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0 active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>إضافة واجب جديد</span>
+            <span>إضافة واجب</span>
           </motion.button>
         )}
       </div>
@@ -282,23 +266,20 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
         </AnimatePresence>
 
         {subjectHomeworks.length === 0 && (
-          <div className="col-span-full text-center py-14 md:py-20 bg-white rounded-3xl border-2 border-dashed border-purple-100 p-6 space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-purple-50 text-purple-500 flex items-center justify-center mx-auto shadow-2xs">
-              <ClipboardList className="w-7 h-7" />
+          <div className="col-span-full text-center py-12 md:py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto shadow-2xs">
+              <ClipboardList className="w-6 h-6" />
             </div>
-            <h4 className="text-base font-black text-slate-800">لا توجد واجبات مسجلة حالياً</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              سيقوم المعلم المشرف لمادة {subject.name} أو المشرف العام بإضافة الواجبات المدرسية وتاريخ أخذها هنا
-            </p>
+            <h4 className="text-sm sm:text-base font-black text-slate-800">لا توجد واجبات مسجلة حالياً</h4>
             {canEdit && (
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleOpenModal}
-                className="mt-2 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                className="mt-2 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>إضافة أول واجب</span>
+                <span>إضافة واجب</span>
               </motion.button>
             )}
           </div>
