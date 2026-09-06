@@ -163,6 +163,7 @@ export interface Subject {
 export interface UserProgress {
   completedLessonIds: string[];
   bookmarkedLessonIds: string[];
+  completedHomeworkIds?: string[];
 }
 
 export interface SubjectBooklet {
@@ -176,4 +177,17 @@ export interface SubjectBooklet {
   createdAt: string;
   supervisorName: string;
 }
+
+export interface Homework {
+  id: string;
+  subjectId: string;
+  title?: string;
+  dueDate: string;
+  pageNumber: string;
+  questionNumber: string;
+  notes?: string;
+  createdAt: string;
+  supervisorName: string;
+}
+
 

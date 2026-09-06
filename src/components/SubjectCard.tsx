@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Subject, Lesson } from '../types';
 import { SubjectIcon } from './SubjectIcon';
 import { Lock } from 'lucide-react';
+import { motion } from 'motion/react';
 
 interface SubjectCardProps {
   subject: Subject;
@@ -42,7 +43,10 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
   };
 
   return (
-    <div
+    <motion.div
+      whileHover={isComingSoon ? {} : { y: -4, scale: 1.01 }}
+      whileTap={isComingSoon ? {} : { scale: 0.98 }}
+      transition={{ type: 'spring', stiffness: 450, damping: 25 }}
       onClick={handleCardClick}
       role={isComingSoon ? 'status' : 'button'}
       aria-disabled={isComingSoon}
@@ -106,6 +110,6 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
           </span>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };

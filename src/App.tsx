@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester } from './types';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
 import { Header } from './components/Header';
 import { SubjectCard } from './components/SubjectCard';
@@ -12,9 +12,9 @@ import { AuthModal } from './components/AuthModal';
 import { LoginPage } from './components/LoginPage';
 import { UserManagementView } from './components/UserManagementView';
 import { QuduratView } from './components/QuduratView';
-import { SemesterCountdown } from './components/SemesterCountdown';
 import { BottomNav, TabType } from './components/BottomNav';
 import { useAuth } from './context/AuthContext';
+import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from './lib/firebase';
 import {
   safeSetItem,
@@ -159,6 +159,64 @@ export default function App() {
       });
     }, (err) => {
       console.warn('Firestore booklets snapshot error:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Homeworks (الواجبات المدرسية)
+  const [homeworks, setHomeworks] = useState<Homework[]>(() => {
+    try {
+      const saved = safeGetItem('thanaweya_homeworks_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  // Sync homeworks safely to localStorage
+  useEffect(() => {
+    safeSetItem('thanaweya_homeworks_v1', JSON.stringify(homeworks));
+  }, [homeworks]);
+
+  // Real-time Firestore sync for Homeworks across all users (instant cloud sync)
+  useEffect(() => {
+    const hwCol = collection(db, 'homeworks');
+    const unsubscribe = onSnapshot(hwCol, (snapshot) => {
+      const cloudHws: Homework[] = [];
+      const deletedIds = new Set<string>();
+
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.isDeleted) {
+          deletedIds.add(data.id || docSnap.id);
+        } else if (data.id && data.subjectId && data.dueDate) {
+          cloudHws.push(data as Homework);
+        }
+      });
+
+      setHomeworks((prev) => {
+        const map = new Map<string, Homework>();
+        prev.forEach((h) => {
+          if (!deletedIds.has(h.id)) {
+            map.set(h.id, h);
+          }
+        });
+        cloudHws.forEach((ch) => {
+          if (!deletedIds.has(ch.id)) {
+            map.set(ch.id, ch);
+          }
+        });
+        const merged = Array.from(map.values());
+        safeSetItem('thanaweya_homeworks_v1', JSON.stringify(merged));
+        return merged;
+      });
+    }, (err) => {
+      console.warn('Firestore homeworks snapshot error:', err);
     });
 
     return () => unsubscribe();
@@ -447,6 +505,64 @@ export default function App() {
     }
   };
 
+  // Homework actions
+  const handleAddHomework = async (newHwData: Omit<Homework, 'id' | 'createdAt'>) => {
+    if (!canManageSubject(newHwData.subjectId)) {
+      return;
+    }
+    const hwId = 'hw-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    const hw: Homework = {
+      ...newHwData,
+      id: hwId,
+      createdAt: new Date().toISOString()
+    };
+
+    // Immediate local state update
+    setHomeworks((prev) => [hw, ...prev]);
+
+    // Cloud Firestore save: pushes immediately to all students in real time
+    try {
+      await setDoc(doc(db, 'homeworks', hwId), hw, { merge: true });
+    } catch (err) {
+      console.warn('Firestore homework save error:', err);
+    }
+  };
+
+  const handleDeleteHomework = async (id: string) => {
+    const target = homeworks.find((h) => h.id === id);
+    if (target && !canManageSubject(target.subjectId)) {
+      return;
+    }
+
+    // Immediate local state update
+    setHomeworks((prev) => prev.filter((h) => h.id !== id));
+
+    // Cloud Firestore deletion
+    try {
+      await setDoc(doc(db, 'homeworks', id), { id, isDeleted: true }, { merge: true });
+      await deleteDoc(doc(db, 'homeworks', id));
+    } catch (err) {
+      console.warn('Firestore homework delete error:', err);
+    }
+  };
+
+  const handleToggleCompleteHomework = (id: string) => {
+    setProgress((prev) => {
+      const current = prev.completedHomeworkIds || [];
+      const updated = current.includes(id)
+        ? current.filter((x) => x !== id)
+        : [...current, id];
+      const newProgress = { ...prev, completedHomeworkIds: updated };
+      safeSetItem(userStorageKey, JSON.stringify(newProgress));
+
+      if (user?.email) {
+        const safeEmail = user.email.toLowerCase().replace(/[.#$/[\]]/g, '_');
+        setDoc(doc(db, 'user_progress', safeEmail), newProgress, { merge: true }).catch(console.error);
+      }
+      return newProgress;
+    });
+  };
+
   const openLessonDetail = (lesson: Lesson) => {
     setActiveLesson(lesson);
     setIsDetailModalOpen(true);
@@ -544,48 +660,50 @@ export default function App() {
                   onDeleteLesson={handleDeleteLesson}
                   onAddBooklet={handleAddBooklet}
                   onDeleteBooklet={handleDeleteBooklet}
+                  homeworks={homeworks}
+                  onAddHomework={handleAddHomework}
+                  onDeleteHomework={handleDeleteHomework}
                   completedLessonIds={progress.completedLessonIds}
                   bookmarkedLessonIds={progress.bookmarkedLessonIds}
+                  completedHomeworkIds={progress.completedHomeworkIds}
+                  onToggleCompleteHomework={handleToggleCompleteHomework}
                 />
               ) : (
                 /* All Subjects Grid */
                 <div className="space-y-3.5 md:space-y-5">
-                  {/* Countdown Timer (العداد الزمني) - Displayed ONLY in P2 as requested */}
-                  {selectedSemester === 2 && <SemesterCountdown />}
-
-                  {/* Semester Switcher: P1 vs P2 */}
+                  {/* Semester Switcher: P1 & P2 only */}
                   <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">
-                    <button
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
                       type="button"
                       onClick={() => {
                         setSelectedSemester(1);
                         setSelectedSubject(null);
                       }}
-                      className={`py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`py-2.5 px-4 rounded-xl text-sm md:text-base font-black transition flex items-center justify-center cursor-pointer ${
                         selectedSemester === 1
-                          ? 'bg-white text-blue-600 shadow-xs'
+                          ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
-                      <span className={`px-2 py-0.5 text-[10px] md:text-xs rounded-md font-black ${selectedSemester === 1 ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-600'}`}>P1</span>
-                      <span>بارت 1 (الفصل الأول)</span>
-                    </button>
+                      P1
+                    </motion.button>
 
-                    <button
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
                       type="button"
                       onClick={() => {
                         setSelectedSemester(2);
                         setSelectedSubject(null);
                       }}
-                      className={`py-2.5 px-3 rounded-xl text-xs md:text-sm font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                      className={`py-2.5 px-4 rounded-xl text-sm md:text-base font-black transition flex items-center justify-center cursor-pointer ${
                         selectedSemester === 2
-                          ? 'bg-white text-purple-600 shadow-xs'
+                          ? 'bg-white text-purple-600 shadow-sm border border-slate-200/60'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
-                      <span className={`px-2 py-0.5 text-[10px] md:text-xs rounded-md font-black ${selectedSemester === 2 ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-600'}`}>P2</span>
-                      <span>بارت 2 (الفصل الثاني)</span>
-                    </button>
+                      P2
+                    </motion.button>
                   </div>
 
                   {/* Search Bar */}

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Subject, Lesson, SubjectBooklet } from '../types';
+import { Subject, Lesson, SubjectBooklet, Homework } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LessonCard } from './LessonCard';
+import { HomeworkSection } from './HomeworkSection';
 import {
   ArrowRight,
   BookOpen,
@@ -11,7 +12,9 @@ import {
   Trash2,
   FileCheck,
   ChevronLeft,
-  MessageCircle
+  MessageCircle,
+  ClipboardList,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF } from '../utils/pdfGenerator';
@@ -21,6 +24,7 @@ interface SubjectDetailViewProps {
   subject: Subject;
   lessons: Lesson[];
   booklets: SubjectBooklet[];
+  homeworks?: Homework[];
   onBack: () => void;
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (id: string) => void;
@@ -30,14 +34,19 @@ interface SubjectDetailViewProps {
   onDeleteLesson: (id: string) => void;
   onAddBooklet: (booklet: Omit<SubjectBooklet, 'id' | 'createdAt'>) => void;
   onDeleteBooklet: (id: string) => void;
+  onAddHomework?: (hw: Omit<Homework, 'id' | 'createdAt'>) => void;
+  onDeleteHomework?: (id: string) => void;
   completedLessonIds: string[];
   bookmarkedLessonIds: string[];
+  completedHomeworkIds?: string[];
+  onToggleCompleteHomework?: (id: string) => void;
 }
 
 export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   subject,
   lessons,
   booklets,
+  homeworks = [],
   onBack,
   onSelectLesson,
   onToggleComplete,
@@ -47,17 +56,22 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   onDeleteLesson,
   onAddBooklet,
   onDeleteBooklet,
+  onAddHomework,
+  onDeleteHomework,
   completedLessonIds,
-  bookmarkedLessonIds
+  bookmarkedLessonIds,
+  completedHomeworkIds = [],
+  onToggleCompleteHomework
 }) => {
   const { user, canManageSubject } = useAuth();
   // Check if current user is authorized to add/edit/delete content for THIS specific subject
   const canEditCurrentSubject = canManageSubject(subject.id);
 
-  // Sub-view: null = show the two main choices, 'lessons' = show lessons page, 'booklets' = show booklets page
-  const [subView, setSubView] = useState<'lessons' | 'booklets' | null>(null);
+  // Sub-view: null = show main choices, 'lessons' = lessons page, 'booklets' = booklets page, 'homework' = homework page
+  const [subView, setSubView] = useState<'lessons' | 'booklets' | 'homework' | null>(null);
   const [isAddBookletModalOpen, setIsAddBookletModalOpen] = useState(false);
   const [isDownloadingAllLessons, setIsDownloadingAllLessons] = useState(false);
+  const [showHomeworkSoonToast, setShowHomeworkSoonToast] = useState(false);
 
   // New booklet form state
   const [bookletTitle, setBookletTitle] = useState('');
@@ -69,6 +83,16 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
 
   const subjectLessons = lessons.filter((l) => l.subjectId === subject.id);
   const subjectBooklets = booklets.filter((b) => b.subjectId === subject.id);
+  const subjectHomeworks = homeworks.filter((h) => h.subjectId === subject.id);
+
+  // Check if subject is Digital Technology or Math
+  const isHomeworkSupported =
+    subject.id === 'digi-1' ||
+    subject.id === 'math-1' ||
+    subject.id === 'math-2' ||
+    subject.name.includes('تقنية رقمية') ||
+    subject.name.includes('الرقمية') ||
+    subject.name.includes('رياضيات');
 
   const handleDownloadAllLessons = async () => {
     if (subjectLessons.length === 0) return;
@@ -216,9 +240,12 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             اختر القسم المطلوب للمتابعة:
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 md:gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 md:gap-6">
             {/* Option 1: الشروحات والدروس */}
-            <div
+            <motion.div
+              whileHover={{ y: -4, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
               onClick={() => setSubView('lessons')}
               className="bg-white hover:bg-blue-50/40 border-2 border-slate-200/90 hover:border-blue-500 rounded-3xl p-5 md:p-7 shadow-xs transition-all cursor-pointer group text-right flex flex-col justify-between"
             >
@@ -235,6 +262,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                       {subjectLessons.length} درس
                     </span>
                   </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    دروس وشروحات تفاعلية وملفات PDF
+                  </p>
                 </div>
               </div>
 
@@ -242,10 +272,13 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                 <span>فتح صفحة الدروس</span>
                 <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 transition group-hover:-translate-x-1" />
               </div>
-            </div>
+            </motion.div>
 
             {/* Option 2: الملخصات والمذكرات */}
-            <div
+            <motion.div
+              whileHover={{ y: -4, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
               onClick={() => setSubView('booklets')}
               className="bg-white hover:bg-emerald-50/40 border-2 border-slate-200/90 hover:border-emerald-500 rounded-3xl p-5 md:p-7 shadow-xs transition-all cursor-pointer group text-right flex flex-col justify-between"
             >
@@ -262,6 +295,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                       {subjectBooklets.length} مذكرة
                     </span>
                   </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    ملازم ومذكرات المراجعة الشاملة
+                  </p>
                 </div>
               </div>
 
@@ -269,14 +305,101 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                 <span>فتح صفحة الملخصات</span>
                 <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 transition group-hover:-translate-x-1" />
               </div>
-            </div>
+            </motion.div>
+
+            {/* Option 3: الواجبات المدرسية */}
+            <motion.div
+              whileHover={{ y: -4, scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+              onClick={() => {
+                if (isHomeworkSupported) {
+                  setSubView('homework');
+                } else {
+                  setShowHomeworkSoonToast(true);
+                  setTimeout(() => setShowHomeworkSoonToast(false), 2500);
+                }
+              }}
+              className={`bg-white border-2 rounded-3xl p-5 md:p-7 shadow-xs transition-all text-right flex flex-col justify-between relative overflow-hidden ${
+                isHomeworkSupported
+                  ? 'hover:bg-purple-50/40 border-slate-200/90 hover:border-purple-500 cursor-pointer group'
+                  : 'border-slate-200 opacity-90 cursor-pointer hover:border-amber-300'
+              }`}
+            >
+              {/* Toast when clicked on unsupported subject */}
+              {showHomeworkSoonToast && (
+                <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-xs flex items-center justify-center p-3 z-10 animate-fade-in text-center">
+                  <span className="text-white text-xs md:text-sm font-bold">
+                    قسم الواجبات لمادة {subject.name} قريباً ⏳
+                  </span>
+                </div>
+              )}
+
+              <div className="space-y-3 md:space-y-4">
+                <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                  <ClipboardList className="w-6 h-6 md:w-8 md:h-8" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-base md:text-lg font-black text-slate-900 group-hover:text-purple-600 transition">
+                      الواجبات المدرسية
+                    </h4>
+                    {isHomeworkSupported ? (
+                      <span className="text-xs md:text-sm font-bold bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-xl">
+                        {subjectHomeworks.length} واجب
+                      </span>
+                    ) : (
+                      <span className="text-[10px] md:text-xs font-black bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-xl flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" />
+                        <span>قريباً</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    {isHomeworkSupported
+                      ? 'الصفحات والأسئلة وتواريخ التسليم'
+                      : 'متاح قريباً لبقية المواد'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-slate-100 flex items-center justify-between font-black text-xs md:text-sm">
+                {isHomeworkSupported ? (
+                  <>
+                    <span className="text-purple-600">فتح صفحة الواجبات</span>
+                    <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-purple-600 transition group-hover:-translate-x-1" />
+                  </>
+                ) : (
+                  <>
+                    <span className="text-amber-700">متاح قريباً</span>
+                    <Lock className="w-4 h-4 text-amber-600" />
+                  </>
+                )}
+              </div>
+            </motion.div>
           </div>
         </div>
       </div>
     );
   }
 
-  // 2) Lessons Page Screen
+  // 2) Homework Page Screen
+  if (subView === 'homework') {
+    return (
+      <HomeworkSection
+        subject={subject}
+        homeworks={homeworks}
+        onBack={() => setSubView(null)}
+        onAddHomework={onAddHomework || (() => {})}
+        onDeleteHomework={onDeleteHomework || (() => {})}
+        completedHomeworkIds={completedHomeworkIds}
+        onToggleCompleteHomework={onToggleCompleteHomework}
+        canEdit={canEditCurrentSubject}
+      />
+    );
+  }
+
+  // 3) Lessons Page Screen
   if (subView === 'lessons') {
     return (
       <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
