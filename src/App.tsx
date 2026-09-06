@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, AlertTriangle } from 'lucide-react';
+import { Search, AlertTriangle, MessageCircle } from 'lucide-react';
 import { Subject, Lesson, UserProgress, SubjectBooklet } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
 import { Header } from './components/Header';
@@ -397,6 +397,18 @@ export default function App() {
               ) : (
                 /* All Subjects Grid */
                 <div className="space-y-3">
+                  {/* WhatsApp Group Direct Button */}
+                  <a
+                    id="whatsapp-home-btn"
+                    href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <span>الدخول لقروب الواتساب</span>
+                  </a>
+
                   {/* Search Bar */}
                   <div className="relative">
                     <input

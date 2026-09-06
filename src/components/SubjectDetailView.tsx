@@ -11,7 +11,8 @@ import {
   Trash2,
   FileCheck,
   ChevronLeft,
-  AlertTriangle
+  AlertTriangle,
+  MessageCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF } from '../utils/pdfGenerator';
@@ -366,6 +367,18 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* WhatsApp Group Direct Button */}
+        <a
+          id="whatsapp-lessons-btn"
+          href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
+        >
+          <MessageCircle className="w-4 h-4 shrink-0" />
+          <span>الدخول لقروب الواتساب</span>
+        </a>
 
         {/* Notice under lessons: site is experimental */}
         <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-center justify-center gap-2 text-amber-900 text-xs font-bold text-center shadow-2xs">

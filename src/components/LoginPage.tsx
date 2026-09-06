@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   Bookmark,
   GraduationCap,
-  ArrowLeft
+  ArrowLeft,
+  MessageCircle
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -217,6 +218,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
           <p className="text-[11px] text-center text-slate-400 font-medium">
             يتم تسجيلك تلقائياً كـ <span className="font-bold text-slate-600">طالب</span> لحفظ تقدمك ومحفوظاتك
           </p>
+
+          {/* WhatsApp Group Direct Button */}
+          <a
+            id="whatsapp-login-btn"
+            href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-3 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
+          >
+            <MessageCircle className="w-4 h-4 shrink-0" />
+            <span>الدخول لقروب الواتساب</span>
+          </a>
         </div>
       </motion.div>
     </div>
