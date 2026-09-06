@@ -16,17 +16,30 @@ import { SemesterCountdown } from './components/SemesterCountdown';
 import { BottomNav, TabType } from './components/BottomNav';
 import { useAuth } from './context/AuthContext';
 import { db, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from './lib/firebase';
+import {
+  safeSetItem,
+  safeGetItem,
+  sanitizeLessonsForStorage,
+  sanitizeBookletsForStorage,
+  sanitizeExistingLocalStorage
+} from './utils/storage';
+import { storeLargeFile, deleteLargeFile } from './utils/fileStorage';
 
 export default function App() {
   const { user, isSuperAdmin, canAddContent, canManageSubject } = useAuth();
   const isSupervisorRole = canAddContent;
+
+  // Run startup hygiene to clean any bloated keys causing QuotaExceededError
+  useEffect(() => {
+    sanitizeExistingLocalStorage();
+  }, []);
 
   const [subjects] = useState<Subject[]>(INITIAL_SUBJECTS);
 
   // Lessons: Always ensure all authentic curriculum lessons are present
   const [lessons, setLessons] = useState<Lesson[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_lessons_v3');
+      const saved = safeGetItem('thanaweya_lessons_v3');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length >= INITIAL_LESSONS.length) {
@@ -43,7 +56,7 @@ export default function App() {
   // Booklets (مذكرات وملخصات)
   const [booklets, setBooklets] = useState<SubjectBooklet[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_subject_booklets_v4');
+      const saved = safeGetItem('thanaweya_subject_booklets_v4');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -56,13 +69,9 @@ export default function App() {
     return INITIAL_BOOKLETS;
   });
 
-  // Sync booklets to localStorage
+  // Sync booklets safely to localStorage (stripping heavy base64 to protect quota)
   useEffect(() => {
-    try {
-      localStorage.setItem('thanaweya_subject_booklets_v4', JSON.stringify(booklets));
-    } catch (e) {
-      console.error(e);
-    }
+    safeSetItem('thanaweya_subject_booklets_v4', JSON.stringify(sanitizeBookletsForStorage(booklets)));
   }, [booklets]);
 
   // Real-time Firestore sync for Lessons across all users (instant cloud sync)
@@ -100,11 +109,7 @@ export default function App() {
         });
 
         const merged = Array.from(map.values());
-        try {
-          localStorage.setItem('thanaweya_lessons_v3', JSON.stringify(merged));
-        } catch (e) {
-          console.error(e);
-        }
+        safeSetItem('thanaweya_lessons_v3', JSON.stringify(sanitizeLessonsForStorage(merged)));
         return merged;
       });
     }, (err) => {
@@ -149,11 +154,7 @@ export default function App() {
         });
 
         const merged = Array.from(map.values());
-        try {
-          localStorage.setItem('thanaweya_subject_booklets_v4', JSON.stringify(merged));
-        } catch (e) {
-          console.error(e);
-        }
+        safeSetItem('thanaweya_subject_booklets_v4', JSON.stringify(sanitizeBookletsForStorage(merged)));
         return merged;
       });
     }, (err) => {
@@ -175,7 +176,7 @@ export default function App() {
       const key = user?.email
         ? `thanaweya_progress_${user.email.toLowerCase().trim()}`
         : 'thanaweya_progress_guest';
-      const saved = localStorage.getItem(key);
+      const saved = safeGetItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (
@@ -200,7 +201,7 @@ export default function App() {
     if (!user) return;
 
     try {
-      const saved = localStorage.getItem(userStorageKey);
+      const saved = safeGetItem(userStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (
@@ -238,14 +239,10 @@ export default function App() {
     fetchCloudProgress();
   }, [userStorageKey, user?.id]);
 
-  // Sync progress
+  // Sync progress safely
   useEffect(() => {
     if (userStorageKey && progress && Array.isArray(progress.completedLessonIds)) {
-      try {
-        localStorage.setItem(userStorageKey, JSON.stringify(progress));
-      } catch (e) {
-        console.error('Failed to sync progress:', e);
-      }
+      safeSetItem(userStorageKey, JSON.stringify(progress));
 
       if (user?.id) {
         try {
@@ -263,13 +260,9 @@ export default function App() {
     }
   }, [progress, userStorageKey, user?.id, user?.email]);
 
-  // Sync lessons to localStorage
+  // Sync lessons safely to localStorage (stripping heavy attachments from cache)
   useEffect(() => {
-    try {
-      localStorage.setItem('thanaweya_lessons_v3', JSON.stringify(lessons));
-    } catch (e) {
-      console.error(e);
-    }
+    safeSetItem('thanaweya_lessons_v3', JSON.stringify(sanitizeLessonsForStorage(lessons)));
   }, [lessons]);
 
   // Active view filters
@@ -363,6 +356,12 @@ export default function App() {
     if (!canManageSubject(newLesson.subjectId)) {
       return;
     }
+
+    // If attached file exists, store in IndexedDB to avoid quota issues
+    if (newLesson.attachedFile?.dataUrl) {
+      await storeLargeFile('lesson-file-' + newLesson.id, newLesson.attachedFile.dataUrl);
+    }
+
     setLessons((prev) => {
       const existingIndex = prev.findIndex((l) => l.id === newLesson.id);
       if (existingIndex >= 0) {
@@ -386,6 +385,9 @@ export default function App() {
     if (target && !canManageSubject(target.subjectId)) {
       return;
     }
+    // Delete file from IndexedDB
+    deleteLargeFile('lesson-file-' + lessonId);
+
     // Immediate local state update
     setLessons((prev) => prev.filter((l) => l.id !== lessonId));
 
@@ -409,6 +411,12 @@ export default function App() {
       id: bookletId,
       createdAt: new Date().toISOString().split('T')[0]
     };
+
+    // Store PDF in IndexedDB
+    if (b.fileDataUrl) {
+      await storeLargeFile(bookletId, b.fileDataUrl);
+    }
+
     // Immediate local state update
     setBooklets((prev) => [b, ...prev]);
 
@@ -425,6 +433,8 @@ export default function App() {
     if (target && !canManageSubject(target.subjectId)) {
       return;
     }
+    deleteLargeFile(id);
+
     // Immediate local state update
     setBooklets((prev) => prev.filter((b) => b.id !== id));
 
@@ -467,12 +477,13 @@ export default function App() {
       dir="rtl"
       className="min-h-screen bg-[#F8FAFC] text-slate-800 font-['Tajawal',sans-serif] flex justify-center selection:bg-blue-500 selection:text-white"
     >
-      <div className="w-full max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl bg-[#F8FAFC] min-h-screen flex flex-col shadow-xl pb-24 md:pb-28 relative transition-all">
+      {/* Container: comfortably wider and scalable on iPad (md/lg) and Desktop (xl/2xl) */}
+      <div className="w-full max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-[1380px] bg-[#F8FAFC] min-h-screen flex flex-col shadow-xl pb-24 md:pb-28 relative transition-all">
         {/* Top Header - with greeting & small logout button */}
         <Header />
 
         {/* Main Content Area */}
-        <main className="flex-1 p-4 sm:p-5 md:p-6 lg:p-8 space-y-4 md:space-y-6">
+        <main className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10 space-y-4 md:space-y-6 lg:space-y-8">
           {/* TAB: Qudurat (القدرات - قريباً) */}
           {activeTab === 'qudurat' ? (
             <QuduratView />

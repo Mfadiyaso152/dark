@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF } from '../utils/pdfGenerator';
+import { getLargeFile } from '../utils/fileStorage';
 
 interface SubjectDetailViewProps {
   subject: Subject;
@@ -124,10 +125,16 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
     setIsAddBookletModalOpen(false);
   };
 
-  const handleDownloadBooklet = (booklet: SubjectBooklet) => {
-    if (booklet.fileDataUrl) {
+  const handleDownloadBooklet = async (booklet: SubjectBooklet) => {
+    let urlToUse = booklet.fileDataUrl;
+    if (!urlToUse) {
+      const stored = await getLargeFile(booklet.id);
+      if (stored) urlToUse = stored;
+    }
+
+    if (urlToUse) {
       const a = document.createElement('a');
-      a.href = booklet.fileDataUrl;
+      a.href = urlToUse;
       a.download = booklet.fileName || `${booklet.title}.pdf`;
       document.body.appendChild(a);
       a.click();
@@ -329,7 +336,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         </div>
 
         {/* Lessons List (Each card shows ONLY the title and download button) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-5">
           {subjectLessons.map((lesson) => (
             <LessonCard
               key={lesson.id}
@@ -411,7 +418,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
       </div>
 
       {/* Booklets List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 md:gap-5">
         {subjectBooklets.map((b) => (
           <div
             key={b.id}

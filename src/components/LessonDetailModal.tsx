@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Lesson, Subject } from '../types';
 import { downloadLessonPDF } from '../utils/pdfGenerator';
+import { getLargeFile } from '../utils/fileStorage';
 import confetti from 'canvas-confetti';
 
 interface LessonDetailModalProps {
@@ -58,6 +59,25 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     if (success) {
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
+    }
+  };
+
+  const handleDownloadAttachedFile = async () => {
+    if (!lesson.attachedFile) return;
+    let url = lesson.attachedFile.dataUrl;
+    if (!url) {
+      const stored = await getLargeFile('lesson-file-' + lesson.id);
+      if (stored) url = stored;
+    }
+    if (url) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = lesson.attachedFile.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      handleDownloadPDF();
     }
   };
 
@@ -205,24 +225,13 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                         </div>
                       </div>
 
-                      {lesson.attachedFile.dataUrl ? (
-                        <a
-                          href={lesson.attachedFile.dataUrl}
-                          download={lesson.attachedFile.name}
-                          className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>تحميل الملف</span>
-                        </a>
-                      ) : (
-                        <button
-                          onClick={handleDownloadPDF}
-                          className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>تحميل</span>
-                        </button>
-                      )}
+                      <button
+                        onClick={handleDownloadAttachedFile}
+                        className="py-1.5 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>تحميل الملف</span>
+                      </button>
                     </div>
 
                     {lesson.attachedFile.previewUrl && (

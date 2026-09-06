@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User, UserRole, USER_JOB_OPTIONS } from '../types';
+import { safeSetItem, safeGetItem, safeRemoveItem } from '../utils/storage';
 import {
   auth,
   googleProvider,
@@ -167,7 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [assistantAdminEmails, setAssistantAdminEmails] = useState<string[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_assistant_admins');
+      const saved = safeGetItem('thanaweya_assistant_admins');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -187,13 +188,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [registeredUsers, setRegisteredUsers] = useState<User[]>(() => {
     try {
-      const saved = localStorage.getItem('thanaweya_registered_users');
+      const saved = safeGetItem('thanaweya_registered_users');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           const validUsers = deduplicateUsersByEmail(parsed);
           if (validUsers.length > 0) {
-            localStorage.setItem('thanaweya_registered_users', JSON.stringify(validUsers));
+            safeSetItem('thanaweya_registered_users', JSON.stringify(validUsers));
             return validUsers;
           }
         }
@@ -206,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // App starts with NO logged-in user by default (forcing Login Page entry)
   const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('thanaweya_user');
+    const saved = safeGetItem('thanaweya_user');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -311,7 +312,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         setUser(newUserObj);
-        localStorage.setItem('thanaweya_user', JSON.stringify(newUserObj));
+        safeSetItem('thanaweya_user', JSON.stringify(newUserObj));
 
         // Push immediately to Firestore cloud
         await syncUserToCloud(newUserObj);
@@ -370,11 +371,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const merged = deduplicateUsersByEmail(cloudUsers);
 
           setRegisteredUsers(merged);
-          try {
-            localStorage.setItem('thanaweya_registered_users', JSON.stringify(merged));
-          } catch (e) {
-            console.error(e);
-          }
+          safeSetItem('thanaweya_registered_users', JSON.stringify(merged));
 
           // If current logged-in user's role was updated by super admin in real-time, sync it
           setUser((currentUser) => {
@@ -388,7 +385,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 role: foundInCloud.role,
                 isAssistantAdmin: foundInCloud.isAssistantAdmin
               };
-              localStorage.setItem('thanaweya_user', JSON.stringify(updated));
+              safeSetItem('thanaweya_user', JSON.stringify(updated));
               return updated;
             }
             return currentUser;
@@ -442,7 +439,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cloudUsers.length > 0) {
         const merged = deduplicateUsersByEmail(cloudUsers);
         setRegisteredUsers(merged);
-        localStorage.setItem('thanaweya_registered_users', JSON.stringify(merged));
+        safeSetItem('thanaweya_registered_users', JSON.stringify(merged));
       }
     } catch (e) {
       console.warn('Manual refresh users note:', e);
@@ -451,18 +448,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (user) {
-      localStorage.setItem('thanaweya_user', JSON.stringify(user));
+      safeSetItem('thanaweya_user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('thanaweya_user');
+      safeRemoveItem('thanaweya_user');
     }
   }, [user]);
 
   useEffect(() => {
-    localStorage.setItem('thanaweya_assistant_admins', JSON.stringify(assistantAdminEmails));
+    safeSetItem('thanaweya_assistant_admins', JSON.stringify(assistantAdminEmails));
   }, [assistantAdminEmails]);
 
   useEffect(() => {
-    localStorage.setItem('thanaweya_registered_users', JSON.stringify(registeredUsers));
+    safeSetItem('thanaweya_registered_users', JSON.stringify(registeredUsers));
   }, [registeredUsers]);
 
   const isSuperAdmin = user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
@@ -576,7 +573,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         setUser(newUserObj);
-        localStorage.setItem('thanaweya_user', JSON.stringify(newUserObj));
+        safeSetItem('thanaweya_user', JSON.stringify(newUserObj));
         setRegisteredUsers((prev) => deduplicateUsersByEmail([newUserObj, ...prev]));
 
         // Immediately push to Firestore cloud
@@ -642,7 +639,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     setUser(targetUser);
-    localStorage.setItem('thanaweya_user', JSON.stringify(targetUser));
+    safeSetItem('thanaweya_user', JSON.stringify(targetUser));
 
     // Update local state instantly with strict deduplication
     setRegisteredUsers((prev) => deduplicateUsersByEmail([targetUser, ...prev]));
@@ -661,7 +658,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setUser(null);
     setFirebaseUser(null);
-    localStorage.removeItem('thanaweya_user');
+    safeRemoveItem('thanaweya_user');
   };
 
   const switchRole = (newRole: UserRole) => {
@@ -717,7 +714,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAssistantAdmin: isTeacherOrSupervisor
       };
       setUser(updatedSelf);
-      localStorage.setItem('thanaweya_user', JSON.stringify(updatedSelf));
+      safeSetItem('thanaweya_user', JSON.stringify(updatedSelf));
     }
 
     // Sync to Firestore Cloud immediately
