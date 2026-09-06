@@ -201,22 +201,13 @@ export const UserManagementView: React.FC = () => {
                       }`}
                       title="تغيير وظيفة المستخدم"
                     >
-                      <optgroup label="🎓 الطلاب (مشاهدة وتحميل فقط)">
-                        <option value="طالب">طالب (مشاهدة وتحميل)</option>
-                      </optgroup>
-                      <optgroup label="👨‍🏫 المعلمون والمشرفون (إضافة ملفات لكافة المواد)">
-                        <option value="أ. رياضيات">أ. رياضيات</option>
-                        <option value="أ. كيمياء">أ. كيمياء</option>
-                        <option value="أ. فيزياء">أ. فيزياء</option>
-                        <option value="أ. أحياء / علم بيئة">أ. أحياء / علم بيئة</option>
-                        <option value="أ. تقنية رقمية">أ. تقنية رقمية</option>
-                        <option value="أ. تفكير ناقد">أ. تفكير ناقد</option>
-                        <option value="أ. لغة إنجليزية">أ. لغة إنجليزية</option>
-                        <option value="أ. كفايات لغوية">أ. كفايات لغوية</option>
-                        <option value="أ. دراسات إسلامية">أ. دراسات إسلامية</option>
-                        <option value="أ. اجتماعيات">أ. اجتماعيات</option>
-                        <option value="معلم / مشرف مادة">معلم / مشرف مادة</option>
-                        <option value="مشرف مساعد">مشرف مساعد</option>
+                      <option value="طالب">طالب</option>
+                      <optgroup label="المعلمون والمشرفون">
+                        {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
                       </optgroup>
                     </select>
                     <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5 pointer-events-none" />

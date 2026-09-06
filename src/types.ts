@@ -19,14 +19,6 @@ export const USER_JOB_OPTIONS: UserJobOption[] = [
     description: 'مشاهدة وتحميل فقط'
   },
   {
-    value: 'أ. رياضيات',
-    label: 'أ. رياضيات',
-    role: 'teacher',
-    isSupervisorOrTeacher: true,
-    colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    description: 'إضافة ملفات وشروحات لكافة المواد'
-  },
-  {
     value: 'أ. كيمياء',
     label: 'أ. كيمياء',
     role: 'teacher',
@@ -35,16 +27,16 @@ export const USER_JOB_OPTIONS: UserJobOption[] = [
     description: 'إضافة ملفات وشروحات لكافة المواد'
   },
   {
-    value: 'أ. فيزياء',
-    label: 'أ. فيزياء',
+    value: 'أ. رياضيات',
+    label: 'أ. رياضيات',
     role: 'teacher',
     isSupervisorOrTeacher: true,
-    colorClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     description: 'إضافة ملفات وشروحات لكافة المواد'
   },
   {
-    value: 'أ. أحياء / علم بيئة',
-    label: 'أ. أحياء / علم بيئة',
+    value: 'أ. علم البيئة',
+    label: 'أ. علم البيئة',
     role: 'teacher',
     isSupervisorOrTeacher: true,
     colorClass: 'bg-teal-100 text-teal-800 border-teal-200',
@@ -63,7 +55,15 @@ export const USER_JOB_OPTIONS: UserJobOption[] = [
     label: 'أ. تفكير ناقد',
     role: 'teacher',
     isSupervisorOrTeacher: true,
-    colorClass: 'bg-rose-100 text-rose-800 border-rose-200',
+    colorClass: 'bg-red-100 text-red-800 border-red-200',
+    description: 'إضافة ملفات وشروحات لكافة المواد'
+  },
+  {
+    value: 'أ. التفسير',
+    label: 'أ. التفسير',
+    role: 'teacher',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     description: 'إضافة ملفات وشروحات لكافة المواد'
   },
   {
@@ -83,35 +83,11 @@ export const USER_JOB_OPTIONS: UserJobOption[] = [
     description: 'إضافة ملفات وشروحات لكافة المواد'
   },
   {
-    value: 'أ. دراسات إسلامية',
-    label: 'أ. دراسات إسلامية',
-    role: 'teacher',
-    isSupervisorOrTeacher: true,
-    colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    description: 'إضافة ملفات وشروحات لكافة المواد'
-  },
-  {
-    value: 'أ. اجتماعيات',
-    label: 'أ. اجتماعيات',
-    role: 'teacher',
-    isSupervisorOrTeacher: true,
-    colorClass: 'bg-amber-100 text-amber-800 border-amber-200',
-    description: 'إضافة ملفات وشروحات لكافة المواد'
-  },
-  {
-    value: 'معلم / مشرف مادة',
-    label: 'معلم / مشرف مادة',
-    role: 'teacher',
-    isSupervisorOrTeacher: true,
-    colorClass: 'bg-violet-100 text-violet-800 border-violet-200',
-    description: 'إضافة ملفات وشروحات لكافة المواد'
-  },
-  {
     value: 'مشرف مساعد',
     label: 'مشرف مساعد',
     role: 'supervisor',
     isSupervisorOrTeacher: true,
-    colorClass: 'bg-purple-100 text-purple-800 border-purple-200',
+    colorClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     description: 'صلاحيات إشرافية كاملة'
   }
 ];
