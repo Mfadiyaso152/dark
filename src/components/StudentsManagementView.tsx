@@ -227,12 +227,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <h3 className="font-black text-slate-900 text-base sm:text-lg">
               {mainTab === 'students'
                 ? `قائمة الطلاب المسجلين (${filteredStudents.length})`
-                : `إدارة المعلمين والمشرفين (${filteredStaff.length})`}
+                : `المشرفون والمعلمون (${filteredStaff.length})`}
             </h3>
             <p className="text-xs text-slate-500">
               {mainTab === 'students'
                 ? 'اضغط على أي طالب لمشاهدة مفضلاته وحلول واجباته بالتفصيل'
-                : 'إدارة صلاحيات ووظائف المشرفين والمعلمين'}
+                : 'اضغط على أي مشرف أو معلم للاطلاع على حلول واجباته ومفضلاته بالتفصيل'}
             </p>
           </div>
         </div>
@@ -248,34 +248,32 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         </button>
       </div>
 
-      {/* Super Admin Switcher (Students vs Staff Management) */}
-      {isSuperAdmin && (
-        <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-          <button
-            onClick={() => setMainTab('students')}
-            className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
-              mainTab === 'students'
-                ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/80'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <GraduationCap className="w-4 h-4" />
-            <span>الطلاب ({studentsOnly.length})</span>
-          </button>
+      {/* Switcher (Students vs Supervisors & Teachers) - Available for SuperAdmin and Teachers */}
+      <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+        <button
+          onClick={() => setMainTab('students')}
+          className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'students'
+              ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <GraduationCap className="w-4 h-4" />
+          <span>الطلاب ({studentsOnly.length})</span>
+        </button>
 
-          <button
-            onClick={() => setMainTab('staff')}
-            className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
-              mainTab === 'staff'
-                ? 'bg-white text-purple-600 shadow-xs border border-slate-200/80'
-                : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>المشرفون والمعلمون ({staffOnly.length})</span>
-          </button>
-        </div>
-      )}
+        <button
+          onClick={() => setMainTab('staff')}
+          className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
+            mainTab === 'staff'
+              ? 'bg-white text-purple-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>المشرفون والمعلمون ({staffOnly.length})</span>
+        </button>
+      </div>
 
       {/* Search Bar */}
       <div className="relative">
@@ -286,7 +284,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           placeholder={
             mainTab === 'students'
               ? 'ابحث باسم الطالب أو البريد الإلكتروني...'
-              : 'ابحث باسم المعلم أو المشرف...'
+              : 'ابحث باسم المعلم أو المشرف أو المادة...'
           }
           className="w-full py-3 pr-11 pl-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs transition"
         />
@@ -390,8 +388,8 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           )}
         </div>
       ) : (
-        /* SECOND VIEW: Staff Management (Super Admin only) */
-        <div className="space-y-2.5">
+        /* SECOND VIEW: Staff & Supervisors (Supervisors and Teachers) */
+        <div className="space-y-3">
           {filteredStaff.map((u) => {
             const isThisSuperAdmin =
               u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
@@ -409,15 +407,20 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               ? 'bg-purple-100 text-purple-800 border-purple-200'
               : matchedOption?.colorClass || 'bg-slate-100 text-slate-700 border-slate-200';
 
+            const bookmarks = getStudentBookmarks(u);
+            const submissionsCount = getStudentSubmissionsCount(u);
             const isUpdatingThis = updatingUserEmail === u.email;
 
             return (
-              <div
+              <motion.div
                 key={u.id || u.email}
-                className="bg-white rounded-2xl p-3.5 border border-slate-100 shadow-2xs hover:border-slate-200 transition flex items-center justify-between gap-3"
+                whileHover={{ y: -1 }}
+                onClick={() => setSelectedStudent(u)}
+                className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-purple-300 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
               >
-                <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                {/* Staff Avatar + Details */}
+                <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-purple-50 border border-purple-100 shrink-0 shadow-xs">
                     <img
                       src={
                         u.avatar ||
@@ -428,11 +431,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-black text-slate-900 text-xs sm:text-sm truncate">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-black text-slate-900 text-sm sm:text-base truncate group-hover:text-purple-700 transition">
                         {u.name}
-                      </span>
+                      </h4>
                       {isThisSuperAdmin ? (
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 shrink-0">
                           <Crown className="w-2.5 h-2.5 text-amber-500" />
@@ -446,38 +449,68 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-400 font-mono truncate mt-0.5">{u.email}</div>
+                    <p className="text-xs text-slate-400 font-mono truncate">{u.email}</p>
                   </div>
                 </div>
 
-                {!isThisSuperAdmin && isSuperAdmin && (
-                  <div className="relative shrink-0">
-                    <select
-                      value={currentJob}
-                      disabled={isUpdatingThis}
-                      onChange={(e) => handleJobChange(u.email, e.target.value)}
-                      className="py-1.5 pr-2.5 pl-6 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer transition appearance-none disabled:opacity-50"
-                      title="تغيير وظيفة المعلم أو المشرف"
-                    >
-                      <option value="طالب">طالب</option>
-                      <optgroup label="المعلمون والمشرفون">
-                        {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5 pointer-events-none" />
+                {/* Right Area: Badges (Bookmarks + Submissions) + Super Admin Dropdown */}
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/70 text-xs font-bold">
+                    <Bookmark className="w-3.5 h-3.5 text-amber-600" />
+                    <span>{bookmarks.length} محفوظة</span>
                   </div>
-                )}
-              </div>
+
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
+                    <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
+                    <span>{submissionsCount} حلول واجبات</span>
+                  </div>
+
+                  {!isThisSuperAdmin && isSuperAdmin && (
+                    <div
+                      className="relative shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <select
+                        value={currentJob}
+                        disabled={isUpdatingThis}
+                        onChange={(e) => handleJobChange(u.email, e.target.value)}
+                        className="py-1.5 pr-2.5 pl-6 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer transition appearance-none disabled:opacity-50"
+                        title="تغيير وظيفة المعلم أو المشرف"
+                      >
+                        <option value="طالب">طالب</option>
+                        <optgroup label="المعلمون والمشرفون">
+                          {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5 pointer-events-none" />
+                    </div>
+                  )}
+
+                  <div className="hidden sm:flex items-center gap-1 text-xs font-bold text-purple-600 group-hover:-translate-x-1 transition mr-1">
+                    <span>التفاصيل</span>
+                    <ChevronLeft className="w-4 h-4" />
+                  </div>
+                </div>
+              </motion.div>
             );
           })}
+
+          {filteredStaff.length === 0 && (
+            <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
+              <Users className="w-10 h-10 text-slate-300 mx-auto" />
+              <h4 className="text-sm sm:text-base font-black text-slate-800">
+                لا يوجد مشرفون أو معلمون مطابقين للبحث
+              </h4>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Detailed Student Modal (when clicking on any student) */}
+      {/* Detailed User Modal (when clicking on any student, supervisor or teacher) */}
       {selectedStudent && (
         <StudentDetailModal
           student={selectedStudent}
@@ -488,6 +521,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           allHomeworks={allHomeworks}
           allSubmissions={allSubmissions}
           studentBookmarkedLessonIds={getStudentBookmarks(selectedStudent)}
+          studentCompletedHomeworkIds={
+            userProgressMap[selectedStudent.id]?.completedHomeworkIds ||
+            userProgressMap[(selectedStudent.email || '').toLowerCase()]?.completedHomeworkIds ||
+            []
+          }
           onSelectLesson={onSelectLesson}
         />
       )}

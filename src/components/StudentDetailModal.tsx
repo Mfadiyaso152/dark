@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { User, Lesson, Subject, Homework, HomeworkSubmission, SubjectBooklet } from '../types';
+import { User, Lesson, Subject, Homework, HomeworkSubmission, USER_JOB_OPTIONS } from '../types';
+import { SUPER_ADMIN_EMAIL } from '../context/AuthContext';
 import {
   X,
   GraduationCap,
@@ -14,10 +15,12 @@ import {
   Sparkles,
   ExternalLink,
   ChevronRight,
-  HelpCircle
+  Crown,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { triggerFileDownload, downloadBookletPDF } from '../utils/pdfGenerator';
+import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
 
@@ -51,12 +54,30 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Filter student's bookmarked lessons
+  const isThisSuperAdmin =
+    student.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || student.isSuperAdmin;
+  const currentJob = isThisSuperAdmin
+    ? 'المشرف الأساسي'
+    : student.jobTitle ||
+      (student.role === 'supervisor'
+        ? 'مشرف مساعد'
+        : student.role === 'teacher'
+        ? 'أ. رياضيات'
+        : 'طالب');
+
+  const matchedOption = USER_JOB_OPTIONS.find((opt) => opt.value === currentJob);
+  const badgeColorClass = isThisSuperAdmin
+    ? 'bg-purple-500/30 text-purple-200 border-purple-400/40'
+    : matchedOption
+    ? 'bg-indigo-500/30 text-indigo-200 border-indigo-400/40'
+    : 'bg-slate-500/30 text-slate-200 border-slate-400/30';
+
+  // Filter user's bookmarked lessons
   const bookmarkedLessons = allLessons.filter((l) =>
     studentBookmarkedLessonIds.includes(l.id)
   );
 
-  // Filter student's homework submissions
+  // Filter user's homework submissions
   const studentEmail = (student.email || '').toLowerCase().trim();
   const studentSubmissions = allSubmissions.filter(
     (s) =>
@@ -147,9 +168,28 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <h3 className="text-base sm:text-lg font-black text-white truncate">
                   {student.name}
                 </h3>
-                <span className="text-[10px] px-2.5 py-0.5 rounded-full font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 flex items-center gap-1">
-                  <GraduationCap className="w-3 h-3" />
-                  طالب
+                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold border flex items-center gap-1 ${badgeColorClass}`}>
+                  {isThisSuperAdmin ? (
+                    <>
+                      <Crown className="w-3 h-3 text-amber-400" />
+                      المشرف الأساسي
+                    </>
+                  ) : currentJob === 'مشرف مساعد' ? (
+                    <>
+                      <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                      مشرف مساعد
+                    </>
+                  ) : currentJob.startsWith('أ.') ? (
+                    <>
+                      <Sparkles className="w-3 h-3 text-cyan-300" />
+                      {currentJob}
+                    </>
+                  ) : (
+                    <>
+                      <GraduationCap className="w-3 h-3" />
+                      طالب
+                    </>
+                  )}
                 </span>
               </div>
               <p className="text-xs text-slate-300 font-mono truncate">{student.email}</p>
@@ -177,7 +217,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <div>
                 <span className="text-[10px] text-slate-300 block">حلول الواجبات</span>
                 <span className="text-xs sm:text-sm font-black text-white">
-                  {studentSubmissions.length} حل مسلم
+                  {studentSubmissions.length} حل مسلّم
                 </span>
               </div>
             </div>
@@ -281,7 +321,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-4 space-y-2">
                   <Bookmark className="w-8 h-8 text-slate-300 mx-auto" />
                   <p className="text-xs sm:text-sm text-slate-500 font-bold">
-                    لم يقم الطالب بإضافة أي درس للمفضلة بعد
+                    لم تتم إضافة أي درس للمفضلة بعد
                   </p>
                 </div>
               )}
@@ -334,10 +374,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                         </div>
                       )}
 
-                      {/* Student's Attached Notes / Answers */}
+                      {/* Attached Notes / Answers */}
                       {submission.notes && (
                         <div className="text-xs text-slate-700 bg-amber-50/70 border border-amber-100 p-2.5 rounded-xl leading-relaxed">
-                          <span className="font-bold text-amber-900 block mb-0.5">💬 إجابة / ملاحظات الطالب:</span>
+                          <span className="font-bold text-amber-900 block mb-0.5">💬 ملاحظات / إجابة الحل:</span>
                           <p>{submission.notes}</p>
                         </div>
                       )}
@@ -357,7 +397,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                             className="py-1.5 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>تحميل ملف حل الطالب (PDF)</span>
+                            <span>تحميل ملف الحل (PDF)</span>
                             <Download className={`w-3.5 h-3.5 mr-1 ${isDownloading ? 'animate-bounce' : ''}`} />
                           </button>
                         ) : (
@@ -391,7 +431,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-4 space-y-2">
                   <ClipboardList className="w-8 h-8 text-slate-300 mx-auto" />
                   <p className="text-xs sm:text-sm text-slate-500 font-bold">
-                    لم يقم الطالب بتسليم أي حلول واجبات بعد
+                    لم يتم تسليم أي حلول واجبات بعد
                   </p>
                 </div>
               )}
@@ -412,3 +452,4 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     </div>
   );
 };
+
