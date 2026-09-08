@@ -146,6 +146,25 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: 'مهارات التفكير الناقد، الاستدلال، تقييم الحجج، وحل المشكلات واتخاذ القرارات',
     supervisorName: 'أ. تفكير ناقد'
   },
+  // 9. الإرشاد الطلابي
+  {
+    id: 'guidance-1',
+    name: 'الإرشاد الطلابي',
+    code: 'GUID-101',
+    semester: 1,
+    isComingSoon: true,
+    icon: 'HeartHandshake',
+    emoji: '🤝',
+    color: 'rose',
+    gradient: 'from-[#F43F5E] to-[#E11D48]',
+    lightBg: 'bg-[#FFF1F2]',
+    borderColor: 'border-[#FFE4E6]',
+    badgeBg: 'bg-[#F43F5E]',
+    titleColor: 'text-[#881337]',
+    countColor: 'text-[#FB7185]',
+    description: 'الإرشاد والتوجيه الطلابي والدعم النفسي والتربوي',
+    supervisorName: 'الموجه الطلابي'
+  },
 
   // ==================== الفصل الدراسي الثاني (Semester 2 - P2) (كلها قريباً) ====================
   // 1. رياضيات 1-2
@@ -318,6 +337,25 @@ export const INITIAL_SUBJECTS: Subject[] = [
     countColor: 'text-[#10B981]',
     description: 'السنة النبوية وأهميتها، وقيم وأخلاق المسلم في الحياة والمعاملات',
     supervisorName: 'مشرف المادة'
+  },
+  // 10. الإرشاد الطلابي
+  {
+    id: 'guidance-2',
+    name: 'الإرشاد الطلابي',
+    code: 'GUID-102',
+    semester: 2,
+    isComingSoon: true,
+    icon: 'HeartHandshake',
+    emoji: '🤝',
+    color: 'rose',
+    gradient: 'from-[#F43F5E] to-[#E11D48]',
+    lightBg: 'bg-[#FFF1F2]',
+    borderColor: 'border-[#FFE4E6]',
+    badgeBg: 'bg-[#F43F5E]',
+    titleColor: 'text-[#881337]',
+    countColor: 'text-[#FB7185]',
+    description: 'الإرشاد والتوجيه الطلابي والدعم النفسي والتربوي',
+    supervisorName: 'الموجه الطلابي'
   }
 ];
 

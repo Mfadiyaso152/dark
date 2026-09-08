@@ -97,10 +97,6 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
               </span>
             )}
           </div>
-
-          <p className="text-xs md:text-sm text-slate-500 font-medium truncate max-w-xs sm:max-w-md md:max-w-lg">
-            {subject?.description || `منهج ومذكرات وواجبات ${subject?.name}`}
-          </p>
         </div>
       </div>
 
