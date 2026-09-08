@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Home, Bookmark, Users, Sparkles } from 'lucide-react';
+import { Home, Bookmark, Sparkles, GraduationCap, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export type TabType = 'home' | 'subjects' | 'qudurat' | 'saved' | 'users';
@@ -16,7 +16,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onTabChange,
   savedCount
 }) => {
-  const { isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
+
+  // Appointed teachers and assistant supervisors (excluding Super Admin and regular students)
+  const isAppointedTeacherOrAssistant =
+    !isSuperAdmin &&
+    (isAssistantAdmin ||
+      canAddContent ||
+      user?.role === 'supervisor' ||
+      user?.role === 'teacher' ||
+      (user?.jobTitle && user.jobTitle !== 'طالب'));
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl transition-all font-['Tajawal',sans-serif]">
@@ -76,7 +85,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <span className="text-[11px] md:text-xs mt-1">المحفوظات</span>
         </motion.button>
 
-        {/* Users (For Super Admin) */}
+        {/* 1. Super Admin (الإدارة الأساسية): Shows "المستخدمين" with Users icon */}
         {isSuperAdmin && (
           <motion.button
             whileTap={{ scale: 0.88 }}
@@ -91,6 +100,24 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <span className="text-[11px] md:text-xs mt-1">المستخدمين</span>
           </motion.button>
         )}
+
+        {/* 2. Appointed Teachers & Assistant Supervisors: Shows "الطلاب" with GraduationCap icon */}
+        {isAppointedTeacherOrAssistant && (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => onTabChange('users')}
+            className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition cursor-pointer select-none active:scale-90 ${
+              activeTab === 'users'
+                ? 'text-[#7C3AED] font-black'
+                : 'text-slate-400 hover:text-slate-600 font-medium'
+            }`}
+          >
+            <GraduationCap className="w-5 h-5 md:w-6 md:h-6" />
+            <span className="text-[11px] md:text-xs mt-1">الطلاب</span>
+          </motion.button>
+        )}
+
+        {/* 3. Students: Do not see this section at all */}
       </div>
     </div>
   );

@@ -192,6 +192,20 @@ export interface Homework {
   notes?: string;
   createdAt: string;
   supervisorName: string;
+  solutionFile?: AttachedFile; // Optional PDF solution file attached by teacher
 }
+
+export interface HomeworkSubmission {
+  id: string;
+  homeworkId: string;
+  subjectId: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  submittedAt: string;
+  notes?: string;
+  attachedFile?: AttachedFile; // Optional PDF solution attached by student
+}
+
 
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Subject, Lesson, SubjectBooklet, Homework } from '../types';
+import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { LessonCard } from './LessonCard';
 import { HomeworkSection } from './HomeworkSection';
@@ -36,11 +36,14 @@ interface SubjectDetailViewProps {
   onAddBooklet: (booklet: Omit<SubjectBooklet, 'id' | 'createdAt'>) => void;
   onDeleteBooklet: (id: string) => void;
   onAddHomework?: (hw: Omit<Homework, 'id' | 'createdAt'>) => void;
+  onUpdateHomework?: (hw: Homework) => void;
   onDeleteHomework?: (id: string) => void;
   completedLessonIds: string[];
   bookmarkedLessonIds: string[];
   completedHomeworkIds?: string[];
   onToggleCompleteHomework?: (id: string) => void;
+  submissions?: HomeworkSubmission[];
+  onSubmitHomeworkSolution?: (sub: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => Promise<void>;
 }
 
 export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
@@ -58,11 +61,14 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   onAddBooklet,
   onDeleteBooklet,
   onAddHomework,
+  onUpdateHomework,
   onDeleteHomework,
   completedLessonIds,
   bookmarkedLessonIds,
   completedHomeworkIds = [],
-  onToggleCompleteHomework
+  onToggleCompleteHomework,
+  submissions = [],
+  onSubmitHomeworkSolution
 }) => {
   const { user, canManageSubject } = useAuth();
   // Check if current user is authorized to add/edit/delete content for THIS specific subject
@@ -399,10 +405,13 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         homeworks={homeworks}
         onBack={() => setSubView(null)}
         onAddHomework={onAddHomework || (() => {})}
+        onUpdateHomework={onUpdateHomework}
         onDeleteHomework={onDeleteHomework || (() => {})}
         completedHomeworkIds={completedHomeworkIds}
         onToggleCompleteHomework={onToggleCompleteHomework}
         canEdit={canEditCurrentSubject}
+        submissions={submissions}
+        onSubmitSolution={onSubmitHomeworkSolution}
       />
     );
   }

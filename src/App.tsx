@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework } from './types';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
 import { Header } from './components/Header';
 import { SubjectCard } from './components/SubjectCard';
@@ -11,6 +11,7 @@ import { AddLessonModal } from './components/AddLessonModal';
 import { AuthModal } from './components/AuthModal';
 import { LoginPage } from './components/LoginPage';
 import { UserManagementView } from './components/UserManagementView';
+import { StudentsManagementView } from './components/StudentsManagementView';
 import { QuduratView } from './components/QuduratView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { useAuth } from './context/AuthContext';
@@ -27,7 +28,7 @@ import { storeLargeFile, deleteLargeFile } from './utils/fileStorage';
 import { uploadFileToCloud, deleteFileFromCloud } from './utils/cloudStorage';
 
 export default function App() {
-  const { user, isSuperAdmin, canAddContent, canManageSubject } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject } = useAuth();
   const isSupervisorRole = canAddContent;
 
   // Run startup hygiene to clean any bloated keys causing QuotaExceededError
@@ -253,6 +254,52 @@ export default function App() {
       });
     }, (err) => {
       console.warn('Firestore homeworks snapshot error:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Homework Submissions (تسليمات وحلول واجبات الطلاب)
+  const [submissions, setSubmissions] = useState<HomeworkSubmission[]>(() => {
+    try {
+      const saved = safeGetItem('thanaweya_homework_submissions_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  // Sync submissions safely to localStorage
+  useEffect(() => {
+    safeSetItem('thanaweya_homework_submissions_v1', JSON.stringify(submissions));
+  }, [submissions]);
+
+  // Real-time Firestore sync for Homework Submissions
+  useEffect(() => {
+    const subCol = collection(db, 'homework_submissions');
+    const unsubscribe = onSnapshot(subCol, (snapshot) => {
+      const cloudSubs: HomeworkSubmission[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && data.id && data.homeworkId && (data.studentEmail || data.studentId)) {
+          cloudSubs.push(data as HomeworkSubmission);
+        }
+      });
+
+      setSubmissions((prev) => {
+        const map = new Map<string, HomeworkSubmission>();
+        prev.forEach((s) => map.set(s.id, s));
+        cloudSubs.forEach((cs) => map.set(cs.id, cs));
+        const merged = Array.from(map.values());
+        safeSetItem('thanaweya_homework_submissions_v1', JSON.stringify(merged));
+        return merged;
+      });
+    }, (err) => {
+      console.warn('Firestore homework_submissions snapshot note:', err);
     });
 
     return () => unsubscribe();
@@ -655,21 +702,164 @@ export default function App() {
       return;
     }
     const hwId = 'hw-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-    const hw: Homework = {
+    const fileId = newHwData.solutionFile?.dataUrl ? 'hw-sol-' + hwId : undefined;
+    const hasFileData = !!newHwData.solutionFile?.dataUrl;
+    const solutionDataUrl = newHwData.solutionFile?.dataUrl;
+
+    const cloudHw: Homework = {
       ...newHwData,
       id: hwId,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      solutionFile: newHwData.solutionFile ? {
+        name: newHwData.solutionFile.name || 'الحل_النموذجي.pdf',
+        type: newHwData.solutionFile.type || 'pdf',
+        size: newHwData.solutionFile.size || '1 MB',
+        hasFile: true,
+        fileId
+      } : undefined
+    };
+
+    const localHw: Homework = {
+      ...cloudHw,
+      solutionFile: newHwData.solutionFile ? {
+        ...cloudHw.solutionFile!,
+        dataUrl: solutionDataUrl
+      } : undefined
     };
 
     // Immediate local state update
-    setHomeworks((prev) => [hw, ...prev]);
+    setHomeworks((prev) => [localHw, ...prev]);
 
     // Cloud Firestore save: pushes immediately to all students in real time
     try {
-      await setDoc(doc(db, 'homeworks', hwId), hw, { merge: true });
+      const sanitized = JSON.parse(JSON.stringify(cloudHw));
+      await setDoc(doc(db, 'homeworks', hwId), sanitized, { merge: true });
     } catch (err) {
       console.warn('Firestore homework save error:', err);
     }
+
+    // Upload cloud chunks if solution PDF attached
+    if (hasFileData && solutionDataUrl && fileId) {
+      uploadFileToCloud(fileId, solutionDataUrl).catch((err) => {
+        console.warn('Failed to upload homework solution PDF to cloud:', err);
+      });
+    }
+  };
+
+  // Edit / Update an existing published homework
+  const handleUpdateHomework = async (updatedHw: Homework) => {
+    if (!canManageSubject(updatedHw.subjectId)) {
+      alert('ليس لديك صلاحية لتعديل واجبات هذه المادة');
+      return;
+    }
+
+    const hasNewFileData = !!updatedHw.solutionFile?.dataUrl;
+    const solutionDataUrl = updatedHw.solutionFile?.dataUrl;
+    const fileId =
+      updatedHw.solutionFile?.fileId ||
+      (hasNewFileData ? 'hw-sol-' + updatedHw.id : undefined);
+
+    const cloudHw: Homework = {
+      ...updatedHw,
+      solutionFile: updatedHw.solutionFile ? {
+        name: updatedHw.solutionFile.name || 'الحل_النموذجي.pdf',
+        type: updatedHw.solutionFile.type || 'pdf',
+        size: updatedHw.solutionFile.size || '1 MB',
+        hasFile: true,
+        fileId
+      } : undefined
+    };
+
+    const localHw: Homework = {
+      ...cloudHw,
+      solutionFile: updatedHw.solutionFile ? {
+        ...cloudHw.solutionFile!,
+        dataUrl: solutionDataUrl || updatedHw.solutionFile.dataUrl
+      } : undefined
+    };
+
+    // Immediate local state update
+    setHomeworks((prev) => {
+      const updated = prev.map((h) => (h.id === updatedHw.id ? localHw : h));
+      safeSetItem('thanaweya_homeworks_v2', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Cloud Firestore update
+    try {
+      const sanitized = JSON.parse(JSON.stringify(cloudHw));
+      await setDoc(doc(db, 'homeworks', updatedHw.id), sanitized, { merge: true });
+    } catch (err) {
+      console.warn('Firestore homework update error:', err);
+    }
+
+    // Upload cloud chunks if new solution PDF attached
+    if (hasNewFileData && solutionDataUrl && fileId) {
+      uploadFileToCloud(fileId, solutionDataUrl).catch((err) => {
+        console.warn('Failed to upload updated homework solution PDF to cloud:', err);
+      });
+    }
+  };
+
+  // Student Homework Solution Submission
+  const handleSubmitHomeworkSolution = async (
+    subData: Omit<HomeworkSubmission, 'id' | 'submittedAt'>
+  ) => {
+    const subId = 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    const fileId = subData.attachedFile?.dataUrl ? 'sub-sol-' + subId : undefined;
+    const hasFileData = !!subData.attachedFile?.dataUrl;
+    const attachedDataUrl = subData.attachedFile?.dataUrl;
+
+    const cloudSub: HomeworkSubmission = {
+      ...subData,
+      id: subId,
+      submittedAt: new Date().toISOString(),
+      attachedFile: subData.attachedFile ? {
+        name: subData.attachedFile.name || 'حل_الواجب.pdf',
+        type: subData.attachedFile.type || 'pdf',
+        size: subData.attachedFile.size || '1 MB',
+        hasFile: true,
+        fileId
+      } : undefined
+    };
+
+    const localSub: HomeworkSubmission = {
+      ...cloudSub,
+      attachedFile: subData.attachedFile ? {
+        ...cloudSub.attachedFile!,
+        dataUrl: attachedDataUrl
+      } : undefined
+    };
+
+    // Replace previous submission if exists or add new
+    setSubmissions((prev) => {
+      const filtered = prev.filter(
+        (s) =>
+          !(
+            s.homeworkId === subData.homeworkId &&
+            s.studentEmail.toLowerCase() === subData.studentEmail.toLowerCase()
+          )
+      );
+      return [localSub, ...filtered];
+    });
+
+    // Cloud Firestore save
+    try {
+      const sanitized = JSON.parse(JSON.stringify(cloudSub));
+      await setDoc(doc(db, 'homework_submissions', subId), sanitized, { merge: true });
+    } catch (err) {
+      console.warn('Firestore homework submission save error:', err);
+    }
+
+    // Upload cloud chunks if PDF attached
+    if (hasFileData && attachedDataUrl && fileId) {
+      uploadFileToCloud(fileId, attachedDataUrl).catch((err) => {
+        console.warn('Failed to upload student solution PDF to cloud:', err);
+      });
+    }
+
+    // Also mark as completed in student's progress
+    handleToggleCompleteHomework(subData.homeworkId);
   };
 
   const handleDeleteHomework = async (id: string) => {
@@ -759,9 +949,20 @@ export default function App() {
           {/* TAB: Qudurat (القدرات - قريباً) */}
           {activeTab === 'qudurat' ? (
             <QuduratView />
-          ) : activeTab === 'users' && isSuperAdmin ? (
-            /* TAB: User Management */
-            <UserManagementView />
+          ) : activeTab === 'users' ? (
+            isSuperAdmin ? (
+              /* TAB: User Management (الإدارة - إدارة المستخدمين وتعيين المعلمين والصلاحيات زي قبل) */
+              <UserManagementView />
+            ) : isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب') ? (
+              /* TAB: Students Management (المعلمين والمشرف المساعد - استعراض الطلاب والمفضلات والواجبات) */
+              <StudentsManagementView
+                allLessons={safeLessons}
+                allSubjects={subjects}
+                allHomeworks={homeworks}
+                allSubmissions={submissions}
+                onSelectLesson={openLessonDetail}
+              />
+            ) : null
           ) : activeTab === 'saved' ? (
             /* TAB: Saved Lessons (المحفوظات) */
             <div className="space-y-3 md:space-y-4">
@@ -802,7 +1003,7 @@ export default function App() {
             /* TAB: Home (الرئيسية) */
             <div className="space-y-4 md:space-y-6">
               {selectedSubject ? (
-                /* Inside a Subject: Shows two selectable options (Lessons vs Booklets) */
+                /* Inside a Subject: Shows selectable options (Lessons vs Booklets vs Homeworks) */
                 <SubjectDetailView
                   subject={selectedSubject}
                   lessons={safeLessons}
@@ -818,11 +1019,14 @@ export default function App() {
                   onDeleteBooklet={handleDeleteBooklet}
                   homeworks={homeworks}
                   onAddHomework={handleAddHomework}
+                  onUpdateHomework={handleUpdateHomework}
                   onDeleteHomework={handleDeleteHomework}
                   completedLessonIds={progress.completedLessonIds}
                   bookmarkedLessonIds={progress.bookmarkedLessonIds}
                   completedHomeworkIds={progress.completedHomeworkIds}
                   onToggleCompleteHomework={handleToggleCompleteHomework}
+                  submissions={submissions}
+                  onSubmitHomeworkSolution={handleSubmitHomeworkSolution}
                 />
               ) : (
                 /* All Subjects Grid */
