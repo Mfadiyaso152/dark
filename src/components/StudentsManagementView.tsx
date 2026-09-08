@@ -51,7 +51,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     user?.jobTitle === 'مشرف مساعد' ||
     (user?.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
 
-  const [mainTab, setMainTab] = useState<'students' | 'staff'>('students');
+  const [filterType, setFilterType] = useState<'all' | 'supervisors' | 'students'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -150,30 +150,42 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     });
   }, [uniqueUsers, isViewerSuperOrAssistant]);
 
-  // Filter students based on search
-  const filteredStudents = useMemo(() => {
-    return studentsOnly.filter((u) => {
-      const q = searchQuery.toLowerCase().trim();
-      if (!q) return true;
-      return (
-        u.name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q)
-      );
-    });
-  }, [studentsOnly, searchQuery]);
+  // Helper to identify supervisor
+  const isSupervisorUser = (u: User) => {
+    const isSuper = (u.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || u.isSuperAdmin;
+    const job = u.jobTitle || '';
+    return (
+      isSuper ||
+      u.role === 'supervisor' ||
+      job === 'المشرف الأساسي' ||
+      job === 'مشرف مساعد' ||
+      job === 'المرشد الطلابي' ||
+      job.includes('مرشد')
+    );
+  };
 
-  // Filter staff based on search
-  const filteredStaff = useMemo(() => {
-    return staffOnly.filter((u) => {
-      const q = searchQuery.toLowerCase().trim();
-      if (!q) return true;
-      return (
+  // Combined list of Supervisors and Students in the exact same list
+  const combinedUsers = useMemo(() => {
+    return [...staffOnly, ...studentsOnly];
+  }, [staffOnly, studentsOnly]);
+
+  // Filtered users based on filterType and search query
+  const filteredUsers = useMemo(() => {
+    let list = combinedUsers;
+    if (filterType === 'students') {
+      list = studentsOnly;
+    } else if (filterType === 'supervisors') {
+      list = staffOnly;
+    }
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return list;
+    return list.filter(
+      (u) =>
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
         (u.jobTitle && u.jobTitle.toLowerCase().includes(q))
-      );
-    });
-  }, [staffOnly, searchQuery]);
+    );
+  }, [combinedUsers, filterType, studentsOnly, staffOnly, searchQuery]);
 
   // Helper to get submissions count for a user (scoped to teacher's subject if viewer is a teacher)
   const getStudentSubmissionsCount = (u: User): number => {
@@ -231,20 +243,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           </div>
           <div>
             <h3 className="font-black text-slate-900 text-base sm:text-lg">
-              {mainTab === 'students'
-                ? `قائمة الطلاب المسجلين (${filteredStudents.length})`
-                : isViewerSuperOrAssistant
-                ? `المشرفون والمعلمون (${filteredStaff.length})`
-                : `المشرفون (${filteredStaff.length})`}
+              {filterType === 'all'
+                ? `قائمة الطلاب والمشرفين (${filteredUsers.length})`
+                : filterType === 'supervisors'
+                ? `قائمة المشرفين (${filteredUsers.length})`
+                : `قائمة الطلاب المسجلين (${filteredUsers.length})`}
             </h3>
             <p className="text-xs text-slate-500">
-              {mainTab === 'students'
-                ? !isViewerSuperOrAssistant
-                  ? `اضغط على أي طالب لمشاهدة حلول واجبات مادتك (${user?.jobTitle})`
-                  : 'اضغط على أي طالب لمشاهدة حلول واجباته بالتفصيل'
-                : !isViewerSuperOrAssistant
-                ? 'قائمة المشرفين المتاحين في المنصة'
-                : 'اضغط على أي مشرف أو معلم للاطلاع على حلول واجباته بالتفصيل'}
+              {!isViewerSuperOrAssistant
+                ? `اضغط على أي طالب أو مشرف لمشاهدة حلول واجبات مادتك (${user?.jobTitle})`
+                : 'اضغط على أي طالب أو مشرف لمشاهدة حلول واجباته بالتفصيل'}
             </p>
           </div>
         </div>
@@ -260,34 +268,45 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         </button>
       </div>
 
-      {/* Switcher (Students vs Supervisors / Staff) */}
-      <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+      {/* Switcher & Filter Tabs (الكل بنفس القائمة افتراضياً) */}
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
         <button
-          onClick={() => setMainTab('students')}
-          className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
-            mainTab === 'students'
+          type="button"
+          onClick={() => setFilterType('all')}
+          className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            filterType === 'all'
               ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>الكل ({combinedUsers.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterType('supervisors')}
+          className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            filterType === 'supervisors'
+              ? 'bg-white text-purple-600 shadow-xs border border-slate-200/80'
+              : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Crown className="w-4 h-4 text-amber-500" />
+          <span>المشرفون ({staffOnly.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterType('students')}
+          className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+            filterType === 'students'
+              ? 'bg-white text-blue-600 shadow-xs border border-slate-200/80'
               : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <GraduationCap className="w-4 h-4" />
           <span>الطلاب ({studentsOnly.length})</span>
-        </button>
-
-        <button
-          onClick={() => setMainTab('staff')}
-          className={`py-2.5 px-4 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 cursor-pointer ${
-            mainTab === 'staff'
-              ? 'bg-white text-purple-600 shadow-xs border border-slate-200/80'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>
-            {isViewerSuperOrAssistant
-              ? `المشرفون والمعلمون (${staffOnly.length})`
-              : `المشرفون (${staffOnly.length})`}
-          </span>
         </button>
       </div>
 
@@ -297,13 +316,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={
-            mainTab === 'students'
-              ? 'ابحث باسم الطالب أو البريد الإلكتروني...'
-              : isViewerSuperOrAssistant
-              ? 'ابحث باسم المعلم أو المشرف أو المادة...'
-              : 'ابحث باسم المشرف...'
-          }
+          placeholder="ابحث بالاسم أو البريد الإلكتروني أو الوظيفة..."
           className="w-full py-3 pr-11 pl-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs transition"
         />
         <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute right-3.5 top-3.5" />
@@ -332,209 +345,155 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         )}
       </AnimatePresence>
 
-      {/* MAIN VIEW: Students List */}
-      {mainTab === 'students' ? (
-        <div className="space-y-3">
-          {filteredStudents.map((student) => {
-            const submissionsCount = getStudentSubmissionsCount(student);
+      {/* UNIFIED VIEW: Students and Supervisors in the Same List */}
+      <div className="space-y-3">
+        {filteredUsers.map((u) => {
+          const isSuper = isSupervisorUser(u);
+          const isThisSuperAdmin =
+            (u.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+          const currentJob = isThisSuperAdmin
+            ? 'المشرف الأساسي'
+            : u.jobTitle ||
+              (u.role === 'supervisor'
+                ? 'مشرف مساعد'
+                : u.role === 'teacher'
+                ? 'معلم'
+                : 'طالب');
 
-            return (
-              <motion.div
-                key={student.id || student.email}
-                whileHover={{ y: -1 }}
-                onClick={() => setSelectedStudent(student)}
-                className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-              >
-                {/* Student Avatar + Details */}
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-indigo-50 border border-indigo-100 shrink-0 shadow-xs">
-                    <img
-                      src={
-                        student.avatar ||
-                        'https://api.dicebear.com/7.x/avataaars/svg?seed=' +
-                          encodeURIComponent(student.name)
-                      }
-                      alt={student.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-black text-slate-900 text-sm sm:text-base truncate group-hover:text-indigo-600 transition">
-                        {student.name}
-                      </h4>
+          const submissionsCount = getStudentSubmissionsCount(u);
+          const isUpdatingThis = updatingUserEmail === u.email;
+
+          return (
+            <motion.div
+              key={u.id || u.email}
+              whileHover={{ y: -1 }}
+              onClick={() => setSelectedStudent(u)}
+              className={`bg-white rounded-3xl p-4 sm:p-5 border shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group ${
+                isSuper
+                  ? 'border-purple-200/90 hover:border-purple-300'
+                  : 'border-slate-200/90 hover:border-indigo-300'
+              }`}
+            >
+              {/* User Avatar + Details */}
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                <div
+                  className={`w-12 h-12 rounded-2xl overflow-hidden shrink-0 shadow-xs border ${
+                    isSuper
+                      ? 'bg-purple-50 border-purple-100'
+                      : 'bg-indigo-50 border-indigo-100'
+                  }`}
+                >
+                  <img
+                    src={
+                      u.avatar ||
+                      'https://api.dicebear.com/7.x/avataaars/svg?seed=' +
+                        encodeURIComponent(u.name)
+                    }
+                    alt={u.name}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4
+                      className={`font-black text-sm sm:text-base truncate transition ${
+                        isSuper
+                          ? 'text-slate-900 group-hover:text-purple-700'
+                          : 'text-slate-900 group-hover:text-indigo-600'
+                      }`}
+                    >
+                      {u.name}
+                    </h4>
+
+                    {/* Badge: Supervisor vs Student */}
+                    {isSuper ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full font-black bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shrink-0 shadow-2xs">
+                          <Crown className="w-3 h-3 text-amber-500" />
+                          مشرف
+                        </span>
+                        {currentJob && currentJob !== 'طالب' && currentJob !== 'المشرف الأساسي' && currentJob !== 'مشرف' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                            {currentJob === 'المرشد الطلابي' && (
+                              <Compass className="w-2.5 h-2.5 text-amber-600" />
+                            )}
+                            {currentJob === 'مشرف مساعد' && (
+                              <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
+                            )}
+                            {currentJob}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
                       <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
                         طالب
                       </span>
-                    </div>
-                    <p className="text-xs text-slate-400 font-mono truncate">{student.email}</p>
+                    )}
                   </div>
+                  <p className="text-xs text-slate-400 font-mono truncate">{u.email}</p>
+                </div>
+              </div>
+
+              {/* Submissions Badge + Action */}
+              <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
+                  <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
+                  <span>
+                    {submissionsCount} حلول واجبات
+                    {!isViewerSuperOrAssistant && ' بمادتك'}
+                  </span>
                 </div>
 
-                {/* Badges: Homework Submissions */}
-                <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
-                    <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                    <span>
-                      {submissionsCount} حلول واجبات
-                      {!isViewerSuperOrAssistant && ' بمادتك'}
-                    </span>
-                  </div>
-
-                  <div className="hidden sm:flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:-translate-x-1 transition mr-1">
-                    <span>التفاصيل</span>
-                    <ChevronLeft className="w-4 h-4" />
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-
-          {filteredStudents.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
-              <GraduationCap className="w-10 h-10 text-slate-300 mx-auto" />
-              <h4 className="text-sm sm:text-base font-black text-slate-800">
-                لا يوجد طلاب مسجلين مطابقين للبحث
-              </h4>
-              <p className="text-xs text-slate-400">
-                عند تسجيل الطلاب ودخولهم سيظهرون فوراً هنا في القائمة
-              </p>
-            </div>
-          )}
-        </div>
-      ) : (
-        /* SECOND VIEW: Staff / Supervisors */
-        <div className="space-y-3">
-          {filteredStaff.map((u) => {
-            const isThisSuperAdmin =
-              u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-            const currentJob = isThisSuperAdmin
-              ? 'المشرف الأساسي'
-              : u.jobTitle ||
-                (u.role === 'supervisor'
-                  ? 'مشرف مساعد'
-                  : u.role === 'teacher'
-                  ? 'أ. رياضيات'
-                  : 'طالب');
-
-            const matchedOption = USER_JOB_OPTIONS.find((opt) => opt.value === currentJob);
-            const badgeClass = isThisSuperAdmin
-              ? 'bg-purple-100 text-purple-800 border-purple-200'
-              : currentJob === 'المرشد الطلابي'
-              ? 'bg-amber-100 text-amber-800 border-amber-200'
-              : matchedOption?.colorClass || 'bg-slate-100 text-slate-700 border-slate-200';
-
-            const submissionsCount = getStudentSubmissionsCount(u);
-            const isUpdatingThis = updatingUserEmail === u.email;
-
-            return (
-              <motion.div
-                key={u.id || u.email}
-                whileHover={{ y: -1 }}
-                onClick={() => setSelectedStudent(u)}
-                className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-md hover:border-purple-300 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-              >
-                {/* Staff Avatar + Details */}
-                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                  <div className="w-12 h-12 rounded-2xl overflow-hidden bg-purple-50 border border-purple-100 shrink-0 shadow-xs">
-                    <img
-                      src={
-                        u.avatar ||
-                        'https://api.dicebear.com/7.x/avataaars/svg?seed=' +
-                          encodeURIComponent(u.name)
-                      }
-                      alt={u.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-black text-slate-900 text-sm sm:text-base truncate group-hover:text-purple-700 transition">
-                        {u.name}
-                      </h4>
-                      {isThisSuperAdmin ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 shrink-0">
-                          <Crown className="w-2.5 h-2.5 text-amber-500" />
-                          المشرف الأساسي
-                        </span>
-                      ) : currentJob === 'المرشد الطلابي' ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 shrink-0">
-                          <Compass className="w-2.5 h-2.5 text-amber-600" />
-                          المرشد الطلابي
-                        </span>
-                      ) : currentJob === 'مشرف مساعد' ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shrink-0">
-                          <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
-                          مشرف مساعد
-                        </span>
-                      ) : (
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold border shrink-0 ${badgeClass}`}
-                        >
-                          {currentJob}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-slate-400 font-mono truncate">{u.email}</p>
-                  </div>
-                </div>
-
-                {/* Right Area: Badges (Submissions) + Super Admin Dropdown */}
-                <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
-                    <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                    <span>
-                      {submissionsCount} حلول واجبات
-                      {!isViewerSuperOrAssistant && ' بمادتك'}
-                    </span>
-                  </div>
-
-                  {!isThisSuperAdmin && isSuperAdmin && (
-                    <div
-                      className="relative shrink-0"
-                      onClick={(e) => e.stopPropagation()}
+                {!isThisSuperAdmin && isSuperAdmin && (
+                  <div
+                    className="relative shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <select
+                      value={currentJob}
+                      disabled={isUpdatingThis}
+                      onChange={(e) => handleJobChange(u.email, e.target.value)}
+                      className="py-1.5 pr-2.5 pl-6 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer transition appearance-none disabled:opacity-50"
+                      title="تغيير وظيفة المعلم أو المشرف"
                     >
-                      <select
-                        value={currentJob}
-                        disabled={isUpdatingThis}
-                        onChange={(e) => handleJobChange(u.email, e.target.value)}
-                        className="py-1.5 pr-2.5 pl-6 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer transition appearance-none disabled:opacity-50"
-                        title="تغيير وظيفة المعلم أو المشرف"
-                      >
-                        <option value="طالب">طالب</option>
-                        <optgroup label="المعلمون والمشرفون">
-                          {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                      <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5 pointer-events-none" />
-                    </div>
-                  )}
-
-                  <div className="hidden sm:flex items-center gap-1 text-xs font-bold text-purple-600 group-hover:-translate-x-1 transition mr-1">
-                    <span>التفاصيل</span>
-                    <ChevronLeft className="w-4 h-4" />
+                      <option value="طالب">طالب</option>
+                      <optgroup label="المعلمون والمشرفون">
+                        {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5 pointer-events-none" />
                   </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                )}
 
-          {filteredStaff.length === 0 && (
-            <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
-              <Users className="w-10 h-10 text-slate-300 mx-auto" />
-              <h4 className="text-sm sm:text-base font-black text-slate-800">
-                {isViewerSuperOrAssistant
-                  ? 'لا يوجد مشرفون أو معلمون مطابقين للبحث'
-                  : 'لا يوجد مشرفون مطابقين للبحث'}
-              </h4>
-            </div>
-          )}
-        </div>
-      )}
+                <div
+                  className={`hidden sm:flex items-center gap-1 text-xs font-bold transition mr-1 group-hover:-translate-x-1 ${
+                    isSuper ? 'text-purple-600' : 'text-indigo-600'
+                  }`}
+                >
+                  <span>التفاصيل</span>
+                  <ChevronLeft className="w-4 h-4" />
+                </div>
+              </div>
+            </motion.div>
+          );
+        })}
+
+        {filteredUsers.length === 0 && (
+          <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
+            <GraduationCap className="w-10 h-10 text-slate-300 mx-auto" />
+            <h4 className="text-sm sm:text-base font-black text-slate-800">
+              لا توجد نتائج مطابقة للبحث
+            </h4>
+            <p className="text-xs text-slate-400">
+              تأكد من كتابة الاسم أو البريد بشكل صحيح
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Detailed User Modal (when clicking on any student, supervisor or teacher) */}
       {selectedStudent && (

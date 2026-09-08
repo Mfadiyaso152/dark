@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, MessageCircle } from 'lucide-react';
+import { Search, MessageCircle, Calendar, Clock, Sparkles } from 'lucide-react';
 import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
 import { Header } from './components/Header';
@@ -14,7 +14,6 @@ import { UserManagementView } from './components/UserManagementView';
 import { StudentsManagementView } from './components/StudentsManagementView';
 import { StudentServiceView } from './components/StudentServiceView';
 import { QuduratView } from './components/QuduratView';
-import { AdminNotificationsView } from './components/AdminNotificationsView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { useAuth } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -405,12 +404,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('home');
 
-  // Guard against opening a coming-soon subject
+  // Guard against opening a coming-soon subject or notifications tab
   useEffect(() => {
     if (selectedSubject?.isComingSoon) {
       setSelectedSubject(null);
     }
-  }, [selectedSubject]);
+    if (activeTab === 'notifications') {
+      setActiveTab('home');
+    }
+  }, [selectedSubject, activeTab]);
 
   // Modals
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
@@ -926,9 +928,6 @@ export default function App() {
           {/* TAB: Qudurat (القدرات - قريباً) */}
           {activeTab === 'qudurat' ? (
             <QuduratView />
-          ) : activeTab === 'notifications' ? (
-            /* TAB: Administrative Notifications (الإشعارات الإدارية - قريباً) */
-            <AdminNotificationsView />
           ) : activeTab === 'users' ? (
             isSuperAdmin ? (
               /* TAB: User Management (الإدارة - إدارة المستخدمين وتعيين المعلمين والصلاحيات زي قبل) */
@@ -1064,6 +1063,19 @@ export default function App() {
                     <MessageCircle className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
                     <span>الدخول لقروب الواتساب</span>
                   </a>
+
+                  {/* Notice: Completion and Official Launch Date */}
+                  <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3 text-right">
+                    <div className="flex items-center gap-2.5">
+                      <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 shrink-0" />
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm">
+                        موعد الانتهاء من البرمجة والإطلاق الرسمي
+                      </span>
+                    </div>
+                    <span className="px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-xs sm:text-sm font-black shrink-0">
+                      20 سبتمبر
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

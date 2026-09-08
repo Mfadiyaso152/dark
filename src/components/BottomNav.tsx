@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Home, Sparkles, GraduationCap, Users, Bell } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Home, Sparkles, GraduationCap, Users, Bell, Clock, Lock } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export type TabType = 'home' | 'subjects' | 'qudurat' | 'notifications' | 'users';
 
@@ -16,6 +16,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onTabChange
 }) => {
   const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
+  const [showComingSoonToast, setShowComingSoonToast] = useState(false);
+
+  const handleNotificationsClick = () => {
+    setShowComingSoonToast(true);
+    setTimeout(() => {
+      setShowComingSoonToast(false);
+    }, 2500);
+  };
 
   // Appointed teachers and assistant supervisors (excluding Super Admin and regular students)
   const isAppointedTeacherOrAssistant =
@@ -28,6 +36,21 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl transition-all font-['Tajawal',sans-serif]">
+      {/* Coming Soon Toast for Administrative Notifications */}
+      <AnimatePresence>
+        {showComingSoonToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 12, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+            className="fixed bottom-20 md:bottom-22 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-xs sm:text-sm px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 z-50 border border-slate-700/80 backdrop-blur-md font-bold whitespace-nowrap shadow-indigo-950/40"
+          >
+            <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-spin" />
+            <span>قسم الإشعارات الإدارية قريباً التفعيل ⏳</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Navigation Items Bar */}
       <div className="h-16 md:h-18 flex items-center justify-around px-2 sm:px-4 md:px-8">
         {/* Home */}
@@ -63,15 +86,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <span className="text-[11px] md:text-xs mt-1">القدرات</span>
         </motion.button>
 
-        {/* Administrative Notifications (الإشعارات الإدارية - قريباً) */}
+        {/* Administrative Notifications (الإشعارات الإدارية - قريباً ما يفتح) */}
         <motion.button
-          whileTap={{ scale: 0.88 }}
-          onClick={() => onTabChange('notifications')}
-          className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none active:scale-90 ${
-            activeTab === 'notifications'
-              ? 'text-blue-600 font-black'
-              : 'text-slate-400 hover:text-slate-600 font-medium'
-          }`}
+          whileTap={{ scale: 0.94 }}
+          onClick={handleNotificationsClick}
+          type="button"
+          className="flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none text-slate-400 hover:text-slate-600 active:scale-90"
+          title="قسم الإشعارات الإدارية قريباً التفعيل"
         >
           <div className="relative">
             <Bell className="w-5 h-5 md:w-6 md:h-6" />
