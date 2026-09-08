@@ -92,9 +92,12 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
     subject.id === 'digi-1' ||
     subject.id === 'math-1' ||
     subject.id === 'math-2' ||
+    subject.id === 'think-1' ||
     subject.name.includes('تقنية رقمية') ||
     subject.name.includes('الرقمية') ||
-    subject.name.includes('رياضيات');
+    subject.name.includes('رياضيات') ||
+    subject.name.includes('التفكير الناقد') ||
+    subject.name.includes('تفكير');
 
   const handleDownloadAllLessons = async () => {
     if (subjectLessons.length === 0) return;

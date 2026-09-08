@@ -128,6 +128,24 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: 'تلاوة وحفظ القرآن الكريم وتدبر معاني الآيات وأسباب النزول وأصول التفسير',
     supervisorName: 'مشرف المادة'
   },
+  // 8. التفكير الناقد
+  {
+    id: 'think-1',
+    name: 'التفكير الناقد',
+    code: 'CRIT-101',
+    semester: 1,
+    icon: 'Brain',
+    emoji: '🧠',
+    color: 'indigo',
+    gradient: 'from-[#6366F1] to-[#4F46E5]',
+    lightBg: 'bg-[#EEF2FF]',
+    borderColor: 'border-[#E0E7FF]',
+    badgeBg: 'bg-[#6366F1]',
+    titleColor: 'text-[#3730A3]',
+    countColor: 'text-[#818CF8]',
+    description: 'مهارات التفكير الناقد، الاستدلال، تقييم الحجج، وحل المشكلات واتخاذ القرارات',
+    supervisorName: 'أ. تفكير ناقد'
+  },
 
   // ==================== الفصل الدراسي الثاني (Semester 2 - P2) (كلها قريباً) ====================
   // 1. رياضيات 1-2
