@@ -545,6 +545,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (job.includes('كفايات') || job.includes('عربي') || job.includes('لغوية')) {
       return target === 'lang-1' || target.includes('كفايات') || target.includes('لغوية') || target.includes('lang');
     }
+    if (job.includes('مرشد') || job.includes('إرشاد') || job.includes('ارشاد')) {
+      return target === 'guidance-1' || target.includes('إرشاد') || target.includes('ارشاد') || target.includes('مرشد') || target.includes('guidance');
+    }
 
     return false;
   }, [user, isSuperAdmin]);

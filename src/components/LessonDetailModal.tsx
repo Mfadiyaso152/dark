@@ -28,9 +28,9 @@ interface LessonDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   isCompleted: boolean;
-  isBookmarked: boolean;
+  isBookmarked?: boolean;
   onToggleComplete: (id: string) => void;
-  onToggleBookmark: (id: string) => void;
+  onToggleBookmark?: (id: string) => void;
   onOpenAllPdfModal?: (subject?: Subject) => void;
 }
 
@@ -40,9 +40,7 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
   isOpen,
   onClose,
   isCompleted,
-  isBookmarked,
   onToggleComplete,
-  onToggleBookmark,
   onOpenAllPdfModal
 }) => {
   const [activeTab, setActiveTab] = useState<'summary' | 'points' | 'terms' | 'quiz'>('summary');
@@ -135,17 +133,6 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
                 className="w-9 h-9 md:w-10 md:h-10 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-[#3B82F6] flex items-center justify-center transition cursor-pointer"
               >
                 <Share2 className="w-4 h-4 md:w-5 md:h-5" />
-              </button>
-              <button
-                onClick={() => onToggleBookmark(lesson.id)}
-                title="حفظ في المفضلة"
-                className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
-                  isBookmarked
-                    ? 'bg-[#FEF3C7] text-[#F59E0B]'
-                    : 'hover:bg-slate-200/70 text-slate-400 hover:text-[#F59E0B]'
-                }`}
-              >
-                <Bookmark className={`w-4 h-4 md:w-5 md:h-5 ${isBookmarked ? 'fill-current' : ''}`} />
               </button>
             </div>
 

@@ -1,20 +1,19 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Home, Bookmark, Sparkles, GraduationCap, Users } from 'lucide-react';
+import { Home, Sparkles, GraduationCap, Users, Bell } from 'lucide-react';
 import { motion } from 'motion/react';
 
-export type TabType = 'home' | 'subjects' | 'qudurat' | 'saved' | 'users';
+export type TabType = 'home' | 'subjects' | 'qudurat' | 'notifications' | 'users';
 
 interface BottomNavProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
-  savedCount: number;
+  savedCount?: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
   activeTab,
-  onTabChange,
-  savedCount
+  onTabChange
 }) => {
   const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
 
@@ -64,25 +63,23 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <span className="text-[11px] md:text-xs mt-1">القدرات</span>
         </motion.button>
 
-        {/* Saved / Bookmarks */}
+        {/* Administrative Notifications (الإشعارات الإدارية - قريباً) */}
         <motion.button
           whileTap={{ scale: 0.88 }}
-          onClick={() => onTabChange('saved')}
+          onClick={() => onTabChange('notifications')}
           className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none active:scale-90 ${
-            activeTab === 'saved'
-              ? 'text-[#3B82F6] font-black'
+            activeTab === 'notifications'
+              ? 'text-blue-600 font-black'
               : 'text-slate-400 hover:text-slate-600 font-medium'
           }`}
         >
           <div className="relative">
-            <Bookmark className="w-5 h-5 md:w-6 md:h-6" />
-            {savedCount > 0 && (
-              <span className="absolute -top-1 -right-2 w-4 h-4 md:w-4.5 md:h-4.5 rounded-full bg-[#22C55E] text-white text-[9px] md:text-[10px] font-black flex items-center justify-center">
-                {savedCount}
-              </span>
-            )}
+            <Bell className="w-5 h-5 md:w-6 md:h-6" />
+            <span className="absolute -top-1 -right-3.5 bg-amber-400 text-amber-950 text-[8px] md:text-[9px] font-black px-1 rounded-full">
+              قريباً
+            </span>
           </div>
-          <span className="text-[11px] md:text-xs mt-1">المحفوظات</span>
+          <span className="text-[11px] md:text-xs mt-1">الإشعارات الإدارية</span>
         </motion.button>
 
         {/* 1. Super Admin (الإدارة الأساسية): Shows "المستخدمين" with Users icon */}
@@ -101,23 +98,47 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           </motion.button>
         )}
 
-        {/* 2. Appointed Teachers & Assistant Supervisors: Shows "الطلاب" with GraduationCap icon */}
+        {/* 2. Appointed Teachers & Assistant Supervisors: Shows "خدمة الطلاب" with GraduationCap icon and beta badge */}
         {isAppointedTeacherOrAssistant && (
           <motion.button
             whileTap={{ scale: 0.88 }}
             onClick={() => onTabChange('users')}
-            className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition cursor-pointer select-none active:scale-90 ${
+            className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none active:scale-90 ${
               activeTab === 'users'
                 ? 'text-[#7C3AED] font-black'
                 : 'text-slate-400 hover:text-slate-600 font-medium'
             }`}
           >
-            <GraduationCap className="w-5 h-5 md:w-6 md:h-6" />
-            <span className="text-[11px] md:text-xs mt-1">الطلاب</span>
+            <div className="relative">
+              <GraduationCap className="w-5 h-5 md:w-6 md:h-6" />
+              <span className="absolute -top-1 -right-3.5 bg-amber-400 text-amber-950 text-[8px] md:text-[9px] font-black px-1 rounded-full">
+                تجريبي
+              </span>
+            </div>
+            <span className="text-[11px] md:text-xs mt-1">خدمة الطلاب</span>
           </motion.button>
         )}
 
-        {/* 3. Students: Do not see this section at all */}
+        {/* 3. Regular Students: Shows "خدمة الطلاب" with GraduationCap icon and beta badge */}
+        {!isSuperAdmin && !isAppointedTeacherOrAssistant && (
+          <motion.button
+            whileTap={{ scale: 0.88 }}
+            onClick={() => onTabChange('users')}
+            className={`flex flex-col items-center justify-center py-1 md:py-1.5 px-3 md:px-5 rounded-2xl transition relative cursor-pointer select-none active:scale-90 ${
+              activeTab === 'users'
+                ? 'text-[#7C3AED] font-black'
+                : 'text-slate-400 hover:text-slate-600 font-medium'
+            }`}
+          >
+            <div className="relative">
+              <GraduationCap className="w-5 h-5 md:w-6 md:h-6" />
+              <span className="absolute -top-1 -right-3.5 bg-amber-400 text-amber-950 text-[8px] md:text-[9px] font-black px-1 rounded-full">
+                تجريبي
+              </span>
+            </div>
+            <span className="text-[11px] md:text-xs mt-1">خدمة الطلاب</span>
+          </motion.button>
+        )}
       </div>
     </div>
   );

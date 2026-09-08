@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth, SUPER_ADMIN_EMAIL } from '../context/AuthContext';
 import { User, Lesson, Subject, Homework, HomeworkSubmission, USER_JOB_OPTIONS } from '../types';
 import { StudentDetailModal } from './StudentDetailModal';
@@ -10,29 +10,23 @@ import {
   RefreshCw,
   GraduationCap,
   ChevronDown,
-  Bookmark,
   ClipboardList,
   ChevronLeft,
   Users,
-  ShieldAlert,
-  Sparkles
+  ShieldCheck,
+  Compass,
+  Sparkles,
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, collection, onSnapshot } from '../lib/firebase';
 
 interface StudentsManagementViewProps {
-  allLessons: Lesson[];
+  allLessons?: Lesson[];
   allSubjects: Subject[];
   allHomeworks: Homework[];
   allSubmissions: HomeworkSubmission[];
   onSelectLesson?: (lesson: Lesson) => void;
-}
-
-interface StudentProgressMap {
-  [emailOrId: string]: {
-    bookmarkedLessonIds: string[];
-    completedHomeworkIds?: string[];
-  };
 }
 
 export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
@@ -43,11 +37,19 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   onSelectLesson
 }) => {
   const {
+    user,
     isSuperAdmin,
     registeredUsers,
     refreshUsers,
-    updateUserJob
+    updateUserJob,
+    canManageSubject
   } = useAuth();
+
+  const isViewerSuperOrAssistant =
+    isSuperAdmin ||
+    user?.role === 'supervisor' ||
+    user?.jobTitle === 'مشرف مساعد' ||
+    (user?.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
 
   const [mainTab, setMainTab] = useState<'students' | 'staff'>('students');
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,41 +57,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [updatingUserEmail, setUpdatingUserEmail] = useState<string | null>(null);
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
-
-  // Real-time map of all users' progress (bookmarks, completed homeworks)
-  const [userProgressMap, setUserProgressMap] = useState<StudentProgressMap>({});
-
-  useEffect(() => {
-    const progressCol = collection(db, 'userProgress');
-    const unsubscribe = onSnapshot(
-      progressCol,
-      (snapshot) => {
-        const map: StudentProgressMap = {};
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          const docId = docSnap.id;
-          const email = (data.email || '').toLowerCase().trim();
-          const progressObj = {
-            bookmarkedLessonIds: Array.isArray(data.bookmarkedLessonIds)
-              ? data.bookmarkedLessonIds
-              : [],
-            completedHomeworkIds: Array.isArray(data.completedHomeworkIds)
-              ? data.completedHomeworkIds
-              : []
-          };
-
-          if (docId) map[docId] = progressObj;
-          if (email) map[email] = progressObj;
-        });
-        setUserProgressMap(map);
-      },
-      (err) => {
-        console.warn('Firestore userProgress listener note:', err);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -140,7 +107,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return Array.from(map.values());
   }, [registeredUsers]);
 
-  // Separate ONLY Students vs Staff
+  // Separate ONLY Students
   const studentsOnly = useMemo(() => {
     return uniqueUsers.filter((u) => {
       const isSuper = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || u.isSuperAdmin;
@@ -150,24 +117,38 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         u.role === 'supervisor' ||
         u.role === 'teacher' ||
         job === 'مشرف مساعد' ||
+        job === 'المرشد الطلابي' ||
+        job.includes('مرشد') ||
         job.startsWith('أ.');
       return !isStaff;
     });
   }, [uniqueUsers]);
 
+  // Separate Staff: For SuperAdmin (all supervisors & teachers); For Teacher (supervisors ONLY, other teachers hidden)
   const staffOnly = useMemo(() => {
     return uniqueUsers.filter((u) => {
       const isSuper = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || u.isSuperAdmin;
-      if (isSuper) return true;
       const job = u.jobTitle || '';
-      return (
+      const isSupervisor =
+        isSuper ||
         u.role === 'supervisor' ||
-        u.role === 'teacher' ||
+        job === 'المشرف الأساسي' ||
         job === 'مشرف مساعد' ||
-        job.startsWith('أ.')
-      );
+        job === 'المرشد الطلابي' ||
+        job.includes('مرشد');
+
+      const isTeacher =
+        u.role === 'teacher' ||
+        job.startsWith('أ.');
+
+      if (isViewerSuperOrAssistant) {
+        return isSupervisor || isTeacher;
+      }
+
+      // Teacher view: Show supervisors only, hide other teachers
+      return isSupervisor;
     });
-  }, [uniqueUsers]);
+  }, [uniqueUsers, isViewerSuperOrAssistant]);
 
   // Filter students based on search
   const filteredStudents = useMemo(() => {
@@ -194,29 +175,54 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     });
   }, [staffOnly, searchQuery]);
 
-  // Helper to get bookmarks for a student
-  const getStudentBookmarks = (u: User): string[] => {
-    const key1 = u.id;
-    const key2 = (u.email || '').toLowerCase().trim();
-    return (
-      userProgressMap[key1]?.bookmarkedLessonIds ||
-      userProgressMap[key2]?.bookmarkedLessonIds ||
-      []
-    );
-  };
-
-  // Helper to get submissions for a student
+  // Helper to get submissions count for a user (scoped to teacher's subject if viewer is a teacher)
   const getStudentSubmissionsCount = (u: User): number => {
     const email = (u.email || '').toLowerCase().trim();
-    return allSubmissions.filter(
+    const subs = allSubmissions.filter(
       (s) =>
         (s.studentEmail && s.studentEmail.toLowerCase().trim() === email) ||
         (s.studentId && s.studentId === u.id)
-    ).length;
+    );
+    if (isViewerSuperOrAssistant) {
+      return subs.length;
+    }
+    return subs.filter((s) => {
+      const hw = allHomeworks.find((h) => h.id === s.homeworkId);
+      return hw ? canManageSubject(hw.subjectId) : false;
+    }).length;
   };
 
   return (
     <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
+      {/* Experimental Service Alert Banner */}
+      <motion.div
+        initial={{ opacity: 0, y: -6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 border border-amber-300/80 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
+      >
+        <div className="flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 border border-amber-400/30">
+            <Sparkles className="w-6 h-6 text-amber-600 animate-pulse" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-black text-amber-950 text-sm sm:text-base">خدمة الطلاب</span>
+              <span className="bg-amber-500/20 text-amber-900 border border-amber-400/50 text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                نسخة تجريبية
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm font-bold text-amber-800">
+              هذه الخدمة تجريبية وسيتم إطلاقها 10 سبتمبر
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black shrink-0">
+          <Clock className="w-4 h-4 text-amber-700" />
+          <span>موعد الإطلاق: 10 سبتمبر 🚀</span>
+        </div>
+      </motion.div>
+
       {/* Header Banner */}
       <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -227,12 +233,18 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <h3 className="font-black text-slate-900 text-base sm:text-lg">
               {mainTab === 'students'
                 ? `قائمة الطلاب المسجلين (${filteredStudents.length})`
-                : `المشرفون والمعلمون (${filteredStaff.length})`}
+                : isViewerSuperOrAssistant
+                ? `المشرفون والمعلمون (${filteredStaff.length})`
+                : `المشرفون (${filteredStaff.length})`}
             </h3>
             <p className="text-xs text-slate-500">
               {mainTab === 'students'
-                ? 'اضغط على أي طالب لمشاهدة مفضلاته وحلول واجباته بالتفصيل'
-                : 'اضغط على أي مشرف أو معلم للاطلاع على حلول واجباته ومفضلاته بالتفصيل'}
+                ? !isViewerSuperOrAssistant
+                  ? `اضغط على أي طالب لمشاهدة حلول واجبات مادتك (${user?.jobTitle})`
+                  : 'اضغط على أي طالب لمشاهدة حلول واجباته بالتفصيل'
+                : !isViewerSuperOrAssistant
+                ? 'قائمة المشرفين المتاحين في المنصة'
+                : 'اضغط على أي مشرف أو معلم للاطلاع على حلول واجباته بالتفصيل'}
             </p>
           </div>
         </div>
@@ -248,7 +260,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         </button>
       </div>
 
-      {/* Switcher (Students vs Supervisors & Teachers) - Available for SuperAdmin and Teachers */}
+      {/* Switcher (Students vs Supervisors / Staff) */}
       <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
         <button
           onClick={() => setMainTab('students')}
@@ -271,7 +283,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>المشرفون والمعلمون ({staffOnly.length})</span>
+          <span>
+            {isViewerSuperOrAssistant
+              ? `المشرفون والمعلمون (${staffOnly.length})`
+              : `المشرفون (${staffOnly.length})`}
+          </span>
         </button>
       </div>
 
@@ -284,7 +300,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           placeholder={
             mainTab === 'students'
               ? 'ابحث باسم الطالب أو البريد الإلكتروني...'
-              : 'ابحث باسم المعلم أو المشرف أو المادة...'
+              : isViewerSuperOrAssistant
+              ? 'ابحث باسم المعلم أو المشرف أو المادة...'
+              : 'ابحث باسم المشرف...'
           }
           className="w-full py-3 pr-11 pl-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs transition"
         />
@@ -318,7 +336,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       {mainTab === 'students' ? (
         <div className="space-y-3">
           {filteredStudents.map((student) => {
-            const bookmarks = getStudentBookmarks(student);
             const submissionsCount = getStudentSubmissionsCount(student);
 
             return (
@@ -354,16 +371,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   </div>
                 </div>
 
-                {/* Badges: Bookmarks + Homework Submissions */}
+                {/* Badges: Homework Submissions */}
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/70 text-xs font-bold">
-                    <Bookmark className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{bookmarks.length} محفوظة</span>
-                  </div>
-
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
                     <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                    <span>{submissionsCount} حلول واجبات</span>
+                    <span>
+                      {submissionsCount} حلول واجبات
+                      {!isViewerSuperOrAssistant && ' بمادتك'}
+                    </span>
                   </div>
 
                   <div className="hidden sm:flex items-center gap-1 text-xs font-bold text-indigo-600 group-hover:-translate-x-1 transition mr-1">
@@ -388,7 +403,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           )}
         </div>
       ) : (
-        /* SECOND VIEW: Staff & Supervisors (Supervisors and Teachers) */
+        /* SECOND VIEW: Staff / Supervisors */
         <div className="space-y-3">
           {filteredStaff.map((u) => {
             const isThisSuperAdmin =
@@ -405,9 +420,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             const matchedOption = USER_JOB_OPTIONS.find((opt) => opt.value === currentJob);
             const badgeClass = isThisSuperAdmin
               ? 'bg-purple-100 text-purple-800 border-purple-200'
+              : currentJob === 'المرشد الطلابي'
+              ? 'bg-amber-100 text-amber-800 border-amber-200'
               : matchedOption?.colorClass || 'bg-slate-100 text-slate-700 border-slate-200';
 
-            const bookmarks = getStudentBookmarks(u);
             const submissionsCount = getStudentSubmissionsCount(u);
             const isUpdatingThis = updatingUserEmail === u.email;
 
@@ -441,6 +457,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                           <Crown className="w-2.5 h-2.5 text-amber-500" />
                           المشرف الأساسي
                         </span>
+                      ) : currentJob === 'المرشد الطلابي' ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1 shrink-0">
+                          <Compass className="w-2.5 h-2.5 text-amber-600" />
+                          المرشد الطلابي
+                        </span>
+                      ) : currentJob === 'مشرف مساعد' ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1 shrink-0">
+                          <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
+                          مشرف مساعد
+                        </span>
                       ) : (
                         <span
                           className={`text-[10px] px-2 py-0.5 rounded-full font-bold border shrink-0 ${badgeClass}`}
@@ -453,16 +479,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   </div>
                 </div>
 
-                {/* Right Area: Badges (Bookmarks + Submissions) + Super Admin Dropdown */}
+                {/* Right Area: Badges (Submissions) + Super Admin Dropdown */}
                 <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-800 border border-amber-200/70 text-xs font-bold">
-                    <Bookmark className="w-3.5 h-3.5 text-amber-600" />
-                    <span>{bookmarks.length} محفوظة</span>
-                  </div>
-
                   <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
                     <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                    <span>{submissionsCount} حلول واجبات</span>
+                    <span>
+                      {submissionsCount} حلول واجبات
+                      {!isViewerSuperOrAssistant && ' بمادتك'}
+                    </span>
                   </div>
 
                   {!isThisSuperAdmin && isSuperAdmin && (
@@ -503,7 +527,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
               <Users className="w-10 h-10 text-slate-300 mx-auto" />
               <h4 className="text-sm sm:text-base font-black text-slate-800">
-                لا يوجد مشرفون أو معلمون مطابقين للبحث
+                {isViewerSuperOrAssistant
+                  ? 'لا يوجد مشرفون أو معلمون مطابقين للبحث'
+                  : 'لا يوجد مشرفون مطابقين للبحث'}
               </h4>
             </div>
           )}
@@ -516,17 +542,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           student={selectedStudent}
           isOpen={!!selectedStudent}
           onClose={() => setSelectedStudent(null)}
-          allLessons={allLessons}
           allSubjects={allSubjects}
           allHomeworks={allHomeworks}
           allSubmissions={allSubmissions}
-          studentBookmarkedLessonIds={getStudentBookmarks(selectedStudent)}
-          studentCompletedHomeworkIds={
-            userProgressMap[selectedStudent.id]?.completedHomeworkIds ||
-            userProgressMap[(selectedStudent.email || '').toLowerCase()]?.completedHomeworkIds ||
-            []
-          }
-          onSelectLesson={onSelectLesson}
         />
       )}
     </div>

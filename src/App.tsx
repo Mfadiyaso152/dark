@@ -12,7 +12,9 @@ import { AuthModal } from './components/AuthModal';
 import { LoginPage } from './components/LoginPage';
 import { UserManagementView } from './components/UserManagementView';
 import { StudentsManagementView } from './components/StudentsManagementView';
+import { StudentServiceView } from './components/StudentServiceView';
 import { QuduratView } from './components/QuduratView';
+import { AdminNotificationsView } from './components/AdminNotificationsView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { useAuth } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -320,11 +322,7 @@ export default function App() {
       const saved = safeGetItem(key);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (
-          parsed &&
-          Array.isArray(parsed.completedLessonIds) &&
-          Array.isArray(parsed.bookmarkedLessonIds)
-        ) {
+        if (parsed && Array.isArray(parsed.completedLessonIds)) {
           return parsed;
         }
       }
@@ -332,8 +330,7 @@ export default function App() {
       console.error(e);
     }
     return {
-      completedLessonIds: [],
-      bookmarkedLessonIds: []
+      completedLessonIds: []
     };
   });
 
@@ -345,11 +342,7 @@ export default function App() {
       const saved = safeGetItem(userStorageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (
-          parsed &&
-          Array.isArray(parsed.completedLessonIds) &&
-          Array.isArray(parsed.bookmarkedLessonIds)
-        ) {
+        if (parsed && Array.isArray(parsed.completedLessonIds)) {
           setProgress(parsed);
         }
       }
@@ -364,10 +357,10 @@ export default function App() {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const data = docSnap.data();
-            if (data && Array.isArray(data.completedLessonIds) && Array.isArray(data.bookmarkedLessonIds)) {
+            if (data && Array.isArray(data.completedLessonIds)) {
               setProgress({
                 completedLessonIds: data.completedLessonIds,
-                bookmarkedLessonIds: data.bookmarkedLessonIds
+                completedHomeworkIds: data.completedHomeworkIds
               });
             }
           }
@@ -391,7 +384,7 @@ export default function App() {
           setDoc(docRef, {
             email: user.email,
             completedLessonIds: progress.completedLessonIds,
-            bookmarkedLessonIds: progress.bookmarkedLessonIds,
+            completedHomeworkIds: progress.completedHomeworkIds || [],
             updatedAt: new Date().toISOString()
           }, { merge: true }).catch((err) => console.warn('Firestore sync note:', err));
         } catch (err) {
@@ -444,7 +437,7 @@ export default function App() {
     return result;
   }, [safeSubjects, selectedSemester, searchQuery]);
 
-  // Filtered lessons for saved tab or search
+  // Filtered lessons for search
   const filteredLessons = useMemo(() => {
     let result = safeLessons;
 
@@ -461,12 +454,8 @@ export default function App() {
       );
     }
 
-    if (activeTab === 'saved') {
-      result = safeLessons.filter((l) => progress.bookmarkedLessonIds.includes(l.id));
-    }
-
     return result;
-  }, [safeLessons, selectedSubject, searchQuery, activeTab, progress.bookmarkedLessonIds]);
+  }, [safeLessons, selectedSubject, searchQuery]);
 
   // Lesson actions
   const handleToggleComplete = (lessonId: string) => {
@@ -477,18 +466,6 @@ export default function App() {
         completedLessonIds: isDone
           ? prev.completedLessonIds.filter((id) => id !== lessonId)
           : [...prev.completedLessonIds, lessonId]
-      };
-    });
-  };
-
-  const handleToggleBookmark = (lessonId: string) => {
-    setProgress((prev) => {
-      const isBookmarked = prev.bookmarkedLessonIds.includes(lessonId);
-      return {
-        ...prev,
-        bookmarkedLessonIds: isBookmarked
-          ? prev.bookmarkedLessonIds.filter((id) => id !== lessonId)
-          : [...prev.bookmarkedLessonIds, lessonId]
       };
     });
   };
@@ -949,12 +926,15 @@ export default function App() {
           {/* TAB: Qudurat (القدرات - قريباً) */}
           {activeTab === 'qudurat' ? (
             <QuduratView />
+          ) : activeTab === 'notifications' ? (
+            /* TAB: Administrative Notifications (الإشعارات الإدارية - قريباً) */
+            <AdminNotificationsView />
           ) : activeTab === 'users' ? (
             isSuperAdmin ? (
               /* TAB: User Management (الإدارة - إدارة المستخدمين وتعيين المعلمين والصلاحيات زي قبل) */
               <UserManagementView />
             ) : isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب') ? (
-              /* TAB: Students Management (المعلمين والمشرف المساعد - استعراض الطلاب والمفضلات والواجبات) */
+              /* TAB: Students Management (المعلمين والمشرف المساعد - استعراض الطلاب والواجبات) */
               <StudentsManagementView
                 allLessons={safeLessons}
                 allSubjects={subjects}
@@ -962,43 +942,10 @@ export default function App() {
                 allSubmissions={submissions}
                 onSelectLesson={openLessonDetail}
               />
-            ) : null
-          ) : activeTab === 'saved' ? (
-            /* TAB: Saved Lessons (المحفوظات) */
-            <div className="space-y-3 md:space-y-4">
-              <div className="flex justify-between items-center px-1">
-                <h3 className="font-black text-[#1E293B] text-base md:text-lg">
-                  الدروس المحفوظة ({filteredLessons.length})
-                </h3>
-              </div>
-
-              {filteredLessons.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-4">
-                  {filteredLessons.map((lesson) => {
-                    const subject = subjects.find((s) => s.id === lesson.subjectId);
-                    const canEditThis = canManageSubject(lesson.subjectId);
-                    return (
-                      <LessonCard
-                        key={lesson.id}
-                        lesson={lesson}
-                        subject={subject}
-                        isCompleted={progress.completedLessonIds.includes(lesson.id)}
-                        isBookmarked={progress.bookmarkedLessonIds.includes(lesson.id)}
-                        onSelect={openLessonDetail}
-                        onToggleComplete={handleToggleComplete}
-                        onToggleBookmark={handleToggleBookmark}
-                        onEdit={canEditThis ? openEditLessonModal : undefined}
-                        onDelete={canEditThis ? handleDeleteLesson : undefined}
-                      />
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12 md:py-16 px-4 bg-white rounded-3xl border border-dashed border-slate-200">
-                  <p className="text-xs md:text-sm text-slate-400">لا توجد دروس محفوظة حالياً بحسابك</p>
-                </div>
-              )}
-            </div>
+            ) : (
+              /* TAB: Student Service for regular students (خدمة الطلاب - تجريبية وإطلاق 10 سبتمبر) */
+              <StudentServiceView />
+            )
           ) : (
             /* TAB: Home (الرئيسية) */
             <div className="space-y-4 md:space-y-6">
@@ -1011,7 +958,6 @@ export default function App() {
                   onBack={() => setSelectedSubject(null)}
                   onSelectLesson={openLessonDetail}
                   onToggleComplete={handleToggleComplete}
-                  onToggleBookmark={handleToggleBookmark}
                   onOpenAddLesson={() => openAddLessonModal(selectedSubject.id)}
                   onOpenEditLesson={openEditLessonModal}
                   onDeleteLesson={handleDeleteLesson}
@@ -1022,7 +968,6 @@ export default function App() {
                   onUpdateHomework={handleUpdateHomework}
                   onDeleteHomework={handleDeleteHomework}
                   completedLessonIds={progress.completedLessonIds}
-                  bookmarkedLessonIds={progress.bookmarkedLessonIds}
                   completedHomeworkIds={progress.completedHomeworkIds}
                   onToggleCompleteHomework={handleToggleCompleteHomework}
                   submissions={submissions}
@@ -1082,12 +1027,16 @@ export default function App() {
                   <div className="flex flex-col gap-3 md:gap-3.5 w-full">
                     {displayedSubjects.map((sub) => {
                       const subjectLessons = safeLessons.filter((l) => l.subjectId === sub.id);
+                      const subjectHomeworks = homeworks.filter((h) => h.subjectId === sub.id);
+                      const subjectBooklets = booklets.filter((b) => b.subjectId === sub.id);
                       return (
                         <SubjectCard
                           key={sub.id}
                           subject={sub}
                           lessons={safeLessons}
                           lessonsCount={subjectLessons.length}
+                          homeworksCount={subjectHomeworks.length}
+                          bookletsCount={subjectBooklets.length}
                           isSelected={selectedSubject?.id === sub.id}
                           onSelect={(s) => {
                             if (s.isComingSoon) return;
@@ -1127,7 +1076,6 @@ export default function App() {
           onTabChange={(tab) => {
             setActiveTab(tab);
           }}
-          savedCount={progress.bookmarkedLessonIds.length}
         />
 
         {/* Lesson Detail Modal */}
@@ -1138,9 +1086,7 @@ export default function App() {
             isOpen={isDetailModalOpen}
             onClose={() => setIsDetailModalOpen(false)}
             isCompleted={progress.completedLessonIds.includes(activeLesson.id)}
-            isBookmarked={progress.bookmarkedLessonIds.includes(activeLesson.id)}
             onToggleComplete={handleToggleComplete}
-            onToggleBookmark={handleToggleBookmark}
           />
         )}
 

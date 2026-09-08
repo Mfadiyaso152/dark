@@ -3,7 +3,6 @@ import { Lesson, Subject } from '../types';
 import {
   Download,
   CheckCircle2,
-  Bookmark,
   Edit,
   Trash2
 } from 'lucide-react';
@@ -17,10 +16,10 @@ interface LessonCardProps {
   lesson: Lesson;
   subject?: Subject;
   isCompleted: boolean;
-  isBookmarked: boolean;
+  isBookmarked?: boolean;
   onSelect?: (lesson: Lesson) => void;
   onToggleComplete: (id: string) => void;
-  onToggleBookmark: (id: string) => void;
+  onToggleBookmark?: (id: string) => void;
   onEdit?: (lesson: Lesson) => void;
   onDelete?: (id: string) => void;
 }
@@ -29,10 +28,8 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   lesson,
   subject,
   isCompleted,
-  isBookmarked,
   onSelect,
   onToggleComplete,
-  onToggleBookmark,
   onEdit,
   onDelete
 }) => {
@@ -95,11 +92,6 @@ export const LessonCard: React.FC<LessonCardProps> = ({
     }
   };
 
-  const handleBookmark = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onToggleBookmark(lesson.id);
-  };
-
   const targetSubjectId = subject?.id || lesson.subjectId;
   const canEditThisLesson = canManageSubject(targetSubjectId);
 
@@ -112,25 +104,12 @@ export const LessonCard: React.FC<LessonCardProps> = ({
           : 'border-[#E2E8F0] hover:border-[#94A3B8] shadow-2xs hover:shadow-xs'
       }`}
     >
-      {/* Top row: Badges & Bookmark */}
+      {/* Top row: Badges & Actions */}
       <div className="flex items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1">
-          {/* Bookmark */}
-          <button
-            onClick={handleBookmark}
-            title="حفظ الدرس"
-            className={`p-1.5 rounded-xl transition cursor-pointer ${
-              isBookmarked
-                ? 'text-[#F59E0B] bg-[#FEF3C7]'
-                : 'text-slate-300 hover:text-[#F59E0B] hover:bg-slate-50'
-            }`}
-          >
-            <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
-          </button>
-
           {/* Teacher/Supervisor Actions */}
           {canEditThisLesson && (
-            <div className="flex items-center gap-1 mr-1">
+            <div className="flex items-center gap-1">
               {onEdit && (
                 <button
                   onClick={(e) => {

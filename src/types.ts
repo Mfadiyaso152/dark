@@ -89,6 +89,14 @@ export const USER_JOB_OPTIONS: UserJobOption[] = [
     isSupervisorOrTeacher: true,
     colorClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     description: 'صلاحيات إشرافية كاملة'
+  },
+  {
+    value: 'المرشد الطلابي',
+    label: 'المرشد الطلابي',
+    role: 'supervisor',
+    isSupervisorOrTeacher: true,
+    colorClass: 'bg-amber-100 text-amber-800 border-amber-200',
+    description: 'إدارة الإرشاد الطلابي والملفات التوجيهية'
   }
 ];
 
@@ -164,7 +172,7 @@ export interface Subject {
 
 export interface UserProgress {
   completedLessonIds: string[];
-  bookmarkedLessonIds: string[];
+  bookmarkedLessonIds?: string[];
   completedHomeworkIds?: string[];
 }
 

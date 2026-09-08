@@ -29,7 +29,6 @@ interface SubjectDetailViewProps {
   onBack: () => void;
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (id: string) => void;
-  onToggleBookmark: (id: string) => void;
   onOpenAddLesson: () => void;
   onOpenEditLesson?: (lesson: Lesson) => void;
   onDeleteLesson: (id: string) => void;
@@ -39,7 +38,6 @@ interface SubjectDetailViewProps {
   onUpdateHomework?: (hw: Homework) => void;
   onDeleteHomework?: (id: string) => void;
   completedLessonIds: string[];
-  bookmarkedLessonIds: string[];
   completedHomeworkIds?: string[];
   onToggleCompleteHomework?: (id: string) => void;
   submissions?: HomeworkSubmission[];
@@ -54,7 +52,6 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   onBack,
   onSelectLesson,
   onToggleComplete,
-  onToggleBookmark,
   onOpenAddLesson,
   onOpenEditLesson,
   onDeleteLesson,
@@ -64,7 +61,6 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   onUpdateHomework,
   onDeleteHomework,
   completedLessonIds,
-  bookmarkedLessonIds,
   completedHomeworkIds = [],
   onToggleCompleteHomework,
   submissions = [],
@@ -489,10 +485,8 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               lesson={lesson}
               subject={subject}
               isCompleted={completedLessonIds.includes(lesson.id)}
-              isBookmarked={bookmarkedLessonIds.includes(lesson.id)}
               onSelect={onSelectLesson}
               onToggleComplete={onToggleComplete}
-              onToggleBookmark={onToggleBookmark}
               onEdit={canEditCurrentSubject ? onOpenEditLesson : undefined}
               onDelete={canEditCurrentSubject ? onDeleteLesson : undefined}
             />
