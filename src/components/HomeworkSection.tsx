@@ -22,7 +22,9 @@ import {
   Send,
   Camera,
   Image as ImageIcon,
-  Eye
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -143,6 +145,12 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
 
   // Lightbox preview state
   const [previewImageUrl, setPreviewImageUrl] = useState<{ url: string; name: string } | null>(null);
+
+  // Expanded cards state ("عرض المزيد")
+  const [expandedHwIds, setExpandedHwIds] = useState<Record<string, boolean>>({});
+  const toggleExpand = (id: string) => {
+    setExpandedHwIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // Inline delete confirmation states
   const [confirmDeleteHwId, setConfirmDeleteHwId] = useState<string | null>(null);
@@ -592,228 +600,105 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
               studentSub &&
               downloadingFileId === (studentSub.attachedFile?.fileId || `sub-sol-${studentSub.id}`);
 
+            const isExpanded = !!expandedHwIds[hw.id];
+
             return (
               <motion.div
                 key={hw.id}
                 layout
-                initial={{ opacity: 0, y: 20, scale: 0.97 }}
+                initial={{ opacity: 0, y: 15, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                transition={{ duration: 0.25, delay: idx * 0.05 }}
-                className={`rounded-3xl p-4 sm:p-5 border transition-all flex flex-col justify-between relative overflow-hidden group shadow-2xs hover:shadow-md ${
-                  hasStudentSubmission || isCompleted
-                    ? 'bg-slate-50/90 border-emerald-300'
-                    : 'bg-white border-slate-200 hover:border-purple-300'
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2, delay: idx * 0.03 }}
+                className={`rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all flex flex-col justify-between relative overflow-hidden group shadow-2xs hover:shadow-xs space-y-2.5 ${
+                  hasStudentSubmission
+                    ? 'bg-emerald-50/20 border-emerald-300/80'
+                    : 'bg-white border-slate-200/90 hover:border-purple-300'
                 }`}
               >
-                <div className="space-y-3">
-                  {/* Top line: Date & Actions */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-100 text-xs font-bold">
-                      <Calendar className="w-3.5 h-3.5 text-purple-600" />
-                      <span>تاريخ الواجب: {hw.dueDate}</span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                      {onToggleCompleteHomework && (
-                        <button
-                          onClick={() => onToggleCompleteHomework(hw.id)}
-                          className={`p-1.5 rounded-xl transition cursor-pointer ${
-                            isCompleted || hasStudentSubmission
-                              ? 'text-emerald-600 bg-emerald-100/70 hover:bg-emerald-200'
-                              : 'text-slate-400 hover:text-purple-600 hover:bg-purple-50'
-                          }`}
-                          title={
-                            isCompleted || hasStudentSubmission
-                              ? 'تم إنجاز الواجب'
-                              : 'تحديد كمنجز'
-                          }
-                        >
-                          {isCompleted || hasStudentSubmission ? (
-                            <CheckCircle className="w-5 h-5" />
-                          ) : (
-                            <Circle className="w-5 h-5" />
-                          )}
-                        </button>
-                      )}
-
-                      {canEdit && (
-                        <>
-                          <button
-                            onClick={() => handleOpenEditModal(hw)}
-                            className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
-                            title="تعديل الواجب"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </button>
-                          {confirmDeleteHwId === hw.id ? (
-                            <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-xl border border-rose-200">
-                              <span className="text-[11px] font-bold text-rose-800 pr-1">حذف؟</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onDeleteHomework(hw.id);
-                                  setConfirmDeleteHwId(null);
-                                }}
-                                className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
-                              >
-                                نعم
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteHwId(null)}
-                                className="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
-                              >
-                                إلغاء
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteHwId(hw.id)}
-                              className="p-1.5 rounded-xl text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                              title="حذف الواجب"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
+                {/* Top line: Date & Status Badge (No "لم ينجز" button) */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-100 text-[11px] font-bold">
+                    <Calendar className="w-3.5 h-3.5 text-purple-600" />
+                    <span>تاريخ الواجب: {hw.dueDate}</span>
                   </div>
 
-                  {/* Title if present */}
-                  {hw.title && (
-                    <h4
-                      className={`font-black text-sm sm:text-base leading-snug ${
-                        isCompleted || hasStudentSubmission
-                          ? 'text-slate-700'
-                          : 'text-slate-900'
-                      }`}
-                    >
-                      {hw.title}
-                    </h4>
-                  )}
-
-                  {/* Key Assignment Details: Page & Question */}
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-100 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
-                        <BookOpen className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-bold block">الصفحة</span>
-                        <span className="text-xs sm:text-sm font-black text-slate-800">
-                          صـ {hw.pageNumber}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="bg-slate-50 rounded-2xl p-2.5 border border-slate-100 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-                        <HelpCircle className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-slate-400 font-bold block">السؤال</span>
-                        <span className="text-xs sm:text-sm font-black text-slate-800">
-                          {hw.questionNumber}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Notes / Instructions */}
-                  {hw.notes && (
-                    <p className="text-xs text-slate-600 bg-amber-50/60 border border-amber-100/70 p-2.5 rounded-xl leading-relaxed">
-                      💬 {hw.notes}
-                    </p>
-                  )}
-
-                  {/* Teacher Model Solution Download / Preview */}
-                  {hw.solutionFile?.hasFile && (
-                    <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
-                          <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                        ) : (
-                          <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                        )}
-                        <span className="truncate max-w-[200px]">
-                          الحل النموذجي ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handlePreviewImage(
-                                hw.solutionFile?.fileId,
-                                hw.solutionFile?.dataUrl,
-                                hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
-                              )
-                            }
-                            className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
-                          >
-                            <Eye className="w-3 h-3" />
-                            <span>معاينة</span>
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleDownloadFile(
-                              hw.solutionFile?.fileId,
-                              hw.solutionFile?.dataUrl,
-                              hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
-                            )
-                          }
-                          disabled={downloadingFileId === (hw.solutionFile?.fileId || hw.solutionFile?.name)}
-                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                        >
-                          <Download className="w-3 h-3" />
-                          <span>تحميل</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Student Submission Card Status / Attached file */}
                   {hasStudentSubmission && (
-                    <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-2.5 space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-black text-emerald-800">
-                        <span className="flex items-center gap-1">
-                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                          تم تسليم حلك بنجاح ✓
-                        </span>
-                        <span className="text-slate-400 font-normal">
-                          {studentSub.submittedAt ? studentSub.submittedAt.split('T')[0] : ''}
-                        </span>
+                    <span className="text-[11px] font-black text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>تم التسليم</span>
+                    </span>
+                  )}
+                </div>
+
+                {/* Title */}
+                <div>
+                  <h4
+                    className={`font-black text-sm sm:text-base leading-snug ${
+                      hasStudentSubmission
+                        ? 'text-slate-800'
+                        : 'text-slate-900'
+                    }`}
+                  >
+                    {hw.title || `واجب صـ ${hw.pageNumber} - سؤال ${hw.questionNumber}`}
+                  </h4>
+                </div>
+
+                {/* Expanded Details: Page, Question, Notes, Solution File, Student File */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-2.5 pt-1 overflow-hidden"
+                    >
+                      {/* Key Assignment Details: Page & Question */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+                          <span>صفحة: <strong className="text-slate-800">صـ {hw.pageNumber}</strong></span>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-xl p-2 border border-slate-100 flex items-center gap-2">
+                          <HelpCircle className="w-4 h-4 text-purple-600 shrink-0" />
+                          <span>السؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
+                        </div>
                       </div>
 
-                      {studentSub.attachedFile?.hasFile && (
-                        <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
-                          <span className="text-[11px] text-slate-600 truncate max-w-[180px] flex items-center gap-1 font-bold">
-                            {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) ? (
-                              <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      {/* Notes / Description */}
+                      {hw.notes && (
+                        <p className="text-xs text-slate-600 bg-amber-50/70 border border-amber-100/80 p-2.5 rounded-xl leading-relaxed">
+                          💬 {hw.notes}
+                        </p>
+                      )}
+
+                      {/* Teacher Model Solution Download / Preview */}
+                      {hw.solutionFile?.hasFile && (
+                        <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
+                              <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
                             ) : (
-                              <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                             )}
-                            <span className="truncate">{studentSub.attachedFile.name}</span>
-                          </span>
+                            <span className="truncate max-w-[200px]">
+                              الملف المرفق ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
+                            </span>
+                          </div>
+
                           <div className="flex items-center gap-1.5">
-                            {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) && (
+                            {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
                               <button
                                 type="button"
                                 onClick={() =>
                                   handlePreviewImage(
-                                    studentSub.attachedFile?.fileId,
-                                    studentSub.attachedFile?.dataUrl,
-                                    studentSub.attachedFile?.name || 'حلي'
+                                    hw.solutionFile?.fileId,
+                                    hw.solutionFile?.dataUrl,
+                                    hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
                                   )
                                 }
-                                className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-md hover:bg-emerald-50 cursor-pointer flex items-center gap-1"
+                                className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
                               >
                                 <Eye className="w-3 h-3" />
                                 <span>معاينة</span>
@@ -823,53 +708,154 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                               type="button"
                               onClick={() =>
                                 handleDownloadFile(
-                                  studentSub.attachedFile?.fileId,
-                                  studentSub.attachedFile?.dataUrl,
-                                  studentSub.attachedFile?.name || 'حلي'
+                                  hw.solutionFile?.fileId,
+                                  hw.solutionFile?.dataUrl,
+                                  hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
                                 )
                               }
-                              className="text-[11px] font-bold text-emerald-700 underline cursor-pointer"
+                              disabled={isDownloadingModel}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                             >
-                              تحميل
+                              <Download className="w-3 h-3" />
+                              <span>تحميل</span>
                             </button>
                           </div>
                         </div>
                       )}
 
-                      {studentSub.notes && (
-                        <p className="text-[11px] text-slate-600 italic bg-white/70 p-1.5 rounded-lg">
-                          "{studentSub.notes}"
-                        </p>
+                      {/* Student Submission Card Status / Attached file */}
+                      {hasStudentSubmission && studentSub && (
+                        <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-xl p-2.5 space-y-2 text-xs">
+                          <div className="flex items-center justify-between text-[11px] font-black text-emerald-800">
+                            <span className="flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              تم تسليم حلك بنجاح ✓
+                            </span>
+                            <span className="text-slate-400 font-normal">
+                              {studentSub.submittedAt ? studentSub.submittedAt.split('T')[0] : ''}
+                            </span>
+                          </div>
+
+                          {studentSub.attachedFile?.hasFile && (
+                            <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
+                              <span className="text-[11px] text-slate-600 truncate max-w-[180px] flex items-center gap-1 font-bold">
+                                {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) ? (
+                                  <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                ) : (
+                                  <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                )}
+                                <span className="truncate">{studentSub.attachedFile.name}</span>
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handlePreviewImage(
+                                        studentSub.attachedFile?.fileId,
+                                        studentSub.attachedFile?.dataUrl,
+                                        studentSub.attachedFile?.name || 'حلي'
+                                      )
+                                    }
+                                    className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-md hover:bg-emerald-50 cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>معاينة</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDownloadFile(
+                                      studentSub.attachedFile?.fileId,
+                                      studentSub.attachedFile?.dataUrl,
+                                      studentSub.attachedFile?.name || 'حلي'
+                                    )
+                                  }
+                                  disabled={isDownloadingStudentSol}
+                                  className="text-[11px] font-bold text-emerald-700 underline cursor-pointer"
+                                >
+                                  تحميل
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {studentSub.notes && (
+                            <p className="text-[11px] text-slate-600 italic bg-white/70 p-1.5 rounded-lg">
+                              "{studentSub.notes}"
+                            </p>
+                          )}
+                        </div>
                       )}
-                    </div>
+                    </motion.div>
                   )}
-                </div>
+                </AnimatePresence>
 
-                {/* Footer: Action button to submit solution & supervisor info */}
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-slate-500 font-medium truncate">
-                    إشراف: {hw.supervisorName}
-                  </span>
+                {/* Footer: Teacher actions + Show More/Less + Submit button */}
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    {canEdit && (
+                      <>
+                        <button
+                          onClick={() => handleOpenEditModal(hw)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
+                          title="تعديل الواجب"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        {confirmDeleteHwId === hw.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-lg border border-rose-200">
+                            <span className="text-[10px] font-bold text-rose-800 pr-1">حذف؟</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteHomework(hw.id);
+                                setConfirmDeleteHwId(null);
+                              }}
+                              className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold transition cursor-pointer"
+                            >
+                              نعم
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteHwId(null)}
+                              className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-bold transition cursor-pointer"
+                            >
+                              إلغاء
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteHwId(hw.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                            title="حذف الواجب"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </>
+                    )}
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {hasStudentSubmission && onDeleteSubmission && (
+                    {isExpanded && hasStudentSubmission && onDeleteSubmission && (
                       confirmDeleteSubId === studentSub.id ? (
-                        <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-xl border border-rose-200">
-                          <span className="text-[11px] font-bold text-rose-800 pr-1">حذف الحل؟</span>
+                        <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-lg border border-rose-200">
+                          <span className="text-[10px] font-bold text-rose-800 pr-1">حذف الحل؟</span>
                           <button
                             type="button"
                             onClick={async () => {
                               await onDeleteSubmission(studentSub.id);
                               setConfirmDeleteSubId(null);
                             }}
-                            className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                            className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold transition cursor-pointer"
                           >
                             نعم
                           </button>
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteSubId(null)}
-                            className="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                            className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-bold transition cursor-pointer"
                           >
                             إلغاء
                           </button>
@@ -878,25 +864,42 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteSubId(studentSub.id)}
-                          className="py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs"
+                          className="py-1 px-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-1 text-[11px] font-bold"
                           title="حذف الحل المسلم لتعديله أو استبداله"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                          <span className="hidden sm:inline">حذف الحل</span>
+                          <Trash2 className="w-3 h-3 text-rose-600" />
+                          <span>حذف الحل</span>
                         </button>
                       )
                     )}
+                  </div>
 
+                  <div className="flex items-center gap-1.5">
+                    {/* زر عرض المزيد / عرض أقل */}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(hw.id)}
+                      className="py-1 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      <span>{isExpanded ? 'عرض أقل' : 'عرض المزيد'}</span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                    </button>
+
+                    {/* زر التسليم */}
                     <button
                       onClick={() => handleOpenStudentSubmitModal(hw)}
-                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
+                      className={`py-1 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
                         hasStudentSubmission
-                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                           : 'bg-purple-600 hover:bg-purple-700 text-white'
                       }`}
                     >
                       <UploadCloud className="w-3.5 h-3.5" />
-                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'إرفاق / تسليم الحل'}</span>
+                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'تسليم الواجب'}</span>
                     </button>
                   </div>
                 </div>

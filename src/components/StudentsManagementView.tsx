@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER } from '../context/AuthContext';
 import { User, Lesson, Subject, Homework, HomeworkSubmission, USER_JOB_OPTIONS } from '../types';
 import {
   Search,
@@ -18,7 +18,8 @@ import {
   HelpCircle,
   Image as ImageIcon,
   Eye,
-  X
+  X,
+  ShieldCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -87,18 +88,27 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         }
       }
     }
+
+    // Always ensure the main supervisor (المشرف الأساسي) is in the list
+    const superKey = SUPER_ADMIN_EMAIL.toLowerCase();
+    if (!map.has(superKey)) {
+      map.set(superKey, SUPER_ADMIN_USER);
+    }
+
     return Array.from(map.values());
   }, [registeredUsers]);
 
-  // Visible users in students service: All genuine students AND student supervisors.
-  // Teachers are excluded so teachers don't see other teachers. Super Admin is also excluded.
+  // Visible users in students service: All genuine students, student supervisors, AND the main supervisor.
+  // Other teachers are excluded so teachers don't see other teachers.
   const visibleStudentsAndSupervisors = useMemo(() => {
     return uniqueUsers.filter((u) => {
       const emailLower = (u.email || '').toLowerCase().trim();
       const isSuper = u.isSuperAdmin || emailLower === SUPER_ADMIN_EMAIL.toLowerCase();
-      if (isSuper) return false;
 
-      // Filter out teachers (معلمين) so teachers only see students and student supervisors
+      // The main supervisor (المشرف الأساسي) is explicitly visible to teachers and everyone!
+      if (isSuper) return true;
+
+      // Filter out teachers (معلمين) so teachers only see students, supervisors, and the main supervisor
       const isTeacher =
         u.role === 'teacher' ||
         (!!u.jobTitle && u.jobTitle.startsWith('أ.')) ||
@@ -106,8 +116,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
       if (isTeacher) return false;
 
-      // Regular students AND supervisors (المشرفين هم طلاب) are visible!
+      // Regular students AND student supervisors are visible!
       return true;
+    }).sort((a, b) => {
+      const aIsSuper = a.isSuperAdmin || (a.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+      const bIsSuper = b.isSuperAdmin || (b.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+      if (aIsSuper && !bIsSuper) return -1;
+      if (!aIsSuper && bIsSuper) return 1;
+      return a.name.localeCompare(b.name, 'ar');
     });
   }, [uniqueUsers, user]);
 
@@ -227,7 +243,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <div className="space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-slate-900">
-                  واجبات الطالب: {activeStudentPage.name}
+                  {activeStudentPage.isSuperAdmin || (activeStudentPage.email && activeStudentPage.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase())
+                    ? `واجبات المشرف الأساسي: ${activeStudentPage.name}`
+                    : (activeStudentPage.role === 'supervisor' ? `واجبات المشرف: ${activeStudentPage.name}` : `واجبات الطالب: ${activeStudentPage.name}`)}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-black border border-purple-200">
                   {studentSubs.length} واجبات مرسلة
@@ -537,11 +555,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
                       {u.name}
                     </h3>
-                    {(u.role === 'supervisor' || u.isAssistantAdmin || (u.jobTitle && u.jobTitle !== 'طالب')) && (
+                    {(u.isSuperAdmin || (u.email && u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase())) ? (
+                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 shrink-0 flex items-center gap-1 shadow-2xs">
+                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                        <span>المشرف الأساسي</span>
+                      </span>
+                    ) : (u.role === 'supervisor' || u.isAssistantAdmin || (u.jobTitle && u.jobTitle !== 'طالب')) ? (
                       <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 shrink-0">
                         {u.jobTitle || 'مشرف'}
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   {/* Number of submitted homeworks pill */}

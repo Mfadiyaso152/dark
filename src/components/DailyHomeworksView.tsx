@@ -22,7 +22,9 @@ import {
   Filter,
   Camera,
   Image as ImageIcon,
-  Eye
+  Eye,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -145,6 +147,12 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
   // Lightbox Image Preview Modal state
   const [previewImageUrl, setPreviewImageUrl] = useState<{ url: string; name: string } | null>(null);
+
+  // Expanded cards state ("عرض المزيد")
+  const [expandedHwIds, setExpandedHwIds] = useState<Record<string, boolean>>({});
+  const toggleExpand = (id: string) => {
+    setExpandedHwIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // PDF download loading state
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
@@ -563,20 +571,22 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
             const hasStudentSubmission = !!studentSub;
             const canManageThis = canManageSubject(hw.subjectId);
 
+            const isExpanded = !!expandedHwIds[hw.id];
+
             return (
               <motion.div
                 key={hw.id}
                 layout
-                className={`bg-white rounded-3xl p-4 sm:p-5 border transition-all duration-200 flex flex-col justify-between space-y-3.5 ${
-                  hasStudentSubmission || isCompleted
-                    ? 'border-emerald-200/80 bg-emerald-50/20'
+                className={`bg-white rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all duration-200 flex flex-col justify-between space-y-2.5 ${
+                  hasStudentSubmission
+                    ? 'border-emerald-200/90 bg-emerald-50/20'
                     : 'border-slate-200/90 shadow-2xs hover:shadow-xs'
                 }`}
               >
-                {/* Top Row: Subject Tag + Date + Complete Toggle */}
+                {/* Top Row: Subject Tag + Date + Submission Badge (No "لم ينجز" button) */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200/70 text-[11px] font-black flex items-center gap-1">
                       <span>{subject?.emoji || '📖'}</span>
                       <span>{subject?.name || 'مقرر دراسي'}</span>
                     </span>
@@ -587,192 +597,191 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                     </span>
                   </div>
 
-                  {/* Complete Checkbox Toggle */}
-                  <button
-                    onClick={() => onToggleCompleteHomework && onToggleCompleteHomework(hw.id)}
-                    className={`py-1 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
-                      isCompleted || hasStudentSubmission
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
-                    }`}
-                    title="تحديد كمنجز"
-                  >
-                    {isCompleted || hasStudentSubmission ? (
-                      <>
-                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                        <span>تم الإنجاز</span>
-                      </>
-                    ) : (
-                      <>
-                        <Circle className="w-4 h-4 text-slate-400" />
-                        <span>لم يُنجز</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Title and Specs */}
-                <div className="space-y-2">
-                  <h3 className="font-black text-slate-900 text-sm sm:text-base">
-                    {hw.title || `واجب صـ ${hw.pageNumber} - سؤال ${hw.questionNumber}`}
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 text-blue-600" />
-                      <span>صفحة: <strong className="text-slate-800">{hw.pageNumber}</strong></span>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-2">
-                      <HelpCircle className="w-4 h-4 text-purple-600" />
-                      <span>سؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
-                    </div>
-                  </div>
-
-                  {hw.notes && (
-                    <p className="text-xs text-slate-600 bg-amber-50/60 border border-amber-200/60 p-2.5 rounded-xl leading-relaxed">
-                      💬 {hw.notes}
-                    </p>
+                  {hasStudentSubmission && (
+                    <span className="text-[11px] font-black text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>تم التسليم</span>
+                    </span>
                   )}
                 </div>
 
-                {/* Teacher Model Solution Download / View if provided */}
-                {hw.solutionFile?.hasFile && (
-                  <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
-                        <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                      ) : (
-                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                {/* Title */}
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base leading-snug">
+                    {hw.title || `واجب صـ ${hw.pageNumber} - سؤال ${hw.questionNumber}`}
+                  </h3>
+                </div>
+
+                {/* Expanded Details: Page, Question, Notes/Description, Attached File, Submission details */}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-2.5 pt-1 overflow-hidden"
+                    >
+                      {/* Specs: Page & Question */}
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+                          <span>صفحة: <strong className="text-slate-800">{hw.pageNumber}</strong></span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-2">
+                          <HelpCircle className="w-4 h-4 text-purple-600 shrink-0" />
+                          <span>سؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
+                        </div>
+                      </div>
+
+                      {/* Notes / Description */}
+                      {hw.notes && (
+                        <p className="text-xs text-slate-600 bg-amber-50/70 border border-amber-200/60 p-2.5 rounded-xl leading-relaxed">
+                          💬 {hw.notes}
+                        </p>
                       )}
-                      <span className="truncate max-w-[200px]">
-                        الحل النموذجي المرفق ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
-                      </span>
-                    </div>
 
-                    <div className="flex items-center gap-1.5">
-                      {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handlePreviewImage(
-                              hw.solutionFile?.fileId,
-                              hw.solutionFile?.dataUrl,
-                              hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
-                            )
-                          }
-                          className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
-                        >
-                          <Eye className="w-3 h-3" />
-                          <span>معاينة</span>
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDownloadFile(
-                            hw.solutionFile?.fileId,
-                            hw.solutionFile?.dataUrl,
-                            hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
-                          )
-                        }
-                        disabled={downloadingFileId === (hw.solutionFile?.fileId || hw.solutionFile?.name)}
-                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                      >
-                        <Download className="w-3 h-3" />
-                        <span>تحميل</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
+                      {/* Teacher Model Solution Download / Preview */}
+                      {hw.solutionFile?.hasFile && (
+                        <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
+                              <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                            ) : (
+                              <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                            )}
+                            <span className="truncate max-w-[200px]">
+                              الملف المرفق ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
+                            </span>
+                          </div>
 
-                {/* Student Submission Card status */}
-                {hasStudentSubmission && studentSub && (
-                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2 text-xs">
-                    <div className="flex items-center justify-between text-emerald-900 font-bold">
-                      <span className="flex items-center gap-1">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>تم تسليم حلك لهذا الواجب</span>
-                      </span>
-                      <span className="text-[10px] text-emerald-700">
-                        {new Date(studentSub.submittedAt).toLocaleDateString('ar-SA')}
-                      </span>
-                    </div>
-
-                    {studentSub.attachedFile?.hasFile && (
-                      <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
-                        <span className="text-[11px] text-slate-600 truncate max-w-[180px] flex items-center gap-1">
-                          {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) ? (
-                            <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                          )}
-                          <span>{studentSub.attachedFile.name}</span>
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) && (
+                          <div className="flex items-center gap-1.5">
+                            {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handlePreviewImage(
+                                    hw.solutionFile?.fileId,
+                                    hw.solutionFile?.dataUrl,
+                                    hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
+                                  )
+                                }
+                                className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>معاينة</span>
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() =>
-                                handlePreviewImage(
-                                  studentSub.attachedFile?.fileId,
-                                  studentSub.attachedFile?.dataUrl,
-                                  studentSub.attachedFile?.name || 'حلي'
+                                handleDownloadFile(
+                                  hw.solutionFile?.fileId,
+                                  hw.solutionFile?.dataUrl,
+                                  hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
                                 )
                               }
-                              className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-md hover:bg-emerald-50 cursor-pointer flex items-center gap-1"
+                              disabled={downloadingFileId === (hw.solutionFile?.fileId || hw.solutionFile?.name)}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
                             >
-                              <Eye className="w-3 h-3" />
-                              <span>معاينة</span>
+                              <Download className="w-3 h-3" />
+                              <span>تحميل</span>
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDownloadFile(
-                                studentSub.attachedFile?.fileId,
-                                studentSub.attachedFile?.dataUrl,
-                                studentSub.attachedFile?.name || 'حلي'
-                              )
-                            }
-                            className="text-[11px] font-bold text-emerald-700 underline cursor-pointer"
-                          >
-                            تحميل
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
 
-                {/* Action Row: Delete/Edit (if teacher), Student Submit/Delete */}
+                      {/* Student Submission details */}
+                      {hasStudentSubmission && studentSub && (
+                        <div className="p-2.5 bg-emerald-50/70 border border-emerald-200 rounded-xl space-y-1.5 text-xs">
+                          <div className="flex items-center justify-between text-emerald-900 font-bold">
+                            <span className="flex items-center gap-1">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>تم تسليم حلك لهذا الواجب</span>
+                            </span>
+                            <span className="text-[10px] text-emerald-700">
+                              {new Date(studentSub.submittedAt).toLocaleDateString('ar-SA')}
+                            </span>
+                          </div>
+
+                          {studentSub.attachedFile?.hasFile && (
+                            <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
+                              <span className="text-[11px] text-slate-600 truncate max-w-[180px] flex items-center gap-1">
+                                {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) ? (
+                                  <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                                ) : (
+                                  <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                )}
+                                <span>{studentSub.attachedFile.name}</span>
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handlePreviewImage(
+                                        studentSub.attachedFile?.fileId,
+                                        studentSub.attachedFile?.dataUrl,
+                                        studentSub.attachedFile?.name || 'حلي'
+                                      )
+                                    }
+                                    className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-md hover:bg-emerald-50 cursor-pointer flex items-center gap-1"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                    <span>معاينة</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDownloadFile(
+                                      studentSub.attachedFile?.fileId,
+                                      studentSub.attachedFile?.dataUrl,
+                                      studentSub.attachedFile?.name || 'حلي'
+                                    )
+                                  }
+                                  className="text-[11px] font-bold text-emerald-700 underline cursor-pointer"
+                                >
+                                  تحميل
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Bottom Action Row: Edit/Delete + Show More/Less + Submit Button */}
                 <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 flex-wrap">
+                  {/* Left: Teacher Edit/Delete or Student Delete Submission */}
                   <div className="flex items-center gap-1">
                     {canManageThis && (
                       <>
                         <button
                           onClick={() => handleOpenEditModal(hw)}
-                          className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
                           title="تعديل الواجب"
                         >
-                          <Edit3 className="w-4 h-4" />
+                          <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         {confirmDeleteHwId === hw.id ? (
-                          <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-xl border border-rose-200">
-                            <span className="text-[11px] font-bold text-rose-800 pr-1">حذف؟</span>
+                          <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-lg border border-rose-200">
+                            <span className="text-[10px] font-bold text-rose-800 pr-1">حذف؟</span>
                             <button
                               type="button"
                               onClick={() => {
                                 onDeleteHomework(hw.id);
                                 setConfirmDeleteHwId(null);
                               }}
-                              className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                              className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold transition cursor-pointer"
                             >
                               نعم
                             </button>
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteHwId(null)}
-                              className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                              className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-bold transition cursor-pointer"
                             >
                               إلغاء
                             </button>
@@ -781,35 +790,33 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteHwId(hw.id)}
-                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                             title="حذف الواجب"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         )}
                       </>
                     )}
-                  </div>
 
-                  <div className="flex items-center gap-1.5">
-                    {hasStudentSubmission && studentSub && onDeleteSubmission && (
+                    {isExpanded && hasStudentSubmission && studentSub && onDeleteSubmission && (
                       confirmDeleteSubId === studentSub.id ? (
-                        <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-xl border border-rose-200">
-                          <span className="text-[11px] font-bold text-rose-800 pr-1">حذف الحل؟</span>
+                        <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-lg border border-rose-200">
+                          <span className="text-[10px] font-bold text-rose-800 pr-1">حذف الحل؟</span>
                           <button
                             type="button"
                             onClick={async () => {
                               await onDeleteSubmission(studentSub.id);
                               setConfirmDeleteSubId(null);
                             }}
-                            className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                            className="px-1.5 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[11px] font-bold transition cursor-pointer"
                           >
                             نعم
                           </button>
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteSubId(null)}
-                            className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                            className="px-1.5 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded text-[11px] font-bold transition cursor-pointer"
                           >
                             إلغاء
                           </button>
@@ -818,25 +825,41 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteSubId(studentSub.id)}
-                          className="py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs"
+                          className="py-1 px-2 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer flex items-center gap-1 text-[11px] font-bold"
                           title="حذف الحل المسلم"
                         >
-                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <Trash2 className="w-3 h-3 text-rose-600" />
                           <span>حذف الحل</span>
                         </button>
                       )
                     )}
+                  </div>
+
+                  {/* Right: زر عرض المزيد + زر التسليم */}
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(hw.id)}
+                      className="py-1 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    >
+                      <span>{isExpanded ? 'عرض أقل' : 'عرض المزيد'}</span>
+                      {isExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                      )}
+                    </button>
 
                     <button
                       onClick={() => handleOpenStudentSubmitModal(hw)}
-                      className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                      className={`py-1 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
                         hasStudentSubmission
-                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                           : 'bg-purple-600 hover:bg-purple-700 text-white'
                       }`}
                     >
                       <UploadCloud className="w-3.5 h-3.5" />
-                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'إرفاق / تسليم الحل'}</span>
+                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'تسليم الواجب'}</span>
                     </button>
                   </div>
                 </div>
