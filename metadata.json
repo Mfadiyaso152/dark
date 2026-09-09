@@ -1,6 +1,6 @@
 {
-  "name": "مقررات وملخصات أول ثانوي",
-  "description": "منصة ملخصات ومقررات طلاب أول ثانوي مع تحميل PDF لجميع المواد والمقررات",
+  "name": "منصة تفوّق | مسار أول ثانوي",
+  "description": "منصة تفوّق التعليمية لطلاب ومدرسي مسار أول ثانوي - ملخصات وواجبات وشروحات تفاعلية",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

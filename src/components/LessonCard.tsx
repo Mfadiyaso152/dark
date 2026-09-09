@@ -10,6 +10,7 @@ import { downloadLessonPDF, triggerFileDownload } from '../utils/pdfGenerator';
 import { useAuth } from '../context/AuthContext';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
+import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
 
 interface LessonCardProps {
@@ -96,7 +97,10 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   const canEditThisLesson = canManageSubject(targetSubjectId);
 
   return (
-    <div
+    <motion.div
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: 'spring', stiffness: 450, damping: 30 }}
       onClick={handleCardClick}
       className={`group cursor-pointer rounded-2xl p-4 transition-all duration-200 border text-right relative overflow-hidden bg-white ${
         isCompleted
@@ -185,6 +189,6 @@ export const LessonCard: React.FC<LessonCardProps> = ({
           <span>{downloadDone ? 'تم التنزيل!' : 'تنزيل PDF'}</span>
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 };

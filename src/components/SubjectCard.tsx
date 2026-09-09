@@ -3,6 +3,7 @@ import { Subject, Lesson } from '../types';
 import { SubjectIcon } from './SubjectIcon';
 import { Lock, ChevronLeft, BookOpen, ClipboardList, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useSubjectControls } from '../context/SubjectControlsContext';
 
 interface SubjectCardProps {
   subject: Subject;
@@ -26,10 +27,12 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
   onSelectSubject
 }) => {
   const [showSoonNotice, setShowSoonNotice] = useState(false);
+  const { isSubjectPaused } = useSubjectControls();
+
   const safeLessons = Array.isArray(lessons) ? lessons : [];
   const subjectLessons = safeLessons.filter((l) => l.subjectId === subject?.id);
   const totalCount = lessonsCount !== undefined ? lessonsCount : subjectLessons.length;
-  const isComingSoon = !!subject?.isComingSoon;
+  const isComingSoon = !!subject?.isComingSoon || isSubjectPaused(subject?.id);
 
   const handleCardClick = (e: React.MouseEvent) => {
     if (isComingSoon) {

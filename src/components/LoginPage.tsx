@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'motion/react';
+import { TermsModal } from './TermsModal';
 import {
   BookOpen,
   Sparkles,
@@ -12,7 +13,8 @@ import {
   Brain,
   ShieldCheck,
   Users,
-  ChevronLeft
+  ChevronLeft,
+  Lock
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -22,6 +24,7 @@ interface LoginPageProps {
 export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   const { loginWithGoogle, authError } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
   const handleRealGoogleLogin = async () => {
     setIsLoading(true);
@@ -44,10 +47,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             </div>
             <div>
               <span className="font-black text-slate-900 text-base sm:text-lg block leading-tight">
-                منصة الأول ثانوي
+                منصة تفوّق
               </span>
               <span className="text-[11px] text-slate-500 font-medium">
-                نظام المسارات 1446-1447هـ
+                مسارات أول ثانوي • 1446-1447هـ
               </span>
             </div>
           </div>
@@ -88,10 +91,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="inline-flex items-center gap-2 bg-purple-50 text-purple-800 border border-purple-200/80 px-4 py-1.5 rounded-full text-xs sm:text-sm font-black shadow-2xs"
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-900 border border-purple-200/80 px-4 py-1.5 rounded-full text-xs sm:text-sm font-black shadow-2xs"
           >
             <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>البوابة الأكاديمية التفاعلية الرسمية</span>
+            <span>نظام المسارات 1446-1447هـ</span>
           </motion.div>
 
           <motion.h1
@@ -100,7 +103,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             transition={{ delay: 0.1 }}
             className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 leading-tight tracking-tight"
           >
-            منصتك التعليمية المتكاملة لمسار أول ثانوي
+            منصة تفوّق | مسار أول ثانوي
           </motion.h1>
 
           <motion.p
@@ -165,10 +168,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             </div>
           )}
 
-          <p className="text-xs text-slate-400 font-medium">
-            يتم تسجيلك مجاناً وبأمان تام لحفظ تقدمك الدراسي وحلول واجباتك
-          </p>
+          {/* Privacy & Terms Note */}
+          <div className="max-w-md mx-auto space-y-1.5 pt-1">
+            <p className="text-xs text-slate-500 font-medium leading-relaxed">
+              بالمتابعة أو تسجيل الدخول، فإنك توافق على{' '}
+              <button
+                type="button"
+                onClick={() => setIsTermsModalOpen(true)}
+                className="text-blue-600 hover:text-blue-700 font-bold underline decoration-blue-300 hover:decoration-blue-600 underline-offset-2 transition cursor-pointer"
+              >
+                الشروط والأحكام وسياسة الخصوصية
+              </button>
+            </p>
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-emerald-700 font-bold">
+              <Lock className="w-3.5 h-3.5 shrink-0" />
+              <span>جميع بياناتك الشخصية وحلولك محفوظة ومشفرة ولن يتم تسريبها إطلاقاً</span>
+            </div>
+          </div>
         </div>
+
+        {/* Terms and Privacy Modal */}
+        <TermsModal
+          isOpen={isTermsModalOpen}
+          onClose={() => setIsTermsModalOpen(false)}
+        />
 
         {/* Platform Pillars / تعريف بمزايا المنصة */}
         <div className="pt-4">

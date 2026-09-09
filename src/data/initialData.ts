@@ -17,7 +17,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#3B82F6]',
     titleColor: 'text-[#1E3A8A]',
     countColor: 'text-[#60A5FA]',
-    description: 'التبرير والبرهان، التوازي والتعامد، وتطابق المثلثات والعلاقات في المثلث',
+    description: '',
     supervisorName: 'خالد القحطاني'
   },
   // 2. كيمياء 1

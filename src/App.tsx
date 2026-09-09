@@ -16,6 +16,7 @@ import { StudentServiceView } from './components/StudentServiceView';
 import { QuduratView } from './components/QuduratView';
 import { DailyHomeworksView } from './components/DailyHomeworksView';
 import { BottomNav, TabType } from './components/BottomNav';
+import { SupervisorSettingsDrawer } from './components/SupervisorSettingsDrawer';
 import { useAuth } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from './lib/firebase';
@@ -965,176 +966,215 @@ export default function App() {
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10 space-y-4 md:space-y-6 lg:space-y-8">
-          {/* TAB: Qudurat (القدرات - قريباً) */}
-          {activeTab === 'qudurat' ? (
-            <QuduratView />
-          ) : activeTab === 'homeworks' ? (
-            /* TAB: Daily Homeworks (الواجبات المدرسية اليومية) */
-            <DailyHomeworksView
-              allSubjects={subjects}
-              homeworks={homeworks}
-              onAddHomework={handleAddHomework}
-              onUpdateHomework={handleUpdateHomework}
-              onDeleteHomework={handleDeleteHomework}
-              completedHomeworkIds={progress.completedHomeworkIds}
-              onToggleCompleteHomework={handleToggleCompleteHomework}
-              submissions={submissions}
-              onSubmitSolution={handleSubmitHomeworkSolution}
-              onDeleteSubmission={handleDeleteSubmission}
-            />
-          ) : activeTab === 'users' ? (
-            isSuperAdmin ? (
-              /* TAB: User Management (الإدارة - إدارة المستخدمين وتعيين المعلمين والصلاحيات زي قبل) */
-              <UserManagementView />
-            ) : isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب') ? (
-              /* TAB: Students Management (المعلمين والمشرف المساعد - استعراض الطلاب والواجبات) */
-              <StudentsManagementView
-                allLessons={safeLessons}
-                allSubjects={subjects}
-                allHomeworks={homeworks}
-                allSubmissions={submissions}
-                onSelectLesson={openLessonDetail}
-              />
-            ) : (
-              /* TAB: Student Service for regular students (خدمة الطلاب - تجريبية وإطلاق 10 سبتمبر) */
-              <StudentServiceView />
-            )
-          ) : (
-            /* TAB: Home (الرئيسية) */
-            <div className="space-y-4 md:space-y-6">
-              {selectedSubject ? (
-                /* Inside a Subject: Shows selectable options (Lessons vs Booklets vs Homeworks) */
-                <SubjectDetailView
-                  subject={selectedSubject}
-                  lessons={safeLessons}
-                  booklets={booklets}
-                  onBack={() => setSelectedSubject(null)}
-                  onSelectLesson={openLessonDetail}
-                  onToggleComplete={handleToggleComplete}
-                  onOpenAddLesson={() => openAddLessonModal(selectedSubject.id)}
-                  onOpenEditLesson={openEditLessonModal}
-                  onDeleteLesson={handleDeleteLesson}
-                  onAddBooklet={handleAddBooklet}
-                  onDeleteBooklet={handleDeleteBooklet}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab + (selectedSubject ? `-${selectedSubject.id}` : '')}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+            >
+              {/* TAB: Qudurat (القدرات - قريباً) */}
+              {activeTab === 'qudurat' ? (
+                <QuduratView />
+              ) : activeTab === 'homeworks' ? (
+                /* TAB: Daily Homeworks (الواجبات المدرسية اليومية) */
+                <DailyHomeworksView
+                  allSubjects={subjects}
                   homeworks={homeworks}
                   onAddHomework={handleAddHomework}
                   onUpdateHomework={handleUpdateHomework}
                   onDeleteHomework={handleDeleteHomework}
-                  completedLessonIds={progress.completedLessonIds}
                   completedHomeworkIds={progress.completedHomeworkIds}
                   onToggleCompleteHomework={handleToggleCompleteHomework}
                   submissions={submissions}
-                  onSubmitHomeworkSolution={handleSubmitHomeworkSolution}
+                  onSubmitSolution={handleSubmitHomeworkSolution}
                   onDeleteSubmission={handleDeleteSubmission}
                 />
+              ) : activeTab === 'users' ? (
+                isSuperAdmin ? (
+                  /* TAB: User Management (الإدارة - إدارة المستخدمين وتعيين المعلمين والصلاحيات زي قبل) */
+                  <UserManagementView />
+                ) : isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب') ? (
+                  /* TAB: Students Management (المعلمين والمشرف المساعد - استعراض الطلاب والواجبات) */
+                  <StudentsManagementView
+                    allLessons={safeLessons}
+                    allSubjects={subjects}
+                    allHomeworks={homeworks}
+                    allSubmissions={submissions}
+                    onSelectLesson={openLessonDetail}
+                  />
+                ) : (
+                  /* TAB: Student Service for regular students (خدمة الطلاب - تجريبية وإطلاق 10 سبتمبر) */
+                  <StudentServiceView />
+                )
               ) : (
-                /* All Subjects Grid */
-                <div className="space-y-3.5 md:space-y-5">
-                  {/* Semester Switcher: P1 & P2 only */}
-                  <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">
-                    <motion.button
-                      whileTap={{ scale: 0.97 }}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSemester(1);
-                        setSelectedSubject(null);
-                      }}
-                      className={`py-2.5 px-4 rounded-xl text-sm md:text-base font-black transition flex items-center justify-center cursor-pointer ${
-                        selectedSemester === 1
-                          ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      P1
-                    </motion.button>
-
-                    <motion.button
-                      whileTap={{ scale: 0.97 }}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSemester(2);
-                        setSelectedSubject(null);
-                      }}
-                      className={`py-2.5 px-4 rounded-xl text-sm md:text-base font-black transition flex items-center justify-center cursor-pointer ${
-                        selectedSemester === 2
-                          ? 'bg-white text-purple-600 shadow-sm border border-slate-200/60'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      P2
-                    </motion.button>
-                  </div>
-
-                  {/* Search Bar */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="ابحث عن درس أو مادة..."
-                      className="w-full py-2.5 md:py-3.5 pr-10 md:pr-12 pl-4 bg-white border border-slate-200 rounded-2xl text-xs md:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] shadow-xs"
+                /* TAB: Home (الرئيسية) */
+                <div className="space-y-4 md:space-y-6">
+                  {selectedSubject ? (
+                    /* Inside a Subject: Shows selectable options (Lessons vs Booklets vs Homeworks) */
+                    <SubjectDetailView
+                      subject={selectedSubject}
+                      lessons={safeLessons}
+                      booklets={booklets}
+                      onBack={() => setSelectedSubject(null)}
+                      onSelectLesson={openLessonDetail}
+                      onToggleComplete={handleToggleComplete}
+                      onOpenAddLesson={() => openAddLessonModal(selectedSubject.id)}
+                      onOpenEditLesson={openEditLessonModal}
+                      onDeleteLesson={handleDeleteLesson}
+                      onAddBooklet={handleAddBooklet}
+                      onDeleteBooklet={handleDeleteBooklet}
+                      homeworks={homeworks}
+                      onAddHomework={handleAddHomework}
+                      onUpdateHomework={handleUpdateHomework}
+                      onDeleteHomework={handleDeleteHomework}
+                      completedLessonIds={progress.completedLessonIds}
+                      completedHomeworkIds={progress.completedHomeworkIds}
+                      onToggleCompleteHomework={handleToggleCompleteHomework}
+                      submissions={submissions}
+                      onSubmitHomeworkSolution={handleSubmitHomeworkSolution}
+                      onDeleteSubmission={handleDeleteSubmission}
                     />
-                    <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 absolute right-3.5 md:right-4 top-3 md:top-3.5" />
-                  </div>
-
-                  {/* Responsive Subject List (Rectangular & Stacked) */}
-                  <div className="flex flex-col gap-3 md:gap-3.5 w-full">
-                    {displayedSubjects.map((sub) => {
-                      const subjectLessons = safeLessons.filter((l) => l.subjectId === sub.id);
-                      const subjectHomeworks = homeworks.filter((h) => h.subjectId === sub.id);
-                      const subjectBooklets = booklets.filter((b) => b.subjectId === sub.id);
-                      return (
-                        <SubjectCard
-                          key={sub.id}
-                          subject={sub}
-                          lessons={safeLessons}
-                          lessonsCount={subjectLessons.length}
-                          homeworksCount={subjectHomeworks.length}
-                          bookletsCount={subjectBooklets.length}
-                          isSelected={selectedSubject?.id === sub.id}
-                          onSelect={(s) => {
-                            if (s.isComingSoon) return;
-                            setSelectedSubject(s);
+                  ) : (
+                    /* All Subjects Grid */
+                    <div className="space-y-3.5 md:space-y-5">
+                      {/* Semester Switcher: P1 & P2 only */}
+                      <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80">
+                        <motion.button
+                          whileTap={{ scale: 0.97 }}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSemester(1);
+                            setSelectedSubject(null);
                           }}
-                        />
-                      );
-                    })}
-                  </div>
+                          className={`py-2.5 px-4 rounded-xl text-sm md:text-base font-black transition flex items-center justify-center cursor-pointer ${
+                            selectedSemester === 1
+                              ? 'bg-white text-blue-600 shadow-sm border border-slate-200/60'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          P1
+                        </motion.button>
 
-                  {displayedSubjects.length === 0 && (
-                    <div className="text-center py-12 md:py-16 bg-white rounded-3xl border border-dashed border-slate-200">
-                      <p className="text-xs md:text-sm text-slate-400">لا توجد مواد مطابقة للبحث حالياً</p>
+                        <motion.button
+                          whileTap={{ scale: 0.97 }}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSemester(2);
+                            setSelectedSubject(null);
+                          }}
+                          className={`py-2.5 px-4 rounded-xl text-sm md:text-base font-black transition flex items-center justify-center cursor-pointer ${
+                            selectedSemester === 2
+                              ? 'bg-white text-purple-600 shadow-sm border border-slate-200/60'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          P2
+                        </motion.button>
+                      </div>
+
+                      {/* Search Bar */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="ابحث عن درس أو مادة..."
+                          className="w-full py-2.5 md:py-3.5 pr-10 md:pr-12 pl-4 bg-white border border-slate-200 rounded-2xl text-xs md:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#3B82F6] shadow-xs"
+                        />
+                        <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 absolute right-3.5 md:right-4 top-3 md:top-3.5" />
+                      </div>
+
+                      {/* Responsive Subject List (Rectangular & Stacked) */}
+                      <div className="flex flex-col gap-3 md:gap-3.5 w-full">
+                        {displayedSubjects.map((sub) => {
+                          const subjectLessons = safeLessons.filter((l) => l.subjectId === sub.id);
+                          const subjectHomeworks = homeworks.filter((h) => h.subjectId === sub.id);
+                          const subjectBooklets = booklets.filter((b) => b.subjectId === sub.id);
+                          return (
+                            <SubjectCard
+                              key={sub.id}
+                              subject={sub}
+                              lessons={safeLessons}
+                              lessonsCount={subjectLessons.length}
+                              homeworksCount={subjectHomeworks.length}
+                              bookletsCount={subjectBooklets.length}
+                              isSelected={selectedSubject?.id === sub.id}
+                              onSelect={(s) => {
+                                if (s.isComingSoon) return;
+                                setSelectedSubject(s);
+                              }}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      {displayedSubjects.length === 0 && (
+                        <div className="text-center py-12 md:py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+                          <p className="text-xs md:text-sm text-slate-400">لا توجد مواد مطابقة للبحث حالياً</p>
+                        </div>
+                      )}
+
+                      {/* Social Media & WhatsApp Links (Compact Circular Icons) */}
+                      <div className="pt-2 pb-3 flex items-center justify-center gap-4">
+                        {/* WhatsApp Group */}
+                        <motion.a
+                          whileHover={{ y: -2, scale: 1.08 }}
+                          whileTap={{ scale: 0.9 }}
+                          id="whatsapp-circular-link"
+                          href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-11 h-11 rounded-full bg-[#25D366] hover:bg-[#20BD5A] text-white flex items-center justify-center shadow-sm hover:shadow-md transition active:scale-90 cursor-pointer"
+                          title="قروب الواتساب"
+                          aria-label="قروب الواتساب"
+                        >
+                          <svg className="w-5 h-5 fill-white shrink-0" viewBox="0 0 24 24">
+                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                          </svg>
+                        </motion.a>
+
+                        {/* TikTok */}
+                        <motion.a
+                          whileHover={{ y: -2, scale: 1.08 }}
+                          whileTap={{ scale: 0.9 }}
+                          id="tiktok-circular-link"
+                          href="https://www.tiktok.com/@..7lk1"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-11 h-11 rounded-full bg-black hover:bg-slate-900 text-white flex items-center justify-center shadow-sm hover:shadow-md border border-slate-800 transition active:scale-90 cursor-pointer"
+                          title="حساب تيك توك: ..7lk1"
+                          aria-label="حساب تيك توك"
+                        >
+                          <svg className="w-5 h-5 fill-white shrink-0" viewBox="0 0 24 24">
+                            <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1.04-.1z"/>
+                          </svg>
+                        </motion.a>
+
+                        {/* Snapchat */}
+                        <motion.a
+                          whileHover={{ y: -2, scale: 1.08 }}
+                          whileTap={{ scale: 0.9 }}
+                          id="snapchat-circular-link"
+                          href="https://www.snapchat.com/add/mk.7mo"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-11 h-11 rounded-full bg-[#FFFC00] hover:bg-[#F5F200] text-black flex items-center justify-center shadow-sm hover:shadow-md border border-yellow-300 transition active:scale-90 cursor-pointer"
+                          title="حساب سناب شات: mk.7mo"
+                          aria-label="حساب سناب شات"
+                        >
+                          <svg className="w-5 h-5 fill-black shrink-0" viewBox="0 0 24 24">
+                            <path d="M12.16 2.07c-3.9 0-5.83 2.63-5.87 5.09-.03 1.5.58 2.87 1.15 3.7.15.22.1.37-.08.49-.49.33-1.34.82-1.77 1.45-.48.7-.14 1.48.51 1.74 1.05.42 2.3.24 3.01.07.21-.05.37.06.43.25.32.96.9 2.45 2.62 2.45 1.73 0 2.31-1.49 2.63-2.45.06-.19.22-.3.43-.25.71.17 1.96.35 3.01-.07.65-.26.99-1.04.51-1.74-.43-.63-1.28-1.12-1.77-1.45-.18-.12-.23-.27-.08-.49.57-.83 1.18-2.2 1.15-3.7-.04-2.46-1.97-5.09-5.87-5.09zm0 1.5c3.08 0 4.37 2.12 4.4 3.59.03 1.25-.49 2.39-1 3.14-.52.76-.36 1.4.29 1.84.45.3 1.12.7 1.43 1.16.2.29.11.58-.2.71-.85.34-1.89.19-2.52.04-.66-.16-1.35.26-1.57.92-.26.79-.69 1.79-1.83 1.79s-1.57-1-1.83-1.79c-.22-.66-.91-1.08-1.57-.92-.63.15-1.67.3-2.52-.04-.31-.13-.4-.42-.2-.71.31-.46.98-.86 1.43-1.16.65-.44.81-1.08.29-1.84-.51-.75-1.03-1.89-1-3.14.03-1.47 1.32-3.59 4.4-3.59z"/>
+                          </svg>
+                        </motion.a>
+                      </div>
                     </div>
                   )}
-
-                  {/* WhatsApp Group Direct Button - Located under subjects as requested */}
-                  <a
-                    id="whatsapp-home-btn"
-                    href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3 md:py-3.5 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm md:text-base flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
-                  >
-                    <MessageCircle className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
-                    <span>الدخول لقروب الواتساب</span>
-                  </a>
-
-                  {/* Notice: Completion and Official Launch Date */}
-                  <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3 text-right">
-                    <div className="flex items-center gap-2.5">
-                      <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 shrink-0" />
-                      <span className="font-bold text-slate-800 text-xs sm:text-sm">
-                        موعد الانتهاء من البرمجة والإطلاق الرسمي
-                      </span>
-                    </div>
-                    <span className="px-3 py-1 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200/80 text-xs sm:text-sm font-black shrink-0">
-                      20 سبتمبر
-                    </span>
-                  </div>
                 </div>
               )}
-            </div>
-          )}
+            </motion.div>
+          </AnimatePresence>
         </main>
 
         {/* Bottom Navigation */}
@@ -1171,6 +1211,9 @@ export default function App() {
 
         {/* Auth / Account Profile Modal */}
         <AuthModal />
+
+        {/* Supervisor Platform Controls Drawer */}
+        <SupervisorSettingsDrawer subjects={subjects} />
       </div>
     </div>
   );

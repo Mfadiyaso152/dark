@@ -116,6 +116,21 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   onDeleteSubmission
 }) => {
   const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
+  const isSupervisor =
+    isSuperAdmin ||
+    user?.email?.toLowerCase() === 'mfb.15.f@gmail.com' ||
+    user?.email?.toLowerCase() === 'kalshrby90@gmail.com' ||
+    user?.jobTitle === 'مشرف مساعد' ||
+    user?.jobTitle === 'المشرف الأساسي' ||
+    user?.role === 'supervisor';
+
+  const isTeacher =
+    !isSupervisor &&
+    (user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
+
+  // Submit button is strictly for students, never for teachers or supervisors
+  const canSubmitHomework = !isTeacher && !isSupervisor;
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
 
@@ -889,18 +904,20 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                       )}
                     </button>
 
-                    {/* زر التسليم */}
-                    <button
-                      onClick={() => handleOpenStudentSubmitModal(hw)}
-                      className={`py-1 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                        hasStudentSubmission
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                          : 'bg-purple-600 hover:bg-purple-700 text-white'
-                      }`}
-                    >
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'تسليم الواجب'}</span>
-                    </button>
+                    {/* زر التسليم: متاح للطلاب والمشرفين فقط */}
+                    {canSubmitHomework && (
+                      <button
+                        onClick={() => handleOpenStudentSubmitModal(hw)}
+                        className={`py-1 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                          hasStudentSubmission
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            : 'bg-purple-600 hover:bg-purple-700 text-white'
+                        }`}
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>{hasStudentSubmission ? 'تعديل الحل' : 'تسليم الواجب'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.div>

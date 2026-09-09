@@ -112,6 +112,31 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 }) => {
   const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject } = useAuth();
 
+  const isSupervisor =
+    isSuperAdmin ||
+    user?.email?.toLowerCase() === 'mfb.15.f@gmail.com' ||
+    user?.email?.toLowerCase() === 'kalshrby90@gmail.com' ||
+    user?.jobTitle === 'مشرف مساعد' ||
+    user?.jobTitle === 'المشرف الأساسي' ||
+    user?.role === 'supervisor';
+
+  const isTeacher =
+    !isSupervisor &&
+    (user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
+
+  // Submit button is ONLY for students, never for teachers or supervisors
+  const canSubmitHomework = !isTeacher && !isSupervisor;
+
+  // Restrict allowed subjects for adding/editing homework
+  const allowedSubjects = useMemo(() => {
+    if (isSupervisor) return allSubjects;
+    if (isTeacher) {
+      const filtered = allSubjects.filter((s) => canManageSubject(s.id));
+      return filtered.length > 0 ? filtered : allSubjects;
+    }
+    return allSubjects;
+  }, [allSubjects, isSupervisor, isTeacher, canManageSubject]);
+
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
@@ -164,9 +189,16 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   };
 
   // Filter & Sort Homeworks:
-  // RULE: Submitted / completed homeworks are pushed to the very bottom!
+  // RULE 1: Teachers only see their own subject's homeworks!
+  // RULE 2: Submitted / completed homeworks are pushed to the very bottom!
   const sortedAndFilteredHomeworks = useMemo(() => {
     let list = [...homeworks];
+
+    // If pure teacher, only show homeworks for their allowed subject
+    if (isTeacher) {
+      list = list.filter((h) => canManageSubject(h.subjectId));
+    }
+
     if (selectedSubjectFilter !== 'all') {
       list = list.filter((h) => h.subjectId === selectedSubjectFilter);
     }
@@ -197,7 +229,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
       return (b.dueDate || '').localeCompare(a.dueDate || '');
     });
-  }, [homeworks, selectedSubjectFilter, submissions, user, completedHomeworkIds]);
+  }, [homeworks, isTeacher, canManageSubject, selectedSubjectFilter, submissions, user, completedHomeworkIds]);
 
   const canUserAddAnyHomework =
     isSuperAdmin ||
@@ -212,7 +244,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
     setDueDate(`${yyyy}-${mm}-${dd}`);
-    setFormSubjectId(allSubjects[0]?.id || 'math-1');
+    const defaultSub = allowedSubjects[0]?.id || allSubjects[0]?.id || 'math-1';
+    setFormSubjectId(defaultSub);
     setPageNumber('');
     setQuestionNumber('');
     setTitle('');
@@ -499,7 +532,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
       </div>
 
       {/* Subject Filter Pills if homeworks exist */}
-      {homeworks.length > 0 && (
+      {homeworks.length > 0 && !isTeacher && (
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
           <button
             onClick={() => setSelectedSubjectFilter('all')}
@@ -530,6 +563,16 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Teacher Assigned Subject Info Tag */}
+      {isTeacher && allowedSubjects.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="px-3.5 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 text-xs font-black inline-flex items-center gap-2">
+            <span>📚</span>
+            <span>واجبات مادتك المسندة إليك: {allowedSubjects.map((s) => s.name).join('، ')}</span>
+          </span>
         </div>
       )}
 
@@ -850,17 +893,20 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                       )}
                     </button>
 
-                    <button
-                      onClick={() => handleOpenStudentSubmitModal(hw)}
-                      className={`py-1 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                        hasStudentSubmission
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                          : 'bg-purple-600 hover:bg-purple-700 text-white'
-                      }`}
-                    >
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'تسليم الواجب'}</span>
-                    </button>
+                    {/* زر التسليم: متاح للطلاب والمشرفين فقط، ولا يظهر للمعلمين */}
+                    {canSubmitHomework && (
+                      <button
+                        onClick={() => handleOpenStudentSubmitModal(hw)}
+                        className={`py-1 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                          hasStudentSubmission
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                            : 'bg-purple-600 hover:bg-purple-700 text-white'
+                        }`}
+                      >
+                        <UploadCloud className="w-3.5 h-3.5" />
+                        <span>{hasStudentSubmission ? 'تعديل الحل' : 'تسليم الواجب'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </motion.div>
@@ -899,13 +945,16 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
               <form onSubmit={handleSubmitHomeworkForm} className="space-y-3.5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">المقرر الدراسي</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    المقرر الدراسي {isTeacher ? '(مادتك المخصصة فقط)' : ''}
+                  </label>
                   <select
                     value={formSubjectId}
                     onChange={(e) => setFormSubjectId(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    disabled={allowedSubjects.length === 1}
+                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-75 disabled:bg-slate-100"
                   >
-                    {allSubjects.map((s) => (
+                    {allowedSubjects.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
                       </option>

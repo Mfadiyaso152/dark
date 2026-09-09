@@ -203,6 +203,17 @@ export interface Homework {
   solutionFile?: AttachedFile; // Optional PDF solution file attached by teacher
 }
 
+export interface SubjectFeatureControl {
+  isPaused?: boolean; // إيقاف المادة بالكامل (عرض قريباً للجميع)
+  lessonsDisabled?: boolean; // إيقاف الدروس (عرض قريباً)
+  bookletsDisabled?: boolean; // إيقاف الملخصات (عرض قريباً)
+  homeworksDisabled?: boolean; // إيقاف الواجبات (عرض قريباً)
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type SubjectControlsMap = Record<string, SubjectFeatureControl>;
+
 export interface HomeworkSubmission {
   id: string;
   homeworkId: string;

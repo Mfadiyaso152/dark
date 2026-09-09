@@ -154,10 +154,6 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               {lesson.title}
             </h1>
             <div className="flex items-center justify-between text-xs md:text-sm text-slate-400 flex-wrap gap-2">
-              <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-                <span>إشراف:</span>
-                <span className="text-slate-800 font-bold">{lesson.supervisorName}</span>
-              </div>
               <div className="flex items-center gap-2">
                 <span className="bg-[#F1F5F9] text-[#334155] px-2.5 py-1 rounded-xl text-[10px] md:text-xs font-bold">
                   {lesson.difficulty === 'easy' ? 'مستوى سهل 🟢' : lesson.difficulty === 'medium' ? 'مستوى متوسط 🟡' : 'مستوى متقدم 🔴'}
