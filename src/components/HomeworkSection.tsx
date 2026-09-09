@@ -38,6 +38,7 @@ interface HomeworkSectionProps {
   canEdit: boolean;
   submissions?: HomeworkSubmission[];
   onSubmitSolution?: (sub: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => Promise<void>;
+  onDeleteSubmission?: (submissionId: string) => Promise<void> | void;
 }
 
 export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
@@ -51,7 +52,8 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   onToggleCompleteHomework,
   canEdit,
   submissions = [],
-  onSubmitSolution
+  onSubmitSolution,
+  onDeleteSubmission
 }) => {
   const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -82,7 +84,30 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   // PDF Download tracking
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
-  const subjectHomeworks = homeworks.filter((h) => h.subjectId === subject.id);
+  // Sort homeworks: unsubmitted/pending homeworks come first; submitted homeworks are placed at the very bottom
+  const subjectHomeworks = [...homeworks.filter((h) => h.subjectId === subject.id)].sort((a, b) => {
+    const aSub = submissions.some(
+      (s) =>
+        s.homeworkId === a.id &&
+        ((user?.email && s.studentEmail.toLowerCase() === user.email.toLowerCase()) ||
+          (user?.id && s.studentId === user.id))
+    );
+    const bSub = submissions.some(
+      (s) =>
+        s.homeworkId === b.id &&
+        ((user?.email && s.studentEmail.toLowerCase() === user.email.toLowerCase()) ||
+          (user?.id && s.studentId === user.id))
+    );
+    if (!aSub && bSub) return -1;
+    if (aSub && !bSub) return 1;
+
+    const aDone = completedHomeworkIds.includes(a.id);
+    const bDone = completedHomeworkIds.includes(b.id);
+    if (!aDone && bDone) return -1;
+    if (aDone && !bDone) return 1;
+
+    return (b.dueDate || '').localeCompare(a.dueDate || '');
+  });
 
   // Open Teacher Add Homework Modal
   const handleOpenAddModal = () => {
@@ -624,17 +649,35 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                     إشراف: {hw.supervisorName}
                   </span>
 
-                  <button
-                    onClick={() => handleOpenStudentSubmitModal(hw)}
-                    className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
-                      hasStudentSubmission
-                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        : 'bg-purple-600 hover:bg-purple-700 text-white'
-                    }`}
-                  >
-                    <UploadCloud className="w-3.5 h-3.5" />
-                    <span>{hasStudentSubmission ? 'تعديل الحل' : 'إرفاق / تسليم الحل'}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {hasStudentSubmission && onDeleteSubmission && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('هل تريد حذف حلك لهذا الواجب؟ سيمكنك رفع حل جديد في أي وقت.')) {
+                            onDeleteSubmission(studentSub.id);
+                          }
+                        }}
+                        className="py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs"
+                        title="حذف الحل المسلم لتعديله أو استبداله"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span className="hidden sm:inline">حذف الحل</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleOpenStudentSubmitModal(hw)}
+                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs ${
+                        hasStudentSubmission
+                          ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          : 'bg-purple-600 hover:bg-purple-700 text-white'
+                      }`}
+                    >
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>{hasStudentSubmission ? 'تعديل الحل' : 'إرفاق / تسليم الحل'}</span>
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             );
@@ -953,22 +996,49 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                   />
                 </div>
 
-                <div className="pt-2 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveHomeworkForSubmission(null)}
-                    className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
-                  >
-                    إلغاء
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="py-2.5 px-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs md:text-sm font-black transition cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    <Send className="w-4 h-4" />
-                    <span>{isSubmitting ? 'جارٍ التسليم...' : 'تسليم الحل'}</span>
-                  </button>
+                <div className="pt-2 flex items-center justify-between gap-2">
+                  {submissions.find(
+                    (s) =>
+                      s.homeworkId === activeHomeworkForSubmission.id &&
+                      (s.studentId === user?.id || s.studentEmail === user?.email)
+                  ) && onDeleteSubmission ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const existingSub = submissions.find(
+                          (s) =>
+                            s.homeworkId === activeHomeworkForSubmission.id &&
+                            (s.studentId === user?.id || s.studentEmail === user?.email)
+                        );
+                        if (existingSub && window.confirm('هل تريد حذف حلك المسلم لهذا الواجب؟ يمكنك رفع حل جديد لاحقاً.')) {
+                          await onDeleteSubmission(existingSub.id);
+                          setActiveHomeworkForSubmission(null);
+                        }
+                      }}
+                      className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>حذف الحل</span>
+                    </button>
+                  ) : <div />}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveHomeworkForSubmission(null)}
+                      className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="py-2.5 px-5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs md:text-sm font-black transition cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{isSubmitting ? 'جارٍ التسليم...' : 'تسليم الحل'}</span>
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>

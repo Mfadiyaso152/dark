@@ -14,6 +14,7 @@ import { UserManagementView } from './components/UserManagementView';
 import { StudentsManagementView } from './components/StudentsManagementView';
 import { StudentServiceView } from './components/StudentServiceView';
 import { QuduratView } from './components/QuduratView';
+import { DailyHomeworksView } from './components/DailyHomeworksView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { useAuth } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
@@ -205,7 +206,7 @@ export default function App() {
   // Homeworks (الواجبات المدرسية)
   const [homeworks, setHomeworks] = useState<Homework[]>(() => {
     try {
-      const saved = safeGetItem('thanaweya_homeworks_v1');
+      const saved = safeGetItem('thanaweya_homeworks_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
@@ -218,7 +219,7 @@ export default function App() {
 
   // Sync homeworks safely to localStorage
   useEffect(() => {
-    safeSetItem('thanaweya_homeworks_v1', JSON.stringify(homeworks));
+    safeSetItem('thanaweya_homeworks_v2', JSON.stringify(homeworks));
   }, [homeworks]);
 
   // Real-time Firestore sync for Homeworks across all users (instant cloud sync)
@@ -250,7 +251,7 @@ export default function App() {
           }
         });
         const merged = Array.from(map.values());
-        safeSetItem('thanaweya_homeworks_v1', JSON.stringify(merged));
+        safeSetItem('thanaweya_homeworks_v2', JSON.stringify(merged));
         return merged;
       });
     }, (err) => {
@@ -404,15 +405,12 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('home');
 
-  // Guard against opening a coming-soon subject or notifications tab
+  // Guard against opening a coming-soon subject
   useEffect(() => {
     if (selectedSubject?.isComingSoon) {
       setSelectedSubject(null);
     }
-    if (activeTab === 'notifications') {
-      setActiveTab('home');
-    }
-  }, [selectedSubject, activeTab]);
+  }, [selectedSubject]);
 
   // Modals
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
@@ -841,6 +839,29 @@ export default function App() {
     handleToggleCompleteHomework(subData.homeworkId);
   };
 
+  // Student Homework Solution Deletion (for re-submission or cancellation)
+  const handleDeleteSubmission = async (submissionId: string) => {
+    // 1. Immediate local state update
+    const target = submissions.find((s) => s.id === submissionId);
+    setSubmissions((prev) => prev.filter((s) => s.id !== submissionId));
+
+    // 2. Cloud Firestore update
+    try {
+      await setDoc(
+        doc(db, 'homework_submissions', submissionId),
+        { id: submissionId, isDeleted: true, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn('Firestore homework submission delete error:', err);
+    }
+
+    // 3. Untoggle completion status if it was completed
+    if (target && progress.completedHomeworkIds?.includes(target.homeworkId)) {
+      handleToggleCompleteHomework(target.homeworkId);
+    }
+  };
+
   const handleDeleteHomework = async (id: string) => {
     const target = homeworks.find((h) => h.id === id);
     if (target && !canManageSubject(target.subjectId)) {
@@ -928,6 +949,20 @@ export default function App() {
           {/* TAB: Qudurat (القدرات - قريباً) */}
           {activeTab === 'qudurat' ? (
             <QuduratView />
+          ) : activeTab === 'homeworks' ? (
+            /* TAB: Daily Homeworks (الواجبات المدرسية اليومية) */
+            <DailyHomeworksView
+              allSubjects={subjects}
+              homeworks={homeworks}
+              onAddHomework={handleAddHomework}
+              onUpdateHomework={handleUpdateHomework}
+              onDeleteHomework={handleDeleteHomework}
+              completedHomeworkIds={progress.completedHomeworkIds}
+              onToggleCompleteHomework={handleToggleCompleteHomework}
+              submissions={submissions}
+              onSubmitSolution={handleSubmitHomeworkSolution}
+              onDeleteSubmission={handleDeleteSubmission}
+            />
           ) : activeTab === 'users' ? (
             isSuperAdmin ? (
               /* TAB: User Management (الإدارة - إدارة المستخدمين وتعيين المعلمين والصلاحيات زي قبل) */
@@ -971,6 +1006,7 @@ export default function App() {
                   onToggleCompleteHomework={handleToggleCompleteHomework}
                   submissions={submissions}
                   onSubmitHomeworkSolution={handleSubmitHomeworkSolution}
+                  onDeleteSubmission={handleDeleteSubmission}
                 />
               ) : (
                 /* All Subjects Grid */

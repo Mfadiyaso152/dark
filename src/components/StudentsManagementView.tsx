@@ -1,25 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { useAuth, SUPER_ADMIN_EMAIL } from '../context/AuthContext';
 import { User, Lesson, Subject, Homework, HomeworkSubmission, USER_JOB_OPTIONS } from '../types';
-import { StudentDetailModal } from './StudentDetailModal';
 import {
   Search,
-  Crown,
   CheckCircle,
   XCircle,
   RefreshCw,
   GraduationCap,
-  ChevronDown,
   ClipboardList,
   ChevronLeft,
-  Users,
-  ShieldCheck,
-  Compass,
-  Sparkles,
-  Clock,
-  Calendar
+  ArrowRight,
+  Download,
+  FileCheck,
+  Calendar,
+  AlertCircle,
+  BookOpen,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { triggerFileDownload } from '../utils/pdfGenerator';
+import { getLargeFile } from '../utils/fileStorage';
+import { downloadFileFromCloud } from '../utils/cloudStorage';
 
 interface StudentsManagementViewProps {
   allLessons?: Lesson[];
@@ -41,7 +42,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     isSuperAdmin,
     registeredUsers,
     refreshUsers,
-    updateUserJob,
     canManageSubject
   } = useAuth();
 
@@ -51,36 +51,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     user?.jobTitle === 'مشرف مساعد' ||
     (user?.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
 
-  const [filterType, setFilterType] = useState<'all' | 'supervisors' | 'students'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [updatingUserEmail, setUpdatingUserEmail] = useState<string | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
+  const [activeStudentPage, setActiveStudentPage] = useState<User | null>(null);
+  const [noHomeworkToast, setNoHomeworkToast] = useState<string | null>(null);
+  const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshUsers();
     setTimeout(() => setIsRefreshing(false), 600);
-  };
-
-  const handleJobChange = async (email: string, newJobTitle: string) => {
-    setUpdatingUserEmail(email);
-    try {
-      const result = await updateUserJob(email, newJobTitle);
-      setFeedback({
-        type: result.success ? 'success' : 'error',
-        message: result.message
-      });
-    } catch (err: any) {
-      setFeedback({
-        type: 'error',
-        message: err.message || 'حدث خطأ أثناء تعديل الوظيفة'
-      });
-    } finally {
-      setUpdatingUserEmail(null);
-      setTimeout(() => setFeedback(null), 3500);
-    }
   };
 
   // Strictly deduplicate users
@@ -98,8 +78,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             ...existing,
             ...u,
             isSuperAdmin: true,
-            role: 'supervisor',
-            jobTitle: 'المشرف الأساسي'
+            role: 'supervisor'
           });
         }
       }
@@ -107,88 +86,20 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return Array.from(map.values());
   }, [registeredUsers]);
 
-  // Separate ONLY Students
-  const studentsOnly = useMemo(() => {
-    return uniqueUsers.filter((u) => {
-      const isSuper = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || u.isSuperAdmin;
-      if (isSuper) return false;
-      const job = u.jobTitle || '';
-      const isStaff =
-        u.role === 'supervisor' ||
-        u.role === 'teacher' ||
-        job === 'مشرف مساعد' ||
-        job === 'المرشد الطلابي' ||
-        job.includes('مرشد') ||
-        job.startsWith('أ.');
-      return !isStaff;
-    });
-  }, [uniqueUsers]);
-
-  // Separate Staff: For SuperAdmin (all supervisors & teachers); For Teacher (supervisors ONLY, other teachers hidden)
-  const staffOnly = useMemo(() => {
-    return uniqueUsers.filter((u) => {
-      const isSuper = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || u.isSuperAdmin;
-      const job = u.jobTitle || '';
-      const isSupervisor =
-        isSuper ||
-        u.role === 'supervisor' ||
-        job === 'المشرف الأساسي' ||
-        job === 'مشرف مساعد' ||
-        job === 'المرشد الطلابي' ||
-        job.includes('مرشد');
-
-      const isTeacher =
-        u.role === 'teacher' ||
-        job.startsWith('أ.');
-
-      if (isViewerSuperOrAssistant) {
-        return isSupervisor || isTeacher;
-      }
-
-      // Teacher view: Show supervisors only, hide other teachers
-      return isSupervisor;
-    });
-  }, [uniqueUsers, isViewerSuperOrAssistant]);
-
-  // Helper to identify supervisor
-  const isSupervisorUser = (u: User) => {
-    const isSuper = (u.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase() || u.isSuperAdmin;
-    const job = u.jobTitle || '';
-    return (
-      isSuper ||
-      u.role === 'supervisor' ||
-      job === 'المشرف الأساسي' ||
-      job === 'مشرف مساعد' ||
-      job === 'المرشد الطلابي' ||
-      job.includes('مرشد')
-    );
-  };
-
-  // Combined list of Supervisors and Students in the exact same list
-  const combinedUsers = useMemo(() => {
-    return [...staffOnly, ...studentsOnly];
-  }, [staffOnly, studentsOnly]);
-
-  // Filtered users based on filterType and search query
+  // Unified list of students without distinguishing between supervisor & student
   const filteredUsers = useMemo(() => {
-    let list = combinedUsers;
-    if (filterType === 'students') {
-      list = studentsOnly;
-    } else if (filterType === 'supervisors') {
-      list = staffOnly;
-    }
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return list;
-    return list.filter(
-      (u) =>
-        u.name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q) ||
-        (u.jobTitle && u.jobTitle.toLowerCase().includes(q))
-    );
-  }, [combinedUsers, filterType, studentsOnly, staffOnly, searchQuery]);
+    if (!q) return uniqueUsers;
+    return uniqueUsers.filter((u) => {
+      const matchesName = u.name.toLowerCase().includes(q);
+      // Only super admin can search by email
+      const matchesEmail = isSuperAdmin && u.email.toLowerCase().includes(q);
+      return matchesName || matchesEmail;
+    });
+  }, [uniqueUsers, searchQuery, isSuperAdmin]);
 
-  // Helper to get submissions count for a user (scoped to teacher's subject if viewer is a teacher)
-  const getStudentSubmissionsCount = (u: User): number => {
+  // Get student's submissions count (scoped to teacher's subject if teacher)
+  const getStudentSubmissions = (u: User) => {
     const email = (u.email || '').toLowerCase().trim();
     const subs = allSubmissions.filter(
       (s) =>
@@ -196,63 +107,252 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         (s.studentId && s.studentId === u.id)
     );
     if (isViewerSuperOrAssistant) {
-      return subs.length;
+      return subs;
     }
     return subs.filter((s) => {
       const hw = allHomeworks.find((h) => h.id === s.homeworkId);
       return hw ? canManageSubject(hw.subjectId) : false;
-    }).length;
+    });
   };
 
-  return (
-    <div className="space-y-4 text-right font-['Tajawal',sans-serif]">
-      {/* Experimental Service Alert Banner */}
-      <motion.div
-        initial={{ opacity: 0, y: -6 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 border border-amber-300/80 rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
-      >
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 border border-amber-400/30">
-            <Sparkles className="w-6 h-6 text-amber-600 animate-pulse" />
-          </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-amber-950 text-sm sm:text-base">خدمة الطلاب</span>
-              <span className="bg-amber-500/20 text-amber-900 border border-amber-400/50 text-[11px] font-black px-2.5 py-0.5 rounded-full">
-                نسخة تجريبية
-              </span>
+  const getStudentSubmissionsCount = (u: User): number => {
+    return getStudentSubmissions(u).length;
+  };
+
+  // Click on student card: if has submitted homework -> enter student homework page; else show alert message
+  const handleStudentClick = (u: User) => {
+    const subsCount = getStudentSubmissionsCount(u);
+    if (subsCount === 0) {
+      setNoHomeworkToast(`الطالب (${u.name}) لم يرسل أي واجب بعد`);
+      setTimeout(() => setNoHomeworkToast(null), 3500);
+      return;
+    }
+    setActiveStudentPage(u);
+  };
+
+  const handleDownloadPdf = async (fileId?: string, dataUrl?: string, filename?: string) => {
+    const targetName = filename || 'ملف_الواجب.pdf';
+    setDownloadingFileId(fileId || targetName);
+    try {
+      let urlToDownload = dataUrl;
+      if (!urlToDownload && fileId) {
+        urlToDownload = (await getLargeFile(fileId)) || (await downloadFileFromCloud(fileId)) || undefined;
+      }
+      if (urlToDownload) {
+        triggerFileDownload(urlToDownload, targetName);
+      } else {
+        alert('تعذر استرداد ملف الـ PDF.');
+      }
+    } catch (err) {
+      console.warn('PDF download error:', err);
+    } finally {
+      setDownloadingFileId(null);
+    }
+  };
+
+  // ----------------------------------------------------
+  // VIEW 1: FULL STUDENT HOMEWORKS PAGE (صفحة واجبات الطالب)
+  // ----------------------------------------------------
+  if (activeStudentPage) {
+    const studentSubs = getStudentSubmissions(activeStudentPage);
+
+    return (
+      <div className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]">
+        {/* Back Button & Student Info Header */}
+        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <button
+              onClick={() => setActiveStudentPage(null)}
+              className="w-11 h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 flex items-center justify-center transition cursor-pointer shrink-0 shadow-2xs"
+              title="الرجوع لقائمة الطلاب"
+            >
+              <ArrowRight className="w-5 h-5" />
+            </button>
+
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xl shadow-xs shrink-0 overflow-hidden">
+              {activeStudentPage.avatar ? (
+                <img
+                  src={activeStudentPage.avatar}
+                  alt={activeStudentPage.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <GraduationCap className="w-6 h-6" />
+              )}
             </div>
-            <p className="text-xs sm:text-sm font-bold text-amber-800">
-              هذه الخدمة تجريبية وسيتم إطلاقها 10 سبتمبر
-            </p>
+
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg sm:text-xl font-black text-slate-900">
+                  واجبات الطالب: {activeStudentPage.name}
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-black border border-purple-200">
+                  {studentSubs.length} واجبات مرسلة
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                استعراض حلول الواجبات المسلّمة وملفات الـ PDF المرفقة
+              </p>
+            </div>
           </div>
+
+          <button
+            onClick={() => setActiveStudentPage(null)}
+            className="py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer self-start sm:self-auto flex items-center gap-1.5"
+          >
+            <span>الرجوع للطلاب</span>
+            <ChevronLeft className="w-4 h-4" />
+          </button>
         </div>
 
-        <div className="flex items-center gap-1.5 self-start sm:self-auto px-3 py-1.5 rounded-xl bg-amber-100 text-amber-900 border border-amber-300 text-xs font-black shrink-0">
-          <Clock className="w-4 h-4 text-amber-700" />
-          <span>موعد الإطلاق: 10 سبتمبر 🚀</span>
+        {/* List of Submitted Homeworks by this student */}
+        <div className="space-y-3.5">
+          {studentSubs.map((sub) => {
+            const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+            const subject = hw ? allSubjects.find((s) => s.id === hw.subjectId) : undefined;
+            const hasSolutionFile = !!sub.attachedFile?.hasFile;
+
+            return (
+              <motion.div
+                key={sub.id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all space-y-3"
+              >
+                {/* Subject Tag & Submission Date */}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1.5">
+                      <span>{subject?.emoji || '📖'}</span>
+                      <span>{subject?.name || 'مقرر دراسي'}</span>
+                    </span>
+                    {hw?.dueDate && (
+                      <span className="text-xs text-slate-500 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>تاريخ استحقاق الواجب: {hw.dueDate}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>تم التسليم: {new Date(sub.submittedAt).toLocaleDateString('ar-SA')}</span>
+                  </span>
+                </div>
+
+                {/* Assignment Title & Details */}
+                <div className="space-y-1.5 pt-1">
+                  <h3 className="font-black text-slate-900 text-sm sm:text-base">
+                    {hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}`}
+                  </h3>
+
+                  {hw && (
+                    <div className="grid grid-cols-2 gap-2 text-xs max-w-sm">
+                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
+                        <BookOpen className="w-4 h-4 text-blue-600" />
+                        <span>صفحة: <strong className="text-slate-800">{hw.pageNumber}</strong></span>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
+                        <HelpCircle className="w-4 h-4 text-purple-600" />
+                        <span>سؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Student Notes if any */}
+                {sub.notes && (
+                  <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-2xl text-xs space-y-0.5">
+                    <span className="font-bold text-indigo-900 block">ملاحظات الطالب مع الحل:</span>
+                    <p className="text-slate-700 leading-relaxed">{sub.notes}</p>
+                  </div>
+                )}
+
+                {/* PDF Solution File Download/View */}
+                <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  {hasSolutionFile ? (
+                    <button
+                      onClick={() =>
+                        handleDownloadPdf(
+                          sub.attachedFile?.fileId,
+                          sub.attachedFile?.dataUrl,
+                          sub.attachedFile?.name || `${activeStudentPage.name}_حل_واجب.pdf`
+                        )
+                      }
+                      disabled={downloadingFileId === (sub.attachedFile?.fileId || sub.attachedFile?.name)}
+                      className="py-2 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
+                    >
+                      <Download className="w-4 h-4 text-emerald-600" />
+                      <span>تحميل واستعراض ملف الحل ({sub.attachedFile?.name})</span>
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-400">لم يتم إرفاق ملف PDF للحل</span>
+                  )}
+
+                  {hw?.solutionFile?.hasFile && (
+                    <button
+                      onClick={() =>
+                        handleDownloadPdf(
+                          hw.solutionFile?.fileId,
+                          hw.solutionFile?.dataUrl,
+                          hw.solutionFile?.name || 'الحل_النموذجي.pdf'
+                        )
+                      }
+                      className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileCheck className="w-4 h-4 text-slate-500" />
+                      <span>الحل النموذجي</span>
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
         </div>
-      </motion.div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
+  // VIEW 2: UNIFIED STUDENTS LIST (قائمة الطلاب بالشكل مثل قسم المواد)
+  // ----------------------------------------------------
+  return (
+    <div className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]">
+      {/* Toast Notice if Student hasn't sent any homework */}
+      <AnimatePresence>
+        {noHomeworkToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.96 }}
+            className="p-4 bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 shadow-md"
+          >
+            <div className="flex items-center gap-2.5">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <span>{noHomeworkToast}</span>
+            </div>
+            <button
+              onClick={() => setNoHomeworkToast(null)}
+              className="text-amber-700 hover:text-amber-900 font-bold text-xs"
+            >
+              إغلاق
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Header Banner */}
-      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-md shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
             <GraduationCap className="w-6 h-6" />
           </div>
           <div>
             <h3 className="font-black text-slate-900 text-base sm:text-lg">
-              {filterType === 'all'
-                ? `قائمة الطلاب والمشرفين (${filteredUsers.length})`
-                : filterType === 'supervisors'
-                ? `قائمة المشرفين (${filteredUsers.length})`
-                : `قائمة الطلاب المسجلين (${filteredUsers.length})`}
+              خدمة الطلاب ({filteredUsers.length})
             </h3>
             <p className="text-xs text-slate-500">
-              {!isViewerSuperOrAssistant
-                ? `اضغط على أي طالب أو مشرف لمشاهدة حلول واجبات مادتك (${user?.jobTitle})`
-                : 'اضغط على أي طالب أو مشرف لمشاهدة حلول واجباته بالتفصيل'}
+              اضغط على أي طالب لاستعراض حلول واجباته
             </p>
           </div>
         </div>
@@ -263,220 +363,84 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
           title="تحديث البيانات"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-600' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
           <span>تحديث</span>
         </button>
       </div>
 
-      {/* Switcher & Filter Tabs (الكل بنفس القائمة افتراضياً) */}
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
-        <button
-          type="button"
-          onClick={() => setFilterType('all')}
-          className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            filterType === 'all'
-              ? 'bg-white text-indigo-600 shadow-xs border border-slate-200/80'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>الكل ({combinedUsers.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilterType('supervisors')}
-          className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            filterType === 'supervisors'
-              ? 'bg-white text-purple-600 shadow-xs border border-slate-200/80'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Crown className="w-4 h-4 text-amber-500" />
-          <span>المشرفون ({staffOnly.length})</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilterType('students')}
-          className={`py-2 px-3 rounded-xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
-            filterType === 'students'
-              ? 'bg-white text-blue-600 shadow-xs border border-slate-200/80'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <GraduationCap className="w-4 h-4" />
-          <span>الطلاب ({studentsOnly.length})</span>
-        </button>
-      </div>
-
-      {/* Search Bar */}
+      {/* Search Input (No tabs above) */}
       <div className="relative">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="ابحث بالاسم أو البريد الإلكتروني أو الوظيفة..."
-          className="w-full py-3 pr-11 pl-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-xs transition"
+          placeholder="ابحث باسم الطالب..."
+          className="w-full py-3 pr-11 pl-4 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs transition"
         />
         <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute right-3.5 top-3.5" />
       </div>
 
-      {/* Feedback Banner */}
-      <AnimatePresence>
-        {feedback && (
-          <motion.div
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -5 }}
-            className={`p-3.5 rounded-2xl text-xs font-bold flex items-center gap-2 shadow-xs ${
-              feedback.type === 'success'
-                ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                : 'bg-rose-50 text-rose-800 border border-rose-200'
-            }`}
-          >
-            {feedback.type === 'success' ? (
-              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-            ) : (
-              <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            )}
-            <span>{feedback.message}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* UNIFIED VIEW: Students and Supervisors in the Same List */}
-      <div className="space-y-3">
+      {/* Stacked Cards: Formatted just like Subject Cards (قسم المواد) */}
+      <div className="flex flex-col gap-3 md:gap-3.5 w-full">
         {filteredUsers.map((u) => {
-          const isSuper = isSupervisorUser(u);
-          const isThisSuperAdmin =
-            (u.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-          const currentJob = isThisSuperAdmin
-            ? 'المشرف الأساسي'
-            : u.jobTitle ||
-              (u.role === 'supervisor'
-                ? 'مشرف مساعد'
-                : u.role === 'teacher'
-                ? 'معلم'
-                : 'طالب');
-
-          const submissionsCount = getStudentSubmissionsCount(u);
-          const isUpdatingThis = updatingUserEmail === u.email;
+          const subsCount = getStudentSubmissionsCount(u);
 
           return (
             <motion.div
               key={u.id || u.email}
-              whileHover={{ y: -1 }}
-              onClick={() => setSelectedStudent(u)}
-              className={`bg-white rounded-3xl p-4 sm:p-5 border shadow-2xs hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group ${
-                isSuper
-                  ? 'border-purple-200/90 hover:border-purple-300'
-                  : 'border-slate-200/90 hover:border-indigo-300'
-              }`}
+              whileHover={{ y: -2, scale: 1.005 }}
+              whileTap={{ scale: 0.99 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+              onClick={() => handleStudentClick(u)}
+              role="button"
+              className="group w-full rounded-2xl md:rounded-3xl p-3 sm:p-4 md:p-4.5 transition-all duration-200 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-right relative overflow-hidden bg-white border-slate-200/90 hover:border-indigo-300 hover:shadow-md cursor-pointer active:scale-[0.99]"
             >
-              {/* User Avatar + Details */}
-              <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                <div
-                  className={`w-12 h-12 rounded-2xl overflow-hidden shrink-0 shadow-xs border ${
-                    isSuper
-                      ? 'bg-purple-50 border-purple-100'
-                      : 'bg-indigo-50 border-indigo-100'
-                  }`}
-                >
-                  <img
-                    src={
-                      u.avatar ||
-                      'https://api.dicebear.com/7.x/avataaars/svg?seed=' +
-                        encodeURIComponent(u.name)
-                    }
-                    alt={u.name}
-                    className="w-full h-full object-cover"
-                  />
+              {/* Right Side: Icon & Student Name (Email completely hidden for teachers!) */}
+              <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                <div className="w-12 h-12 md:w-13 md:h-13 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl flex items-center justify-center text-xl shadow-xs shrink-0 overflow-hidden">
+                  {u.avatar ? (
+                    <img
+                      src={u.avatar}
+                      alt={u.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <GraduationCap className="w-6 h-6 md:w-7 md:h-7" />
+                  )}
                 </div>
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4
-                      className={`font-black text-sm sm:text-base truncate transition ${
-                        isSuper
-                          ? 'text-slate-900 group-hover:text-purple-700'
-                          : 'text-slate-900 group-hover:text-indigo-600'
+
+                <div className="min-w-0 space-y-1">
+                  <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
+                    {u.name}
+                  </h3>
+
+                  {/* Number of submitted homeworks pill */}
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                        subsCount > 0
+                          ? 'bg-purple-50 text-purple-800 border-purple-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200'
                       }`}
                     >
-                      {u.name}
-                    </h4>
+                      <ClipboardList className="w-3.5 h-3.5" />
+                      <span>{subsCount > 0 ? `${subsCount} واجبات تم إرسالها` : 'لم يرسل واجبات'}</span>
+                    </span>
 
-                    {/* Badge: Supervisor vs Student */}
-                    {isSuper ? (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full font-black bg-purple-100 text-purple-900 border border-purple-300 flex items-center gap-1 shrink-0 shadow-2xs">
-                          <Crown className="w-3 h-3 text-amber-500" />
-                          مشرف
-                        </span>
-                        {currentJob && currentJob !== 'طالب' && currentJob !== 'المشرف الأساسي' && currentJob !== 'مشرف' && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                            {currentJob === 'المرشد الطلابي' && (
-                              <Compass className="w-2.5 h-2.5 text-amber-600" />
-                            )}
-                            {currentJob === 'مشرف مساعد' && (
-                              <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />
-                            )}
-                            {currentJob}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                        طالب
+                    {/* Only super admin sees email if necessary */}
+                    {isSuperAdmin && (
+                      <span className="text-[11px] text-slate-400 font-mono hidden sm:inline-block">
+                        {u.email}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 font-mono truncate">{u.email}</p>
                 </div>
               </div>
 
-              {/* Submissions Badge + Action */}
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap shrink-0 justify-between sm:justify-end border-t sm:border-t-0 pt-2.5 sm:pt-0 border-slate-100">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200/70 text-xs font-bold">
-                  <ClipboardList className="w-3.5 h-3.5 text-purple-600" />
-                  <span>
-                    {submissionsCount} حلول واجبات
-                    {!isViewerSuperOrAssistant && ' بمادتك'}
-                  </span>
-                </div>
-
-                {!isThisSuperAdmin && isSuperAdmin && (
-                  <div
-                    className="relative shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <select
-                      value={currentJob}
-                      disabled={isUpdatingThis}
-                      onChange={(e) => handleJobChange(u.email, e.target.value)}
-                      className="py-1.5 pr-2.5 pl-6 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold border border-slate-200 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer transition appearance-none disabled:opacity-50"
-                      title="تغيير وظيفة المعلم أو المشرف"
-                    >
-                      <option value="طالب">طالب</option>
-                      <optgroup label="المعلمون والمشرفون">
-                        {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5 pointer-events-none" />
-                  </div>
-                )}
-
-                <div
-                  className={`hidden sm:flex items-center gap-1 text-xs font-bold transition mr-1 group-hover:-translate-x-1 ${
-                    isSuper ? 'text-purple-600' : 'text-indigo-600'
-                  }`}
-                >
-                  <span>التفاصيل</span>
-                  <ChevronLeft className="w-4 h-4" />
-                </div>
+              {/* Left Side: View Arrow / Action */}
+              <div className="flex items-center gap-1 text-xs font-black text-indigo-600 group-hover:-translate-x-1.5 transition-transform self-end sm:self-center">
+                <span>{subsCount > 0 ? 'عرض الواجبات' : 'التفاصيل'}</span>
+                <ChevronLeft className="w-4 h-4" />
               </div>
             </motion.div>
           );
@@ -489,23 +453,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               لا توجد نتائج مطابقة للبحث
             </h4>
             <p className="text-xs text-slate-400">
-              تأكد من كتابة الاسم أو البريد بشكل صحيح
+              تأكد من كتابة اسم الطالب بشكل صحيح
             </p>
           </div>
         )}
       </div>
-
-      {/* Detailed User Modal (when clicking on any student, supervisor or teacher) */}
-      {selectedStudent && (
-        <StudentDetailModal
-          student={selectedStudent}
-          isOpen={!!selectedStudent}
-          onClose={() => setSelectedStudent(null)}
-          allSubjects={allSubjects}
-          allHomeworks={allHomeworks}
-          allSubmissions={allSubmissions}
-        />
-      )}
     </div>
   );
 };

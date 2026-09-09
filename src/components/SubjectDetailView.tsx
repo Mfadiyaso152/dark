@@ -42,6 +42,7 @@ interface SubjectDetailViewProps {
   onToggleCompleteHomework?: (id: string) => void;
   submissions?: HomeworkSubmission[];
   onSubmitHomeworkSolution?: (sub: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => Promise<void>;
+  onDeleteSubmission?: (submissionId: string) => Promise<void> | void;
 }
 
 export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
@@ -64,7 +65,8 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   completedHomeworkIds = [],
   onToggleCompleteHomework,
   submissions = [],
-  onSubmitHomeworkSolution
+  onSubmitHomeworkSolution,
+  onDeleteSubmission
 }) => {
   const { user, canManageSubject } = useAuth();
   // Check if current user is authorized to add/edit/delete content for THIS specific subject
@@ -89,17 +91,22 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   const subjectBooklets = booklets.filter((b) => b.subjectId === subject.id);
   const subjectHomeworks = homeworks.filter((h) => h.subjectId === subject.id);
 
-  // Check if subject is Digital Technology or Math
+  // Check if homework is supported for this subject (Math, Digital Technology, Critical Thinking, English)
   const isHomeworkSupported =
     subject.id === 'digi-1' ||
     subject.id === 'math-1' ||
     subject.id === 'math-2' ||
     subject.id === 'think-1' ||
+    subject.id === 'eng-1' ||
     subject.name.includes('تقنية رقمية') ||
     subject.name.includes('الرقمية') ||
     subject.name.includes('رياضيات') ||
     subject.name.includes('التفكير الناقد') ||
-    subject.name.includes('تفكير');
+    subject.name.includes('تفكير') ||
+    subject.name.includes('إنجليزي') ||
+    subject.name.includes('انجليزي') ||
+    subject.name.toLowerCase().includes('english') ||
+    subject.name.toLowerCase().includes('mega goal');
 
   const handleDownloadAllLessons = async () => {
     if (subjectLessons.length === 0) return;
@@ -408,6 +415,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         canEdit={canEditCurrentSubject}
         submissions={submissions}
         onSubmitSolution={onSubmitHomeworkSolution}
+        onDeleteSubmission={onDeleteSubmission}
       />
     );
   }
