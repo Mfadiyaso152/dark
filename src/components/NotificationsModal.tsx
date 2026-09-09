@@ -46,8 +46,6 @@ export const NotificationsModal: React.FC = () => {
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  if (!isNotificationsModalOpen) return null;
-
   // If teacher, they see their own sent notifications plus general notifications
   // If supervisor or student, they see the shared active list
   const displayedList = useMemo(() => {
@@ -62,6 +60,8 @@ export const NotificationsModal: React.FC = () => {
     }
     return notifications;
   }, [isTeacher, myNotifications, notifications]);
+
+  if (!isNotificationsModalOpen) return null;
 
   const handleSendSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
