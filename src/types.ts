@@ -226,5 +226,20 @@ export interface HomeworkSubmission {
   attachedFile?: AttachedFile; // Optional PDF solution attached by student
 }
 
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  subjectId?: string;
+  subjectName?: string;
+  authorId: string;
+  authorEmail: string;
+  authorName: string;
+  authorJobTitle?: string;
+  linkUrl?: string;
+  createdAt: string;
+  isDeleted?: boolean;
+}
+
 
 

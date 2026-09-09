@@ -9,6 +9,7 @@ import { LessonCard } from './components/LessonCard';
 import { LessonDetailModal } from './components/LessonDetailModal';
 import { AddLessonModal } from './components/AddLessonModal';
 import { AuthModal } from './components/AuthModal';
+import { NotificationsModal } from './components/NotificationsModal';
 import { LoginPage } from './components/LoginPage';
 import { UserManagementView } from './components/UserManagementView';
 import { StudentsManagementView } from './components/StudentsManagementView';
@@ -1211,6 +1212,9 @@ export default function App() {
 
         {/* Auth / Account Profile Modal */}
         <AuthModal />
+
+        {/* Notifications Modal */}
+        <NotificationsModal />
 
         {/* Supervisor Platform Controls Drawer */}
         <SupervisorSettingsDrawer subjects={subjects} />

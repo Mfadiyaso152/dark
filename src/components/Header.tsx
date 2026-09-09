@@ -1,11 +1,14 @@
 import React from 'react';
 import { useAuth, formatDisplayName } from '../context/AuthContext';
 import { useSubjectControls } from '../context/SubjectControlsContext';
-import { LogOut, Settings } from 'lucide-react';
+import { useNotifications } from '../context/NotificationsContext';
+import { LogOut, Settings, Bell } from 'lucide-react';
+import { motion } from 'motion/react';
 
 export const Header: React.FC = () => {
   const { user, logout, canAddContent, isSuperAdmin, isAssistantAdmin } = useAuth();
   const { openSettings } = useSubjectControls();
+  const { openNotificationsModal, unreadCount } = useNotifications();
 
   const isTeacherOrSupervisor = isSuperAdmin || isAssistantAdmin || canAddContent || (user && user.jobTitle !== 'طالب');
   
@@ -21,7 +24,7 @@ export const Header: React.FC = () => {
   return (
     <header className="px-5 sm:px-6 md:px-8 lg:px-10 pt-4 md:pt-6 pb-2 text-right font-['Tajawal',sans-serif]">
       {/* Top User Bar */}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3">
         {/* User Info with Avatar & Name */}
         <div className="flex items-center gap-3 md:gap-4 min-w-0">
           <div className="w-11 h-11 md:w-14 md:h-14 rounded-2xl bg-white border-2 border-slate-200 shadow-xs flex items-center justify-center overflow-hidden shrink-0">
@@ -78,6 +81,28 @@ export const Header: React.FC = () => {
               الصف الأول الثانوي • المسار المشترك
             </p>
           </div>
+        </div>
+
+        {/* Top-Left Notification Bell Icon */}
+        <div className="flex items-center shrink-0">
+          <motion.button
+            whileHover={{ scale: 1.06 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={openNotificationsModal}
+            className="relative p-2.5 sm:p-3 rounded-2xl bg-white hover:bg-indigo-50/60 text-slate-700 hover:text-indigo-600 transition flex items-center justify-center border border-slate-200/80 shadow-xs cursor-pointer active:scale-95"
+            title="الإشعارات والتنبيهات المدرسية"
+            aria-label="الإشعارات والتنبيهات"
+            id="header-notifications-btn"
+          >
+            <Bell className="w-5 h-5 md:w-6 md:h-6 text-slate-700 hover:text-indigo-600 transition-colors" />
+
+            {/* Unread Counter Badge */}
+            {unreadCount > 0 && (
+              <span className="absolute -top-1.5 -left-1.5 min-w-[20px] h-5 px-1 bg-rose-500 text-white text-[10px] sm:text-xs font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs animate-bounce">
+                {unreadCount > 9 ? '+9' : unreadCount}
+              </span>
+            )}
+          </motion.button>
         </div>
       </div>
     </header>

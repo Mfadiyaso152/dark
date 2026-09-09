@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import { AuthProvider } from './context/AuthContext.tsx';
 import { SubjectControlsProvider } from './context/SubjectControlsContext.tsx';
+import { NotificationsProvider } from './context/NotificationsContext.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 
 createRoot(document.getElementById('root')!).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <AuthProvider>
         <SubjectControlsProvider>
-          <App />
+          <NotificationsProvider>
+            <App />
+          </NotificationsProvider>
         </SubjectControlsProvider>
       </AuthProvider>
     </ErrorBoundary>
