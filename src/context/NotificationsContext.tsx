@@ -69,13 +69,14 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const isStudent = !isSupervisor && !isTeacher;
 
-  // Subjects assigned to the teacher
+  // Subjects assigned to the teacher (Filtered strictly to Semester 1)
   const teacherAssignedSubjects = useMemo(() => {
+    const p1Subjects = INITIAL_SUBJECTS.filter((s) => s.semester === 1);
     if (isTeacher) {
-      const filtered = INITIAL_SUBJECTS.filter((s) => canManageSubject(s.id));
-      return filtered.length > 0 ? filtered : INITIAL_SUBJECTS;
+      const filtered = p1Subjects.filter((s) => canManageSubject(s.id));
+      return filtered.length > 0 ? filtered : p1Subjects;
     }
-    return INITIAL_SUBJECTS;
+    return p1Subjects;
   }, [isTeacher, canManageSubject]);
 
   // Update read IDs when user switches or loads

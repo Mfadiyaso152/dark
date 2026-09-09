@@ -352,9 +352,6 @@ export const SupervisorSettingsDrawer: React.FC<SupervisorSettingsDrawerProps> =
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                                {sub.code}
-                              </p>
                             </div>
                           </div>
 

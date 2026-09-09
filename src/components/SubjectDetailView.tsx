@@ -221,7 +221,6 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             <ArrowRight className="w-4 h-4 text-blue-600 transition group-hover:-translate-x-0.5" />
             <span>رجوع للمواد</span>
           </motion.button>
-          <span className="text-xs font-bold text-slate-400">{subject.code}</span>
         </div>
 
         {/* Subject Header Banner */}

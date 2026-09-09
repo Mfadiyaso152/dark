@@ -73,21 +73,21 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
       )}
 
       {/* Right Side: Icon & Subject Details */}
-      <div className="flex items-center gap-3 md:gap-4 min-w-0">
-        {/* Subject Emoji / Icon in rounded container */}
+      <div className="flex items-center gap-3 md:gap-3.5 min-w-0">
+        {/* Subject Emoji / Icon in circular small container */}
         <div
-          className={`w-12 h-12 md:w-13 md:h-13 ${
+          className={`w-9 h-9 md:w-10 md:h-10 ${
             isComingSoon ? 'bg-amber-500' : (subject?.badgeBg || 'bg-[#3B82F6]')
-          } rounded-2xl flex items-center justify-center text-white text-xl md:text-2xl shadow-xs shrink-0`}
+          } rounded-full flex items-center justify-center text-white text-base md:text-lg shadow-xs shrink-0`}
         >
           {subject?.emoji ? (
             <span>{subject.emoji}</span>
           ) : (
-            <SubjectIcon name={subject?.icon || 'book'} className="w-6 h-6 md:w-7 md:h-7" />
+            <SubjectIcon name={subject?.icon || 'book'} className="w-5 h-5 md:w-5 md:h-5" />
           )}
         </div>
 
-        {/* Title and Description / Meta */}
+        {/* Title and Subject Name */}
         <div className="min-w-0 space-y-0.5 md:space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h3
@@ -97,18 +97,7 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
             >
               {subject?.name}
             </h3>
-
-            {subject?.code && (
-              <span className="text-[10px] md:text-xs font-bold text-slate-400 bg-white/70 px-1.5 py-0.5 rounded-md border border-slate-200/60 hidden sm:inline-block">
-                {subject.code}
-              </span>
-            )}
           </div>
-          {subject?.description && (
-            <p className="text-[11px] sm:text-xs text-slate-500 line-clamp-1 max-w-md hidden sm:block">
-              {subject.description}
-            </p>
-          )}
         </div>
       </div>
 

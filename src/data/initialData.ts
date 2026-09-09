@@ -6,7 +6,6 @@ export const INITIAL_SUBJECTS: Subject[] = [
   {
     id: 'math-1',
     name: 'رياضيات 1-1',
-    code: 'MATH-101',
     semester: 1,
     icon: 'Calculator',
     emoji: '📐',
@@ -24,7 +23,6 @@ export const INITIAL_SUBJECTS: Subject[] = [
   {
     id: 'chem-1',
     name: 'كيمياء 1',
-    code: 'CHEM-101',
     semester: 1,
     icon: 'FlaskConical',
     emoji: '🧪',
@@ -35,14 +33,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#3B82F6]',
     titleColor: 'text-[#1E3A8A]',
     countColor: 'text-[#60A5FA]',
-    description: 'المادة وخواصها، التركيب الذري، والتوزيع الإلكتروني والجدول الدوري والتفاعلات',
+    description: '',
     supervisorName: 'فهد الشمري'
   },
   // 3. أحياء 1
   {
     id: 'bio-1',
     name: 'أحياء 1',
-    code: 'BIO-101',
     semester: 1,
     icon: 'Dna',
     emoji: '🧬',
@@ -53,14 +50,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#14B8A6]',
     titleColor: 'text-[#134E4A]',
     countColor: 'text-[#2DD4BF]',
-    description: 'دراسة الحياة، تنظيم تنوع الحياة، والبكتيريا والفيروسات والطلائعيات والفطريات',
+    description: '',
     supervisorName: 'مشرف الأحياء'
   },
   // 4. إنجليزي 1-1
   {
     id: 'eng-1',
     name: 'إنجليزي 1-1 (Mega Goal)',
-    code: 'ENG-101',
     semester: 1,
     icon: 'BookOpenCheck',
     emoji: '🔤',
@@ -71,14 +67,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#F97316]',
     titleColor: 'text-[#7C2D12]',
     countColor: 'text-[#FB923C]',
-    description: 'Grammar, Vocabulary, Reading & Writing for 1st Secondary',
+    description: '',
     supervisorName: 'أحمد & David'
   },
   // 5. تقنية رقمية 1-1
   {
     id: 'digi-1',
     name: 'تقنية رقمية 1-1',
-    code: 'TECH-101',
     semester: 1,
     icon: 'Cpu',
     emoji: '💻',
@@ -89,14 +84,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#8B5CF6]',
     titleColor: 'text-[#4C1D95]',
     countColor: 'text-[#A78BFA]',
-    description: 'أساسيات علم الحاسب، الحوسبة السحابية، والبرمجة بلغة بايثون وتصميم المستندات',
+    description: '',
     supervisorName: 'راكان العتيبي'
   },
   // 6. كفايات لغوية 1-1
   {
     id: 'lang-1',
     name: 'كفايات لغوية 1-1',
-    code: 'LANG-101',
     semester: 1,
     icon: 'PenTool',
     emoji: '✍️',
@@ -107,14 +101,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#EC4899]',
     titleColor: 'text-[#831843]',
     countColor: 'text-[#F472B6]',
-    description: 'الجملة الاسمية ونواسخها، همزتا الوصل والقطع، والقراءة السريعة والمهارات الإملائية',
+    description: '',
     supervisorName: 'فاطمة الغامدي'
   },
   // 7. قرآن و تفسير
   {
     id: 'tafsir-1',
     name: 'قرآن و تفسير',
-    code: 'TAF-101',
     semester: 1,
     icon: 'BookOpenCheck',
     emoji: '📖',
@@ -125,14 +118,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#059669]',
     titleColor: 'text-[#065F46]',
     countColor: 'text-[#10B981]',
-    description: 'تلاوة وحفظ القرآن الكريم وتدبر معاني الآيات وأسباب النزول وأصول التفسير',
+    description: '',
     supervisorName: 'مشرف المادة'
   },
   // 8. التفكير الناقد
   {
     id: 'think-1',
     name: 'التفكير الناقد',
-    code: 'CRIT-101',
     semester: 1,
     icon: 'Brain',
     emoji: '🧠',
@@ -143,7 +135,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#6366F1]',
     titleColor: 'text-[#3730A3]',
     countColor: 'text-[#818CF8]',
-    description: 'مهارات التفكير الناقد، الاستدلال، تقييم الحجج، وحل المشكلات واتخاذ القرارات',
+    description: '',
     supervisorName: 'أ. تفكير ناقد'
   },
 
@@ -152,7 +144,6 @@ export const INITIAL_SUBJECTS: Subject[] = [
   {
     id: 'math-2',
     name: 'رياضيات 1-2',
-    code: 'MATH-102',
     semester: 2,
     isComingSoon: true,
     icon: 'Calculator',
@@ -164,14 +155,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#3B82F6]',
     titleColor: 'text-[#1E3A8A]',
     countColor: 'text-[#60A5FA]',
-    description: 'العلاقات والدوال العكسية والجذرية، والمحددات والمصفوفات',
+    description: '',
     supervisorName: 'خالد القحطاني'
   },
   // 2. فيزياء 1
   {
     id: 'phys-1',
     name: 'فيزياء 1',
-    code: 'PHYS-101',
     semester: 2,
     isComingSoon: true,
     icon: 'Zap',
@@ -183,14 +173,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#F59E0B]',
     titleColor: 'text-[#78350F]',
     countColor: 'text-[#FBBF24]',
-    description: 'مدخل إلى علم الفيزياء، الحركة المتسارعة، والقوى في بعد واحد',
+    description: '',
     supervisorName: 'فهد الشمري'
   },
   // 3. علم البيئة
   {
     id: 'eco-1',
     name: 'علم البيئة',
-    code: 'ECOL-101',
     semester: 2,
     isComingSoon: true,
     icon: 'TreePine',
@@ -202,14 +191,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#10B981]',
     titleColor: 'text-[#064E3B]',
     countColor: 'text-[#34D399]',
-    description: 'مبادئ علم البيئة، المجتمعات الحيوية، وديناميكية الجماعات الحيوية والتنوع الحيوي',
+    description: '',
     supervisorName: 'ناصر السبيعي'
   },
   // 4. إنجليزي 1-2
   {
     id: 'eng-2',
     name: 'إنجليزي 1-2 (Mega Goal)',
-    code: 'ENG-102',
     semester: 2,
     isComingSoon: true,
     icon: 'BookOpenCheck',
@@ -221,14 +209,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#F97316]',
     titleColor: 'text-[#7C2D12]',
     countColor: 'text-[#FB923C]',
-    description: 'Mega Goal 1.2 Grammar, Vocabulary & Communication Skills',
+    description: '',
     supervisorName: 'David & أحمد'
   },
   // 5. تقنية رقمية 1-2
   {
     id: 'digi-2',
     name: 'تقنية رقمية 1-2',
-    code: 'TECH-102',
     semester: 2,
     isComingSoon: true,
     icon: 'Cpu',
@@ -240,14 +227,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#8B5CF6]',
     titleColor: 'text-[#4C1D95]',
     countColor: 'text-[#A78BFA]',
-    description: 'تصميم المواقع، قواعد البيانات، وتحليل البيانات البرمجية',
+    description: '',
     supervisorName: 'راكان العتيبي'
   },
   // 6. المعرفة المالية
   {
     id: 'fin-1',
     name: 'المعرفة المالية',
-    code: 'FIN-101',
     semester: 2,
     isComingSoon: true,
     icon: 'Coins',
@@ -259,14 +245,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#6366F1]',
     titleColor: 'text-[#312E81]',
     countColor: 'text-[#818CF8]',
-    description: 'إدارة الأموال الشخصية، الميزانية، الاستثمار، والادخار الذكي',
+    description: '',
     supervisorName: 'مشرف المادة'
   },
   // 7. كفايات لغوية 1-2
   {
     id: 'lang-2',
     name: 'كفايات لغوية 1-2',
-    code: 'LANG-102',
     semester: 2,
     isComingSoon: true,
     icon: 'PenTool',
@@ -278,14 +263,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#EC4899]',
     titleColor: 'text-[#831843]',
     countColor: 'text-[#F472B6]',
-    description: 'الكفاية الإملائية والكتابية والتواصل الإقناعي والقراءة النقدية',
+    description: '',
     supervisorName: 'فاطمة الغامدي'
   },
   // 8. الدراسات الاجتماعية
   {
     id: 'soc-1',
     name: 'الدراسات الاجتماعية',
-    code: 'SOC-101',
     semester: 2,
     isComingSoon: true,
     icon: 'GraduationCap',
@@ -297,14 +281,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#F43F5E]',
     titleColor: 'text-[#881337]',
     countColor: 'text-[#FB7185]',
-    description: 'المملكة العربية السعودية والعالم، والتنمية الاقتصادية والمجتمعية',
+    description: '',
     supervisorName: 'مشرف المادة'
   },
   // 9. حديث 1
   {
     id: 'hadith-1',
     name: 'حديث 1',
-    code: 'HAD-101',
     semester: 2,
     isComingSoon: true,
     icon: 'BookOpenCheck',
@@ -316,14 +299,13 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#059669]',
     titleColor: 'text-[#065F46]',
     countColor: 'text-[#10B981]',
-    description: 'السنة النبوية وأهميتها، وقيم وأخلاق المسلم في الحياة والمعاملات',
+    description: '',
     supervisorName: 'مشرف المادة'
   },
   // 10. الإرشاد الطلابي
   {
     id: 'guidance-2',
     name: 'الإرشاد الطلابي',
-    code: 'GUID-102',
     semester: 2,
     isComingSoon: true,
     icon: 'HeartHandshake',
@@ -335,14 +317,14 @@ export const INITIAL_SUBJECTS: Subject[] = [
     badgeBg: 'bg-[#F43F5E]',
     titleColor: 'text-[#881337]',
     countColor: 'text-[#FB7185]',
-    description: 'الإرشاد والتوجيه الطلابي والدعم النفسي والتربوي',
+    description: '',
     supervisorName: 'الموجه الطلابي'
   }
 ];
 
 // Complete official curriculum lessons for First Secondary Track (أول ثانوي مسار مشترك)
 export const INITIAL_LESSONS: Lesson[] = [
-  // ==================== 1. كيمياء 1 (CHEM-101) ====================
+  // ==================== 1. كيمياء 1 ====================
   {
     id: 'chem-l1',
     subjectId: 'chem-1',
@@ -509,7 +491,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'hard'
   },
 
-  // ==================== 2. رياضيات 1-1 (MATH-101) ====================
+  // ==================== 2. رياضيات 1-1 ====================
   {
     id: 'math-l1',
     subjectId: 'math-1',
@@ -742,7 +724,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'hard'
   },
 
-  // ==================== 3. علم البيئة 1-1 (ECOL-101) ====================
+  // ==================== 3. علم البيئة 1-1 ====================
   {
     id: 'eco-l1',
     subjectId: 'eco-1',
@@ -876,7 +858,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'medium'
   },
 
-  // ==================== 4. تقنية رقمية 1-1 (TECH-101) ====================
+  // ==================== 4. تقنية رقمية 1-1 ====================
   {
     id: 'digi-l1',
     subjectId: 'digi-1',
@@ -1010,7 +992,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'hard'
   },
 
-  // ==================== 5. التفكير الناقد (CRIT-101) ====================
+  // ==================== 5. التفكير الناقد ====================
   {
     id: 'crit-l1',
     subjectId: 'think-1',
@@ -1122,7 +1104,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'medium'
   },
 
-  // ==================== 6. التفسير (TAF-101) ====================
+  // ==================== 6. التفسير ====================
   {
     id: 'tafsir-l1',
     subjectId: 'tafsir-1',
@@ -1212,7 +1194,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'medium'
   },
 
-  // ==================== 7. إنجليزي 1-1 (Mega Goal 1.1) (ENG-101) ====================
+  // ==================== 7. إنجليزي 1-1 (Mega Goal 1.1) ====================
   {
     id: 'eng-l1',
     subjectId: 'eng-1',
@@ -1313,7 +1295,7 @@ export const INITIAL_LESSONS: Lesson[] = [
     difficulty: 'hard'
   },
 
-  // ==================== 8. الكفايات اللغوية 1-1 (LANG-101) ====================
+  // ==================== 8. الكفايات اللغوية 1-1 ====================
   {
     id: 'lang-l1',
     subjectId: 'lang-1',

@@ -127,14 +127,15 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   // Submit button is ONLY for students, never for teachers or supervisors
   const canSubmitHomework = !isTeacher && !isSupervisor;
 
-  // Restrict allowed subjects for adding/editing homework
+  // Restrict allowed subjects for adding/editing homework - ONLY Semester 1 (P1)
   const allowedSubjects = useMemo(() => {
-    if (isSupervisor) return allSubjects;
+    const p1Subjects = allSubjects.filter((s) => s.semester === 1);
+    if (isSupervisor) return p1Subjects;
     if (isTeacher) {
-      const filtered = allSubjects.filter((s) => canManageSubject(s.id));
-      return filtered.length > 0 ? filtered : allSubjects;
+      const filtered = p1Subjects.filter((s) => canManageSubject(s.id));
+      return filtered.length > 0 ? filtered : p1Subjects;
     }
-    return allSubjects;
+    return p1Subjects;
   }, [allSubjects, isSupervisor, isTeacher, canManageSubject]);
 
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
@@ -544,7 +545,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
           >
             جميع المواد ({homeworks.length})
           </button>
-          {allSubjects.map((sub) => {
+          {allSubjects.filter((sub) => sub.semester === 1).map((sub) => {
             const count = homeworks.filter((h) => h.subjectId === sub.id).length;
             if (count === 0) return null;
             return (
@@ -956,7 +957,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                   >
                     {allowedSubjects.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name}
+                        {s.emoji ? `${s.emoji} ` : ''}{s.name}
                       </option>
                     ))}
                   </select>

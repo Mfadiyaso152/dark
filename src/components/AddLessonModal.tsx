@@ -34,9 +34,10 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
   const { user, canManageSubject } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Filter subjects to only those the teacher/supervisor is authorized to manage
-  const allowedSubjects = subjects.filter((s) => canManageSubject(s.id));
-  const fallbackSubjectId = allowedSubjects[0]?.id || defaultSubjectId || (subjects[0]?.id || '');
+  // Filter subjects to only Semester 1 and those the teacher/supervisor is authorized to manage
+  const p1Subjects = subjects.filter((s) => s.semester === 1);
+  const allowedSubjects = p1Subjects.filter((s) => canManageSubject(s.id));
+  const fallbackSubjectId = allowedSubjects[0]?.id || defaultSubjectId || (p1Subjects[0]?.id || '');
 
   const [subjectId, setSubjectId] = useState<string>(() => {
     if (editingLesson) return editingLesson.subjectId;
@@ -180,7 +181,7 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
               onChange={(e) => setSubjectId(e.target.value)}
               className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-none"
             >
-              {(allowedSubjects.length > 0 ? allowedSubjects : subjects).map((sub) => (
+              {(allowedSubjects.length > 0 ? allowedSubjects : p1Subjects).map((sub) => (
                 <option key={sub.id} value={sub.id}>
                   {sub.emoji} {sub.name}
                 </option>
