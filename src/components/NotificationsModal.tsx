@@ -48,9 +48,20 @@ export const NotificationsModal: React.FC = () => {
 
   if (!isNotificationsModalOpen) return null;
 
-  // If teacher, they see their own sent notifications
+  // If teacher, they see their own sent notifications plus general notifications
   // If supervisor or student, they see the shared active list
-  const displayedList = isTeacher ? myNotifications : notifications;
+  const displayedList = useMemo(() => {
+    if (isTeacher) {
+      const myNotifIds = new Set(myNotifications.map((n) => n.id));
+      const generalNotifs = notifications.filter((n) => n.subjectId === 'general' && !myNotifIds.has(n.id));
+      return [...myNotifications, ...generalNotifs].sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    }
+    return notifications;
+  }, [isTeacher, myNotifications, notifications]);
 
   const handleSendSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
