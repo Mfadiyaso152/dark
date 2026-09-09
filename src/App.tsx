@@ -229,11 +229,21 @@ export default function App() {
       const cloudHws: Homework[] = [];
       const deletedIds = new Set<string>();
 
+      // Read local deleted IDs so deleted homeworks NEVER resurrect
+      try {
+        const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_hw_ids') || '[]');
+        if (Array.isArray(storedDeleted)) {
+          storedDeleted.forEach((d: string) => deletedIds.add(d));
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        if (data.isDeleted) {
+        if (data.isDeleted || deletedIds.has(docSnap.id) || deletedIds.has(data.id)) {
           deletedIds.add(data.id || docSnap.id);
-        } else if (data.id && data.subjectId && data.dueDate) {
+        } else if (data.id && data.subjectId && data.dueDate && !deletedIds.has(data.id)) {
           cloudHws.push(data as Homework);
         }
       });
@@ -864,7 +874,15 @@ export default function App() {
 
   const handleDeleteHomework = async (id: string) => {
     const target = homeworks.find((h) => h.id === id);
-    if (target && !canManageSubject(target.subjectId)) {
+    const canDelete =
+      isSuperAdmin ||
+      user?.role === 'supervisor' ||
+      user?.jobTitle === 'مشرف مساعد' ||
+      !target ||
+      canManageSubject(target.subjectId);
+
+    if (!canDelete) {
+      console.warn('Cannot delete homework: permission denied for subject', target?.subjectId);
       return;
     }
 
@@ -884,9 +902,10 @@ export default function App() {
       return updated;
     });
 
-    // 3. Cloud Firestore deletion
+    // 3. Cloud Firestore deletion: delete doc AND mark isDeleted
     try {
-      await setDoc(doc(db, 'homeworks', id), { id, isDeleted: true, updatedAt: new Date().toISOString() }, { merge: true });
+      await deleteDoc(doc(db, 'homeworks', id)).catch(() => {});
+      await setDoc(doc(db, 'homeworks', id), { id, isDeleted: true, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
     } catch (err) {
       console.warn('Firestore homework delete error:', err);
     }

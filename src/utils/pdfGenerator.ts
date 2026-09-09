@@ -34,7 +34,8 @@ export function triggerFileDownload(blobOrDataUrl: Blob | string, fileName: stri
       shouldRevoke = true;
     }
 
-    const cleanName = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+    const hasExtension = /\.(pdf|png|jpe?g|webp)$/i.test(fileName);
+    const cleanName = hasExtension ? fileName : `${fileName}.pdf`;
 
     const link = document.createElement('a');
     link.href = blobUrl;

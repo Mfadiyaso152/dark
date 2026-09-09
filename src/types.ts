@@ -102,7 +102,7 @@ export const USER_JOB_OPTIONS: UserJobOption[] = [
 
 export interface AttachedFile {
   name: string;
-  type: 'pdf' | 'png' | 'jpg';
+  type: 'pdf' | 'png' | 'jpg' | 'image';
   size: string;
   dataUrl?: string;
   previewUrl?: string;

@@ -19,7 +19,10 @@ import {
   FileCheck,
   Clock,
   Send,
-  Filter
+  Filter,
+  Camera,
+  Image as ImageIcon,
+  Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -38,6 +41,60 @@ interface DailyHomeworksViewProps {
   onSubmitSolution?: (sub: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => Promise<void>;
   onDeleteSubmission?: (submissionId: string) => Promise<void> | void;
 }
+
+// Helper: process image with canvas resize and JPEG compression for fast upload & small storage
+const processImageFile = (file: File): Promise<{ dataUrl: string; size: string; name: string }> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1600;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve({
+            dataUrl: reader.result as string,
+            size: (file.size / 1024 / 1024).toFixed(1) + ' MB',
+            name: file.name
+          });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        const byteLength = Math.round((dataUrl.length * 3) / 4);
+        const sizeStr =
+          byteLength > 1024 * 1024
+            ? (byteLength / 1024 / 1024).toFixed(1) + ' MB'
+            : Math.round(byteLength / 1024) + ' KB';
+
+        const baseName = file.name.replace(/\.[^/.]+$/, '');
+        resolve({
+          dataUrl,
+          size: sizeStr,
+          name: `${baseName || 'صورة_واجب'}.jpg`
+        });
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   allSubjects,
@@ -66,9 +123,10 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
 
-  // Model solution PDF
+  // Model solution attachment
   const [solutionFileName, setSolutionFileName] = useState('');
   const [solutionFileSize, setSolutionFileSize] = useState('');
+  const [solutionFileType, setSolutionFileType] = useState<AttachedFile['type']>('pdf');
   const [solutionFileDataUrl, setSolutionFileDataUrl] = useState<string | null>(null);
 
   // Student submission modal
@@ -76,12 +134,26 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   const [studentNotes, setStudentNotes] = useState('');
   const [studentFileName, setStudentFileName] = useState('');
   const [studentFileSize, setStudentFileSize] = useState('');
+  const [studentFileType, setStudentFileType] = useState<AttachedFile['type']>('pdf');
   const [studentFileDataUrl, setStudentFileDataUrl] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
+  // Deletion confirm states (bypasses window.confirm in iframe)
+  const [confirmDeleteHwId, setConfirmDeleteHwId] = useState<string | null>(null);
+  const [confirmDeleteSubId, setConfirmDeleteSubId] = useState<string | null>(null);
+
+  // Lightbox Image Preview Modal state
+  const [previewImageUrl, setPreviewImageUrl] = useState<{ url: string; name: string } | null>(null);
+
   // PDF download loading state
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+
+  const isImageAttachment = (name?: string, dataUrl?: string | null) => {
+    if (dataUrl?.startsWith('data:image/')) return true;
+    if (!name) return false;
+    return /\.(jpe?g|png|webp|gif|bmp)$/i.test(name);
+  };
 
   // Filter & Sort Homeworks:
   // RULE: Submitted / completed homeworks are pushed to the very bottom!
@@ -140,6 +212,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     setFormError('');
     setSolutionFileName('');
     setSolutionFileSize('');
+    setSolutionFileType('pdf');
     setSolutionFileDataUrl(null);
     setIsAddModalOpen(true);
   };
@@ -156,63 +229,79 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     if (hw.solutionFile) {
       setSolutionFileName(hw.solutionFile.name);
       setSolutionFileSize(hw.solutionFile.size);
+      setSolutionFileType(hw.solutionFile.type || 'pdf');
       setSolutionFileDataUrl(hw.solutionFile.dataUrl || null);
     } else {
       setSolutionFileName('');
       setSolutionFileSize('');
+      setSolutionFileType('pdf');
       setSolutionFileDataUrl(null);
     }
     setIsAddModalOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTeacherFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      alert('يرجى اختيار ملف بصيغة PDF فقط.');
-      return;
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      if (file.size > 15 * 1024 * 1024) {
+        alert('حجم الملف كبير جداً. الحد الأقصى 15 ميجابايت.');
+        return;
+      }
+      const sizeStr = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+      setSolutionFileName(file.name);
+      setSolutionFileSize(sizeStr);
+      setSolutionFileType('pdf');
+      const reader = new FileReader();
+      reader.onload = () => setSolutionFileDataUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) {
+      try {
+        const processed = await processImageFile(file);
+        setSolutionFileName(processed.name);
+        setSolutionFileSize(processed.size);
+        setSolutionFileType('jpg');
+        setSolutionFileDataUrl(processed.dataUrl);
+      } catch (err) {
+        console.warn('Image process error:', err);
+      }
+    } else {
+      alert('يرجى اختيار صورة أو ملف PDF.');
     }
-
-    if (file.size > 15 * 1024 * 1024) {
-      alert('حجم الملف كبير جداً. الحد الأقصى المسموح به 15 ميجابايت.');
-      return;
-    }
-
-    const sizeStr = (file.size / 1024 / 1024).toFixed(1) + ' MB';
-    setSolutionFileName(file.name);
-    setSolutionFileSize(sizeStr);
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSolutionFileDataUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const handleStudentFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleStudentFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      alert('يرجى اختيار ملف حل بصيغة PDF فقط.');
-      return;
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      if (file.size > 15 * 1024 * 1024) {
+        alert('حجم الملف كبير جداً. الحد الأقصى 15 ميجابايت.');
+        return;
+      }
+      const sizeStr = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+      setStudentFileName(file.name);
+      setStudentFileSize(sizeStr);
+      setStudentFileType('pdf');
+      const reader = new FileReader();
+      reader.onload = () => setStudentFileDataUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    } else if (file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name)) {
+      try {
+        const processed = await processImageFile(file);
+        setStudentFileName(processed.name);
+        setStudentFileSize(processed.size);
+        setStudentFileType('jpg');
+        setStudentFileDataUrl(processed.dataUrl);
+      } catch (err) {
+        console.warn('Image process error:', err);
+      }
+    } else {
+      alert('يرجى اختيار صورة أو ملف PDF.');
     }
-
-    if (file.size > 15 * 1024 * 1024) {
-      alert('حجم الملف كبير جداً. الحد الأقصى المسموح به 15 ميجابايت.');
-      return;
-    }
-
-    const sizeStr = (file.size / 1024 / 1024).toFixed(1) + ' MB';
-    setStudentFileName(file.name);
-    setStudentFileSize(sizeStr);
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setStudentFileDataUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleSubmitHomeworkForm = (e: React.FormEvent) => {
@@ -227,7 +316,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
       solutionFile = {
         hasFile: true,
         name: solutionFileName,
-        type: 'pdf',
+        type: solutionFileType || 'pdf',
         size: solutionFileSize || '1 MB',
         dataUrl: solutionFileDataUrl
       };
@@ -283,16 +372,19 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
       if (existing.attachedFile) {
         setStudentFileName(existing.attachedFile.name);
         setStudentFileSize(existing.attachedFile.size);
+        setStudentFileType(existing.attachedFile.type || 'pdf');
         setStudentFileDataUrl(existing.attachedFile.dataUrl || null);
       } else {
         setStudentFileName('');
         setStudentFileSize('');
+        setStudentFileType('pdf');
         setStudentFileDataUrl(null);
       }
     } else {
       setStudentNotes('');
       setStudentFileName('');
       setStudentFileSize('');
+      setStudentFileType('pdf');
       setStudentFileDataUrl(null);
     }
   };
@@ -308,7 +400,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         attachedFile = {
           hasFile: true,
           name: studentFileName,
-          type: 'pdf',
+          type: studentFileType || 'pdf',
           size: studentFileSize || '1 MB',
           dataUrl: studentFileDataUrl
         };
@@ -337,8 +429,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     }
   };
 
-  const handleDownloadPdf = async (fileId?: string, dataUrl?: string, filename?: string) => {
-    const targetName = filename || 'ملف_الواجب.pdf';
+  const handleDownloadFile = async (fileId?: string, dataUrl?: string, filename?: string) => {
+    const targetName = filename || 'ملف_الواجب';
     setDownloadingFileId(fileId || targetName);
     try {
       let urlToDownload = dataUrl;
@@ -348,12 +440,24 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
       if (urlToDownload) {
         triggerFileDownload(urlToDownload, targetName);
       } else {
-        alert('تعذر استرداد ملف الـ PDF. يرجى التحقق من اتصال الإنترنت.');
+        alert('تعذر استرداد الملف. يرجى التحقق من اتصال الإنترنت.');
       }
     } catch (err) {
-      console.warn('PDF download error:', err);
+      console.warn('File download error:', err);
     } finally {
       setDownloadingFileId(null);
+    }
+  };
+
+  const handlePreviewImage = async (fileId?: string, dataUrl?: string, filename?: string) => {
+    let url = dataUrl;
+    if (!url && fileId) {
+      url = (await getLargeFile(fileId)) || (await downloadFileFromCloud(fileId)) || undefined;
+    }
+    if (url) {
+      setPreviewImageUrl({ url, name: filename || 'صورة الواجب' });
+    } else {
+      alert('تعذر تحميل الصورة للمعاينة.');
     }
   };
 
@@ -531,30 +635,59 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                   )}
                 </div>
 
-                {/* Teacher Model Solution Download if provided */}
+                {/* Teacher Model Solution Download / View if provided */}
                 {hw.solutionFile?.hasFile && (
-                  <button
-                    onClick={() =>
-                      handleDownloadPdf(
-                        hw.solutionFile?.fileId,
-                        hw.solutionFile?.dataUrl,
-                        hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي.pdf`
-                      )
-                    }
-                    disabled={downloadingFileId === (hw.solutionFile?.fileId || hw.solutionFile?.name)}
-                    className="w-full py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer disabled:opacity-50"
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <FileCheck className="w-4 h-4 text-emerald-600" />
-                      <span>الحل النموذجي المرفق (PDF)</span>
+                  <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
+                        <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+                      ) : (
+                        <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                      <span className="truncate max-w-[200px]">
+                        الحل النموذجي المرفق ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
+                      </span>
                     </div>
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
+
+                    <div className="flex items-center gap-1.5">
+                      {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePreviewImage(
+                              hw.solutionFile?.fileId,
+                              hw.solutionFile?.dataUrl,
+                              hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
+                            )
+                          }
+                          className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3 h-3" />
+                          <span>معاينة</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDownloadFile(
+                            hw.solutionFile?.fileId,
+                            hw.solutionFile?.dataUrl,
+                            hw.solutionFile?.name || `${hw.title || 'حل'}_نموذجي`
+                          )
+                        }
+                        disabled={downloadingFileId === (hw.solutionFile?.fileId || hw.solutionFile?.name)}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      >
+                        <Download className="w-3 h-3" />
+                        <span>تحميل</span>
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Student Submission Card status */}
                 {hasStudentSubmission && studentSub && (
-                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-1.5 text-xs">
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2 text-xs">
                     <div className="flex items-center justify-between text-emerald-900 font-bold">
                       <span className="flex items-center gap-1">
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
@@ -566,23 +699,46 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                     </div>
 
                     {studentSub.attachedFile?.hasFile && (
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-[11px] text-slate-600 truncate max-w-[180px]">
-                          📎 {studentSub.attachedFile.name}
+                      <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
+                        <span className="text-[11px] text-slate-600 truncate max-w-[180px] flex items-center gap-1">
+                          {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) ? (
+                            <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                          )}
+                          <span>{studentSub.attachedFile.name}</span>
                         </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleDownloadPdf(
-                              studentSub.attachedFile?.fileId,
-                              studentSub.attachedFile?.dataUrl,
-                              studentSub.attachedFile?.name || 'حلي.pdf'
-                            )
-                          }
-                          className="text-[11px] font-bold text-emerald-700 underline cursor-pointer"
-                        >
-                          تحميل حلي
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {isImageAttachment(studentSub.attachedFile?.name, studentSub.attachedFile?.dataUrl) && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handlePreviewImage(
+                                  studentSub.attachedFile?.fileId,
+                                  studentSub.attachedFile?.dataUrl,
+                                  studentSub.attachedFile?.name || 'حلي'
+                                )
+                              }
+                              className="text-[11px] font-bold text-emerald-700 bg-white border border-emerald-200 px-2 py-0.5 rounded-md hover:bg-emerald-50 cursor-pointer flex items-center gap-1"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>معاينة</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDownloadFile(
+                                studentSub.attachedFile?.fileId,
+                                studentSub.attachedFile?.dataUrl,
+                                studentSub.attachedFile?.name || 'حلي'
+                              )
+                            }
+                            className="text-[11px] font-bold text-emerald-700 underline cursor-pointer"
+                          >
+                            تحميل
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -600,36 +756,75 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm('هل أنت متأكد من حذف هذا الواجب؟')) {
-                              onDeleteHomework(hw.id);
-                            }
-                          }}
-                          className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
-                          title="حذف الواجب"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {confirmDeleteHwId === hw.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-xl border border-rose-200">
+                            <span className="text-[11px] font-bold text-rose-800 pr-1">حذف؟</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onDeleteHomework(hw.id);
+                                setConfirmDeleteHwId(null);
+                              }}
+                              className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                            >
+                              نعم
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteHwId(null)}
+                              className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                            >
+                              إلغاء
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteHwId(hw.id)}
+                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                            title="حذف الواجب"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
 
                   <div className="flex items-center gap-1.5">
                     {hasStudentSubmission && studentSub && onDeleteSubmission && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('هل تريد حذف حلك المسلم لهذا الواجب؟ سيمكنك رفع حل جديد في أي وقت.')) {
-                            onDeleteSubmission(studentSub.id);
-                          }
-                        }}
-                        className="py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs"
-                        title="حذف الحل المسلم"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                        <span>حذف الحل</span>
-                      </button>
+                      confirmDeleteSubId === studentSub.id ? (
+                        <div className="flex items-center gap-1 bg-rose-50 p-1 rounded-xl border border-rose-200">
+                          <span className="text-[11px] font-bold text-rose-800 pr-1">حذف الحل؟</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await onDeleteSubmission(studentSub.id);
+                              setConfirmDeleteSubId(null);
+                            }}
+                            className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                          >
+                            نعم
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteSubId(null)}
+                            className="px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteSubId(studentSub.id)}
+                          className="py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 shadow-2xs"
+                          title="حذف الحل المسلم"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                          <span>حذف الحل</span>
+                        </button>
+                      )
                     )}
 
                     <button
@@ -750,18 +945,107 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">الحل النموذجي (اختياري بصيغة PDF)</label>
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={handleFileChange}
-                    className="w-full text-xs text-slate-500 file:mr-0 file:ml-2 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
-                  />
-                  {solutionFileName && (
-                    <span className="text-[11px] text-emerald-600 block mt-1">
-                      تم اختيار: {solutionFileName} ({solutionFileSize})
-                    </span>
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">
+                    الحل النموذجي (اختياري: صور / كاميرا / PDF)
+                  </label>
+
+                  {solutionFileName && solutionFileDataUrl ? (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {solutionFileType !== 'pdf' ? (
+                          <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-emerald-300 bg-white shrink-0">
+                            <img
+                              src={solutionFileDataUrl}
+                              alt="معاينة"
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-emerald-900 truncate max-w-[200px]">
+                            {solutionFileName}
+                          </p>
+                          <span className="text-[10px] text-emerald-700 block">
+                            {solutionFileSize} • {solutionFileType !== 'pdf' ? 'صورة مرفقة' : 'ملف PDF'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        {solutionFileType !== 'pdf' && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPreviewImageUrl({ url: solutionFileDataUrl, name: solutionFileName })
+                            }
+                            className="p-1.5 text-emerald-700 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
+                            title="معاينة"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSolutionFileName('');
+                            setSolutionFileSize('');
+                            setSolutionFileDataUrl(null);
+                          }}
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="إزالة الملف"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 bg-slate-50 hover:bg-purple-50 border border-dashed border-slate-300 hover:border-purple-300 rounded-xl cursor-pointer transition text-center group">
+                        <Camera className="w-5 h-5 text-purple-600 group-hover:scale-110 transition-transform" />
+                        <span className="text-[11px] font-bold text-slate-700 group-hover:text-purple-700">
+                          الكاميرا
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleTeacherFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <label className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 bg-slate-50 hover:bg-indigo-50 border border-dashed border-slate-300 hover:border-indigo-300 rounded-xl cursor-pointer transition text-center group">
+                        <ImageIcon className="w-5 h-5 text-indigo-600 group-hover:scale-110 transition-transform" />
+                        <span className="text-[11px] font-bold text-slate-700 group-hover:text-indigo-700">
+                          الصور
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleTeacherFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <label className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 bg-slate-50 hover:bg-emerald-50 border border-dashed border-slate-300 hover:border-emerald-300 rounded-xl cursor-pointer transition text-center group">
+                        <FileText className="w-5 h-5 text-emerald-600 group-hover:scale-110 transition-transform" />
+                        <span className="text-[11px] font-bold text-slate-700 group-hover:text-emerald-700">
+                          ملف PDF
+                        </span>
+                        <input
+                          type="file"
+                          accept="application/pdf,.pdf"
+                          onChange={handleTeacherFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
                   )}
                 </div>
 
@@ -828,20 +1112,107 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                     </span>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
-                      ملف الحل (بصيغة PDF)
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-slate-700">
+                      إرفاق الحل (الصور / الكاميرا / PDF)
                     </label>
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      onChange={handleStudentFileChange}
-                      className="w-full text-xs text-slate-500 file:mr-0 file:ml-2 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-purple-100 file:text-purple-800 hover:file:bg-purple-200"
-                    />
-                    {studentFileName && (
-                      <span className="text-[11px] text-emerald-600 font-bold block mt-1">
-                        تم اختيار: {studentFileName} ({studentFileSize})
-                      </span>
+
+                    {studentFileName && studentFileDataUrl ? (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {studentFileType !== 'pdf' ? (
+                            <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-emerald-300 bg-white shrink-0">
+                              <img
+                                src={studentFileDataUrl}
+                                alt="معاينة حلي"
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                              <FileText className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-emerald-900 truncate max-w-[200px]">
+                              {studentFileName}
+                            </p>
+                            <span className="text-[10px] text-emerald-700 block">
+                              {studentFileSize} • {studentFileType !== 'pdf' ? 'صورة مرفقة' : 'ملف PDF'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {studentFileType !== 'pdf' && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPreviewImageUrl({ url: studentFileDataUrl, name: studentFileName })
+                              }
+                              className="p-1.5 text-emerald-700 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
+                              title="معاينة"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStudentFileName('');
+                              setStudentFileSize('');
+                              setStudentFileDataUrl(null);
+                            }}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="إزالة الملف"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2">
+                        <label className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 bg-slate-50 hover:bg-purple-50 border border-dashed border-slate-300 hover:border-purple-300 rounded-2xl cursor-pointer transition text-center group">
+                          <Camera className="w-6 h-6 text-purple-600 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-slate-700 group-hover:text-purple-700">
+                            التقاط بالكاميرا
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={handleStudentFileSelect}
+                            className="hidden"
+                          />
+                        </label>
+
+                        <label className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 bg-slate-50 hover:bg-indigo-50 border border-dashed border-slate-300 hover:border-indigo-300 rounded-2xl cursor-pointer transition text-center group">
+                          <ImageIcon className="w-6 h-6 text-indigo-600 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-700">
+                            من الصور
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleStudentFileSelect}
+                            className="hidden"
+                          />
+                        </label>
+
+                        <label className="flex flex-col items-center justify-center gap-1.5 py-3.5 px-2 bg-slate-50 hover:bg-emerald-50 border border-dashed border-slate-300 hover:border-emerald-300 rounded-2xl cursor-pointer transition text-center group">
+                          <FileText className="w-6 h-6 text-emerald-600 group-hover:scale-110 transition-transform" />
+                          <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-700">
+                            ملف PDF
+                          </span>
+                          <input
+                            type="file"
+                            accept="application/pdf,.pdf"
+                            onChange={handleStudentFileSelect}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
                     )}
                   </div>
 
@@ -872,7 +1243,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                               s.homeworkId === activeHomeworkForSubmission.id &&
                               (s.studentId === user?.id || s.studentEmail === user?.email)
                           );
-                          if (existingSub && window.confirm('هل تريد حذف حلك المسلم لهذا الواجب؟ يمكنك رفع حل جديد لاحقاً.')) {
+                          if (existingSub) {
                             await onDeleteSubmission(existingSub.id);
                             setActiveHomeworkForSubmission(null);
                           }
@@ -880,7 +1251,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                         className="py-2.5 px-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
                       >
                         <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                        <span>حذف الحل</span>
+                        <span>حذف الحل المسلم</span>
                       </button>
                     ) : <div />}
 
@@ -904,6 +1275,55 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                   </div>
                 </form>
               )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Lightbox Modal for Image Preview */}
+      <AnimatePresence>
+        {previewImageUrl && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs"
+            onClick={() => setPreviewImageUrl(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl max-h-[90vh] bg-slate-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-slate-700"
+            >
+              <div className="flex items-center justify-between p-3 bg-slate-900/90 border-b border-slate-800 text-white z-10">
+                <span className="text-xs sm:text-sm font-bold truncate max-w-[280px]">
+                  {previewImageUrl.name}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => triggerFileDownload(previewImageUrl.url, previewImageUrl.name)}
+                    className="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>تحميل</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImageUrl(null)}
+                    className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              <div className="overflow-auto p-2 flex items-center justify-center bg-black/40">
+                <img
+                  src={previewImageUrl.url}
+                  alt={previewImageUrl.name}
+                  className="max-h-[75vh] w-auto object-contain rounded-lg"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
             </motion.div>
           </div>
         )}

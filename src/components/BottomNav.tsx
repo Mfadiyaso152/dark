@@ -36,7 +36,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       (user?.jobTitle && user.jobTitle !== 'طالب'));
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 max-w-2xl md:max-w-4xl lg:max-w-6xl xl:max-w-7xl mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200/90 shadow-2xl transition-all font-['Tajawal',sans-serif]">
+    <div className="fixed bottom-3 sm:bottom-4 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 w-auto sm:w-[500px] md:w-[600px] lg:w-[680px] bg-white/95 backdrop-blur-xl border border-slate-200/90 rounded-3xl sm:rounded-[28px] shadow-xl shadow-slate-900/10 transition-all font-['Tajawal',sans-serif]">
       {/* Coming Soon Toast for Qudurat */}
       <AnimatePresence>
         {showQuduratToast && (
@@ -44,7 +44,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             initial={{ opacity: 0, y: 12, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
-            className="fixed bottom-20 md:bottom-22 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-xs sm:text-sm px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 z-50 border border-slate-700/80 backdrop-blur-md font-bold whitespace-nowrap shadow-indigo-950/40"
+            className="fixed bottom-22 md:bottom-24 left-1/2 -translate-x-1/2 bg-slate-900/95 text-white text-xs sm:text-sm px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-2.5 z-50 border border-slate-700/80 backdrop-blur-md font-bold whitespace-nowrap shadow-indigo-950/40"
           >
             <Clock className="w-4 h-4 text-amber-400 shrink-0 animate-spin" />
             <span>قسم القدرات قريباً التفعيل ⏳</span>
@@ -53,7 +53,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </AnimatePresence>
 
       {/* Navigation Items Bar */}
-      <div className="h-16 md:h-18 flex items-center justify-around px-2 sm:px-4 md:px-8">
+      <div className="h-16 md:h-18 flex items-center justify-around px-2 sm:px-4 md:px-6">
         {/* Home */}
         <motion.button
           whileTap={{ scale: 0.88 }}

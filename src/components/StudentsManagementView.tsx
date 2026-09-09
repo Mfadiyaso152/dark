@@ -15,7 +15,10 @@ import {
   Calendar,
   AlertCircle,
   BookOpen,
-  HelpCircle
+  HelpCircle,
+  Image as ImageIcon,
+  Eye,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -56,6 +59,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const [activeStudentPage, setActiveStudentPage] = useState<User | null>(null);
   const [noHomeworkToast, setNoHomeworkToast] = useState<string | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const [previewImageUrl, setPreviewImageUrl] = useState<{ url: string; name: string } | null>(null);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -86,17 +90,38 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return Array.from(map.values());
   }, [registeredUsers]);
 
-  // Unified list of students without distinguishing between supervisor & student
+  // Visible users in students service: All genuine students AND student supervisors.
+  // Teachers are excluded so teachers don't see other teachers. Super Admin is also excluded.
+  const visibleStudentsAndSupervisors = useMemo(() => {
+    return uniqueUsers.filter((u) => {
+      const emailLower = (u.email || '').toLowerCase().trim();
+      const isSuper = u.isSuperAdmin || emailLower === SUPER_ADMIN_EMAIL.toLowerCase();
+      if (isSuper) return false;
+
+      // Filter out teachers (معلمين) so teachers only see students and student supervisors
+      const isTeacher =
+        u.role === 'teacher' ||
+        (!!u.jobTitle && u.jobTitle.startsWith('أ.')) ||
+        (u.email && user?.role === 'teacher' && u.email.toLowerCase() === user.email.toLowerCase());
+
+      if (isTeacher) return false;
+
+      // Regular students AND supervisors (المشرفين هم طلاب) are visible!
+      return true;
+    });
+  }, [uniqueUsers, user]);
+
+  // Filtered students according to search
   const filteredUsers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return uniqueUsers;
-    return uniqueUsers.filter((u) => {
+    if (!q) return visibleStudentsAndSupervisors;
+    return visibleStudentsAndSupervisors.filter((u) => {
       const matchesName = u.name.toLowerCase().includes(q);
       // Only super admin can search by email
       const matchesEmail = isSuperAdmin && u.email.toLowerCase().includes(q);
       return matchesName || matchesEmail;
     });
-  }, [uniqueUsers, searchQuery, isSuperAdmin]);
+  }, [visibleStudentsAndSupervisors, searchQuery, isSuperAdmin]);
 
   // Get student's submissions count (scoped to teacher's subject if teacher)
   const getStudentSubmissions = (u: User) => {
@@ -130,8 +155,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setActiveStudentPage(u);
   };
 
+  const isImageFile = (fileName?: string, dataUrl?: string) => {
+    if (dataUrl?.startsWith('data:image/')) return true;
+    if (!fileName) return false;
+    return /\.(png|jpe?g|webp|gif|bmp)$/i.test(fileName);
+  };
+
   const handleDownloadPdf = async (fileId?: string, dataUrl?: string, filename?: string) => {
-    const targetName = filename || 'ملف_الواجب.pdf';
+    const targetName = filename || 'ملف_الواجب';
     setDownloadingFileId(fileId || targetName);
     try {
       let urlToDownload = dataUrl;
@@ -141,12 +172,24 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       if (urlToDownload) {
         triggerFileDownload(urlToDownload, targetName);
       } else {
-        alert('تعذر استرداد ملف الـ PDF.');
+        alert('تعذر استرداد الملف.');
       }
     } catch (err) {
-      console.warn('PDF download error:', err);
+      console.warn('File download error:', err);
     } finally {
       setDownloadingFileId(null);
+    }
+  };
+
+  const handlePreviewImage = async (fileId?: string, dataUrl?: string, filename?: string) => {
+    let url = dataUrl;
+    if (!url && fileId) {
+      url = (await getLargeFile(fileId)) || (await downloadFileFromCloud(fileId)) || undefined;
+    }
+    if (url) {
+      setPreviewImageUrl({ url, name: filename || 'صورة الواجب' });
+    } else {
+      alert('تعذر تحميل الصورة للمعاينة.');
     }
   };
 
@@ -268,47 +311,127 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   </div>
                 )}
 
-                {/* PDF Solution File Download/View */}
+                {/* Solution File Download/View (PDF or Image) */}
                 <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                   {hasSolutionFile ? (
-                    <button
-                      onClick={() =>
-                        handleDownloadPdf(
-                          sub.attachedFile?.fileId,
-                          sub.attachedFile?.dataUrl,
-                          sub.attachedFile?.name || `${activeStudentPage.name}_حل_واجب.pdf`
-                        )
-                      }
-                      disabled={downloadingFileId === (sub.attachedFile?.fileId || sub.attachedFile?.name)}
-                      className="py-2 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
-                    >
-                      <Download className="w-4 h-4 text-emerald-600" />
-                      <span>تحميل واستعراض ملف الحل ({sub.attachedFile?.name})</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {isImageFile(sub.attachedFile?.name, sub.attachedFile?.dataUrl) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePreviewImage(
+                              sub.attachedFile?.fileId,
+                              sub.attachedFile?.dataUrl,
+                              sub.attachedFile?.name
+                            )
+                          }
+                          className="py-2 px-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        >
+                          <Eye className="w-4 h-4 text-indigo-600" />
+                          <span>معاينة صورة الحل</span>
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() =>
+                          handleDownloadPdf(
+                            sub.attachedFile?.fileId,
+                            sub.attachedFile?.dataUrl,
+                            sub.attachedFile?.name || `${activeStudentPage.name}_حل_واجب`
+                          )
+                        }
+                        disabled={downloadingFileId === (sub.attachedFile?.fileId || sub.attachedFile?.name)}
+                        className="py-2 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
+                      >
+                        <Download className="w-4 h-4 text-emerald-600" />
+                        <span>تحميل {isImageFile(sub.attachedFile?.name, sub.attachedFile?.dataUrl) ? 'الصورة' : 'الملف'} ({sub.attachedFile?.name})</span>
+                      </button>
+                    </div>
                   ) : (
-                    <span className="text-xs text-slate-400">لم يتم إرفاق ملف PDF للحل</span>
+                    <span className="text-xs text-slate-400">لم يتم إرفاق ملف أو صورة للحل</span>
                   )}
 
                   {hw?.solutionFile?.hasFile && (
-                    <button
-                      onClick={() =>
-                        handleDownloadPdf(
-                          hw.solutionFile?.fileId,
-                          hw.solutionFile?.dataUrl,
-                          hw.solutionFile?.name || 'الحل_النموذجي.pdf'
-                        )
-                      }
-                      className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <FileCheck className="w-4 h-4 text-slate-500" />
-                      <span>الحل النموذجي</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {isImageFile(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handlePreviewImage(
+                              hw.solutionFile?.fileId,
+                              hw.solutionFile?.dataUrl,
+                              hw.solutionFile?.name
+                            )
+                          }
+                          className="py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4 text-purple-600" />
+                          <span>معاينة النموذج</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() =>
+                          handleDownloadPdf(
+                            hw.solutionFile?.fileId,
+                            hw.solutionFile?.dataUrl,
+                            hw.solutionFile?.name || 'الحل_النموذجي'
+                          )
+                        }
+                        className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <FileCheck className="w-4 h-4 text-slate-500" />
+                        <span>الحل النموذجي</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </motion.div>
             );
           })}
         </div>
+
+        {/* Lightbox Image Preview Modal inside activeStudentPage */}
+        <AnimatePresence>
+          {previewImageUrl && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="relative max-w-4xl w-full bg-slate-900 rounded-3xl overflow-hidden shadow-2xl border border-slate-700 flex flex-col max-h-[90vh]"
+              >
+                <div className="p-4 bg-slate-800/90 border-b border-slate-700 flex items-center justify-between text-white">
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5 text-indigo-400" />
+                    <span className="font-bold text-sm truncate max-w-xs sm:max-w-md">{previewImageUrl.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => triggerFileDownload(previewImageUrl.url, previewImageUrl.name)}
+                      className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="hidden sm:inline">تحميل</span>
+                    </button>
+                    <button
+                      onClick={() => setPreviewImageUrl(null)}
+                      className="p-2 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-slate-950">
+                  <img
+                    src={previewImageUrl.url}
+                    alt={previewImageUrl.name}
+                    className="max-h-[75vh] w-auto max-w-full object-contain rounded-xl shadow-lg"
+                  />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -410,9 +533,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 </div>
 
                 <div className="min-w-0 space-y-1">
-                  <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
-                    {u.name}
-                  </h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
+                      {u.name}
+                    </h3>
+                    {(u.role === 'supervisor' || u.isAssistantAdmin || (u.jobTitle && u.jobTitle !== 'طالب')) && (
+                      <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 shrink-0">
+                        {u.jobTitle || 'مشرف'}
+                      </span>
+                    )}
+                  </div>
 
                   {/* Number of submitted homeworks pill */}
                   <div className="flex items-center gap-2">
