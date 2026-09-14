@@ -139,9 +139,17 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Filtered active notifications
+  // Filtered active notifications (excluding deleted and older than 24 hours)
   const notifications = useMemo(() => {
-    return rawNotifications.filter((n) => !n.isDeleted);
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    return rawNotifications.filter((n) => {
+      if (n.isDeleted) return false;
+      if (!n.createdAt) return true;
+      const createdTime = new Date(n.createdAt).getTime();
+      if (isNaN(createdTime)) return true;
+      return (now - createdTime) <= ONE_DAY_MS;
+    });
   }, [rawNotifications]);
 
   // Notifications sent by this teacher / supervisor

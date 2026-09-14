@@ -75,7 +75,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   onSubmitHomeworkSolution,
   onDeleteSubmission
 }) => {
-  const { user, isSuperAdmin, isAssistantAdmin, canManageSubject } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canManageSubject, setIsAuthModalOpen } = useAuth();
   const { isSubjectPaused, isLessonsPaused, isBookletsPaused, isHomeworksPaused } = useSubjectControls();
 
   const isSubjectActuallyPaused = !!subject.isComingSoon || isSubjectPaused(subject.id);
@@ -96,6 +96,10 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   }, [initialSubView]);
 
   const handleSubViewSelect = (newSubView: 'lessons' | 'booklets' | 'homework' | null) => {
+    if (newSubView && !user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setSubViewState(newSubView);
     if (onSubViewChange) {
       onSubViewChange(newSubView);

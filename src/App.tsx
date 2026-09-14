@@ -487,23 +487,30 @@ export default function App() {
         setActiveTab('home');
         setSelectedSubject(route.subject);
         setSelectedSemester(route.subject.semester);
-        setSelectedSubView(route.subView);
 
-        if (route.activeLesson) {
-          setActiveLesson(route.activeLesson);
-          setIsDetailModalOpen(true);
-          document.title = `${route.activeLesson.title} | ${route.subject.name} | زاد`;
-        } else {
+        if ((route.subView || route.activeLesson) && !user) {
+          setSelectedSubView(null);
           setIsDetailModalOpen(false);
-          const sectionTitle =
-            route.subView === 'lessons'
-              ? `شروحات ${route.subject.name}`
-              : route.subView === 'homework'
-              ? `واجبات ${route.subject.name}`
-              : route.subView === 'booklets'
-              ? `ملخصات ${route.subject.name}`
-              : route.subject.name;
-          document.title = `${sectionTitle} | زاد`;
+          setIsAuthModalOpen(true);
+        } else {
+          setSelectedSubView(route.subView);
+
+          if (route.activeLesson) {
+            setActiveLesson(route.activeLesson);
+            setIsDetailModalOpen(true);
+            document.title = `${route.activeLesson.title} | ${route.subject.name} | زاد`;
+          } else {
+            setIsDetailModalOpen(false);
+            const sectionTitle =
+              route.subView === 'lessons'
+                ? `شروحات ${route.subject.name}`
+                : route.subView === 'homework'
+                ? `واجبات ${route.subject.name}`
+                : route.subView === 'booklets'
+                ? `ملخصات ${route.subject.name}`
+                : route.subject.name;
+            document.title = `${sectionTitle} | زاد`;
+          }
         }
       } else if (route.type === 'not-found') {
         setIsNotFound(true);
