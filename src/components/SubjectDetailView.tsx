@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useSubjectControls } from '../context/SubjectControlsContext';
@@ -15,7 +15,9 @@ import {
   ChevronLeft,
   MessageCircle,
   ClipboardList,
-  Lock
+  Lock,
+  Share2,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF, downloadBookletPDF, triggerFileDownload } from '../utils/pdfGenerator';
@@ -27,6 +29,8 @@ interface SubjectDetailViewProps {
   lessons: Lesson[];
   booklets: SubjectBooklet[];
   homeworks?: Homework[];
+  initialSubView?: 'lessons' | 'booklets' | 'homework' | null;
+  onSubViewChange?: (subView: 'lessons' | 'booklets' | 'homework' | null) => void;
   onBack: () => void;
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (id: string) => void;
@@ -51,6 +55,8 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   lessons,
   booklets,
   homeworks = [],
+  initialSubView = null,
+  onSubViewChange,
   onBack,
   onSelectLesson,
   onToggleComplete,
@@ -81,7 +87,35 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   const canEditCurrentSubject = canManageSubject(subject.id);
 
   // Sub-view: null = show main choices, 'lessons' = lessons page, 'booklets' = booklets page, 'homework' = homework page
-  const [subView, setSubView] = useState<'lessons' | 'booklets' | 'homework' | null>(null);
+  const [subView, setSubViewState] = useState<'lessons' | 'booklets' | 'homework' | null>(initialSubView);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Keep state synchronized with prop if it changes externally
+  useEffect(() => {
+    setSubViewState(initialSubView);
+  }, [initialSubView]);
+
+  const handleSubViewSelect = (newSubView: 'lessons' | 'booklets' | 'homework' | null) => {
+    setSubViewState(newSubView);
+    if (onSubViewChange) {
+      onSubViewChange(newSubView);
+    }
+  };
+
+  const handleShareSubject = () => {
+    const urlToShare = window.location.href;
+    if (navigator.share) {
+      navigator.share({
+        title: `${subject.name} | زاد`,
+        text: `مقرر ${subject.name} - منصة زاد التعليمية`,
+        url: urlToShare
+      }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(urlToShare);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
   const [isAddBookletModalOpen, setIsAddBookletModalOpen] = useState(false);
   const [isDownloadingAllLessons, setIsDownloadingAllLessons] = useState(false);
   const [downloadingBookletId, setDownloadingBookletId] = useState<string | null>(null);
@@ -211,7 +245,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         transition={{ duration: 0.2 }}
         className="space-y-4 text-right font-['Tajawal',sans-serif]"
       >
-        {/* Top Navigation: Return to all subjects */}
+        {/* Top Navigation: Return to all subjects + Share */}
         <div className="flex items-center justify-between gap-3">
           <motion.button
             whileTap={{ scale: 0.95 }}
@@ -221,6 +255,24 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             <ArrowRight className="w-4 h-4 text-blue-600 transition group-hover:-translate-x-0.5" />
             <span>رجوع للمواد</span>
           </motion.button>
+
+          <button
+            onClick={handleShareSubject}
+            title="مشاركة رابط المادة"
+            className="py-2 px-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+          >
+            {copiedLink ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="text-emerald-700 font-bold">تم نسخ الرابط!</span>
+              </>
+            ) : (
+              <>
+                <Share2 className="w-3.5 h-3.5 text-indigo-600" />
+                <span>مشاركة المادة</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Subject Header Banner */}
@@ -260,16 +312,12 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           </div>
         )}
 
-        {/* The Three Choices Cards */}
-        <div className="pt-1">
-          <h3 className="text-xs md:text-sm font-bold text-slate-500 mb-3 md:mb-4 px-1">
-            اختر القسم المطلوب للمتابعة:
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 md:gap-6">
-            {/* Option 1: الشروحات والدروس */}
+        {/* The Two Choices Cards: الدروس والملخصات فقط */}
+        <div className="pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-5">
+            {/* Option 1: الدروس */}
             <motion.div
-              whileHover={isLessonsActuallyPaused ? {} : { y: -4, scale: 1.01 }}
+              whileHover={isLessonsActuallyPaused ? {} : { y: -3, scale: 1.01 }}
               whileTap={isLessonsActuallyPaused ? {} : { scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 450, damping: 25 }}
               onClick={() => {
@@ -278,9 +326,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                   setTimeout(() => setShowLessonsSoonToast(false), 2500);
                   return;
                 }
-                setSubView('lessons');
+                handleSubViewSelect('lessons');
               }}
-              className={`bg-white border-2 rounded-3xl p-5 md:p-7 shadow-xs transition-all text-right flex flex-col justify-between relative overflow-hidden ${
+              className={`bg-white border-2 rounded-3xl p-5 sm:p-6 shadow-xs transition-all text-right flex items-center justify-between relative overflow-hidden ${
                 isLessonsActuallyPaused
                   ? 'border-slate-200 opacity-90 cursor-pointer hover:border-amber-300'
                   : 'hover:bg-blue-50/40 border-slate-200/90 hover:border-blue-500 cursor-pointer group'
@@ -288,58 +336,42 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             >
               {showLessonsSoonToast && (
                 <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-xs flex items-center justify-center p-3 z-10 animate-fade-in text-center">
-                  <span className="text-white text-xs md:text-sm font-bold">
-                    قسم الشروحات والدروس لمادة {subject.name} قريباً ⏳
+                  <span className="text-white text-xs sm:text-sm font-bold">
+                    قسم الدروس لمادة {subject.name} قريباً ⏳
                   </span>
                 </div>
               )}
 
-              <div className="space-y-3 md:space-y-4">
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl ${
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${
                   isLessonsActuallyPaused ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'
-                } flex items-center justify-center`}>
-                  <BookOpen className="w-6 h-6 md:w-8 md:h-8" />
+                } flex items-center justify-center shrink-0`}>
+                  <BookOpen className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-base md:text-lg font-black text-slate-900 group-hover:text-blue-600 transition">
-                      الشروحات والدروس
-                    </h4>
-                    {isLessonsActuallyPaused ? (
-                      <span className="text-[10px] md:text-xs font-black bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-xl flex items-center gap-1">
-                        <Lock className="w-2.5 h-2.5" />
-                        <span>قريباً</span>
-                      </span>
-                    ) : (
-                      <span className="text-xs md:text-sm font-bold bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-xl">
-                        {subjectLessons.length} درس
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    دروس وشروحات تفاعلية وملفات PDF
-                  </p>
+                  <h4 className="text-base sm:text-lg font-black text-slate-900 group-hover:text-blue-600 transition">
+                    الدروس
+                  </h4>
+                  {isLessonsActuallyPaused ? (
+                    <span className="text-[10px] sm:text-xs font-bold text-amber-700 mt-0.5 inline-block">
+                      متاح قريباً
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500 mt-0.5 inline-block">
+                      {subjectLessons.length} درس
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-slate-100 flex items-center justify-between font-black text-xs md:text-sm">
-                {isLessonsActuallyPaused ? (
-                  <>
-                    <span className="text-amber-700">متاح قريباً</span>
-                    <Lock className="w-4 h-4 text-amber-600" />
-                  </>
-                ) : (
-                  <>
-                    <span className="text-blue-600">فتح صفحة الدروس</span>
-                    <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-blue-600 transition group-hover:-translate-x-1" />
-                  </>
-                )}
+              <div className="shrink-0">
+                <ChevronLeft className="w-5 h-5 text-blue-600 transition group-hover:-translate-x-1" />
               </div>
             </motion.div>
 
-            {/* Option 2: الملخصات والمذكرات */}
+            {/* Option 2: الملخصات */}
             <motion.div
-              whileHover={isBookletsActuallyPaused ? {} : { y: -4, scale: 1.01 }}
+              whileHover={isBookletsActuallyPaused ? {} : { y: -3, scale: 1.01 }}
               whileTap={isBookletsActuallyPaused ? {} : { scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 450, damping: 25 }}
               onClick={() => {
@@ -348,9 +380,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                   setTimeout(() => setShowBookletsSoonToast(false), 2500);
                   return;
                 }
-                setSubView('booklets');
+                handleSubViewSelect('booklets');
               }}
-              className={`bg-white border-2 rounded-3xl p-5 md:p-7 shadow-xs transition-all text-right flex flex-col justify-between relative overflow-hidden ${
+              className={`bg-white border-2 rounded-3xl p-5 sm:p-6 shadow-xs transition-all text-right flex items-center justify-between relative overflow-hidden ${
                 isBookletsActuallyPaused
                   ? 'border-slate-200 opacity-90 cursor-pointer hover:border-amber-300'
                   : 'hover:bg-emerald-50/40 border-slate-200/90 hover:border-emerald-500 cursor-pointer group'
@@ -358,125 +390,36 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             >
               {showBookletsSoonToast && (
                 <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-xs flex items-center justify-center p-3 z-10 animate-fade-in text-center">
-                  <span className="text-white text-xs md:text-sm font-bold">
+                  <span className="text-white text-xs sm:text-sm font-bold">
                     قسم الملخصات لمادة {subject.name} قريباً ⏳
                   </span>
                 </div>
               )}
 
-              <div className="space-y-3 md:space-y-4">
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl ${
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${
                   isBookletsActuallyPaused ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-600'
-                } flex items-center justify-center`}>
-                  <FileText className="w-6 h-6 md:w-8 md:h-8" />
+                } flex items-center justify-center shrink-0`}>
+                  <FileText className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-base md:text-lg font-black text-slate-900 group-hover:text-emerald-600 transition">
-                      الملخصات والمذكرات
-                    </h4>
-                    {isBookletsActuallyPaused ? (
-                      <span className="text-[10px] md:text-xs font-black bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-xl flex items-center gap-1">
-                        <Lock className="w-2.5 h-2.5" />
-                        <span>قريباً</span>
-                      </span>
-                    ) : (
-                      <span className="text-xs md:text-sm font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-xl">
-                        {subjectBooklets.length} مذكرة
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    ملازم ومذكرات المراجعة الشاملة
-                  </p>
+                  <h4 className="text-base sm:text-lg font-black text-slate-900 group-hover:text-emerald-600 transition">
+                    الملخصات
+                  </h4>
+                  {isBookletsActuallyPaused ? (
+                    <span className="text-[10px] sm:text-xs font-bold text-amber-700 mt-0.5 inline-block">
+                      متاح قريباً
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500 mt-0.5 inline-block">
+                      {subjectBooklets.length} مذكرة
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-slate-100 flex items-center justify-between font-black text-xs md:text-sm">
-                {isBookletsActuallyPaused ? (
-                  <>
-                    <span className="text-amber-700">متاح قريباً</span>
-                    <Lock className="w-4 h-4 text-amber-600" />
-                  </>
-                ) : (
-                  <>
-                    <span className="text-emerald-600">فتح صفحة الملخصات</span>
-                    <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-emerald-600 transition group-hover:-translate-x-1" />
-                  </>
-                )}
-              </div>
-            </motion.div>
-
-            {/* Option 3: الواجبات المدرسية */}
-            <motion.div
-              whileHover={(!isHomeworkSupportedBase || isHomeworksActuallyPaused) ? {} : { y: -4, scale: 1.01 }}
-              whileTap={(!isHomeworkSupportedBase || isHomeworksActuallyPaused) ? {} : { scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
-              onClick={() => {
-                if (isHomeworkSupportedBase && !isHomeworksActuallyPaused) {
-                  setSubView('homework');
-                } else {
-                  setShowHomeworkSoonToast(true);
-                  setTimeout(() => setShowHomeworkSoonToast(false), 2500);
-                }
-              }}
-              className={`bg-white border-2 rounded-3xl p-5 md:p-7 shadow-xs transition-all text-right flex flex-col justify-between relative overflow-hidden ${
-                isHomeworkSupportedBase && !isHomeworksActuallyPaused
-                  ? 'hover:bg-purple-50/40 border-slate-200/90 hover:border-purple-500 cursor-pointer group'
-                  : 'border-slate-200 opacity-90 cursor-pointer hover:border-amber-300'
-              }`}
-            >
-              {/* Toast when clicked on unsupported/paused subject */}
-              {showHomeworkSoonToast && (
-                <div className="absolute inset-0 bg-slate-900/85 backdrop-blur-xs flex items-center justify-center p-3 z-10 animate-fade-in text-center">
-                  <span className="text-white text-xs md:text-sm font-bold">
-                    قسم الواجبات لمادة {subject.name} قريباً ⏳
-                  </span>
-                </div>
-              )}
-
-              <div className="space-y-3 md:space-y-4">
-                <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl ${
-                  isHomeworkSupportedBase && !isHomeworksActuallyPaused ? 'bg-purple-100 text-purple-600' : 'bg-amber-100 text-amber-700'
-                } flex items-center justify-center`}>
-                  <ClipboardList className="w-6 h-6 md:w-8 md:h-8" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-base md:text-lg font-black text-slate-900 group-hover:text-purple-600 transition">
-                      الواجبات المدرسية
-                    </h4>
-                    {isHomeworkSupportedBase && !isHomeworksActuallyPaused ? (
-                      <span className="text-xs md:text-sm font-bold bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-xl">
-                        {subjectHomeworks.length} واجب
-                      </span>
-                    ) : (
-                      <span className="text-[10px] md:text-xs font-black bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-xl flex items-center gap-1">
-                        <Lock className="w-2.5 h-2.5" />
-                        <span>قريباً</span>
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">
-                    {isHomeworkSupportedBase && !isHomeworksActuallyPaused
-                      ? 'الصفحات والأسئلة وتواريخ التسليم'
-                      : 'متاح قريباً'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 md:mt-6 pt-3 md:pt-4 border-t border-slate-100 flex items-center justify-between font-black text-xs md:text-sm">
-                {isHomeworkSupportedBase && !isHomeworksActuallyPaused ? (
-                  <>
-                    <span className="text-purple-600">فتح صفحة الواجبات</span>
-                    <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-purple-600 transition group-hover:-translate-x-1" />
-                  </>
-                ) : (
-                  <>
-                    <span className="text-amber-700">متاح قريباً</span>
-                    <Lock className="w-4 h-4 text-amber-600" />
-                  </>
-                )}
+              <div className="shrink-0">
+                <ChevronLeft className="w-5 h-5 text-emerald-600 transition group-hover:-translate-x-1" />
               </div>
             </motion.div>
           </div>
@@ -491,7 +434,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
       <HomeworkSection
         subject={subject}
         homeworks={homeworks}
-        onBack={() => setSubView(null)}
+        onBack={() => handleSubViewSelect(null)}
         onAddHomework={onAddHomework || (() => {})}
         onUpdateHomework={onUpdateHomework}
         onDeleteHomework={onDeleteHomework || (() => {})}
@@ -518,7 +461,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         <div className="flex items-center justify-between gap-3">
           <motion.button
             whileTap={{ scale: 0.95 }}
-            onClick={() => setSubView(null)}
+            onClick={() => handleSubViewSelect(null)}
             className="py-2 px-3.5 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group active:scale-95"
           >
             <ArrowRight className="w-4 h-4 text-blue-600 transition group-hover:-translate-x-0.5" />
@@ -532,7 +475,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           </div>
         </div>
 
-        {/* Action Row & Title with Download All */}
+        {/* Action Row & Title */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 bg-blue-50 border border-blue-100 p-4 md:p-5 rounded-2xl md:rounded-3xl">
           <div className="flex items-center gap-2.5 md:gap-3">
             <div className="w-9 h-9 md:w-11 md:h-11 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
@@ -544,24 +487,10 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={handleDownloadAllLessons}
-              disabled={isDownloadingAllLessons || subjectLessons.length === 0}
-              className="py-2 md:py-2.5 px-3.5 md:px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-              title="تنزيل كامل الشروحات والدروس كملف PDF"
-            >
-              {isDownloadingAllLessons ? (
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              )}
-              <span>{isDownloadingAllLessons ? 'جاري تجهيز الملف...' : 'تنزيل كامل الدروس والشروحات (PDF)'}</span>
-            </button>
-
             {canEditCurrentSubject && (
               <button
                 onClick={onOpenAddLesson}
-                className="py-2 md:py-2.5 px-3 md:px-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
+                className="py-2 md:py-2.5 px-3.5 md:px-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0"
               >
                 <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
                 <span>إضافة درس</span>
@@ -592,18 +521,6 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
             </div>
           )}
         </div>
-
-        {/* WhatsApp Group Direct Button */}
-        <a
-          id="whatsapp-lessons-btn"
-          href="https://chat.whatsapp.com/E8lRfoLDghq3syUGzeBfl7?s=cl&p=i&mlu=4&ilr=4"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="w-full py-3 md:py-3.5 px-4 bg-[#25D366] hover:bg-[#20BD5A] text-white rounded-2xl font-bold text-xs sm:text-sm md:text-base flex items-center justify-center gap-2 shadow-xs transition active:scale-[0.99] cursor-pointer"
-        >
-          <MessageCircle className="w-4 h-4 md:w-5 md:h-5 shrink-0" />
-          <span>الدخول لقروب الواتساب</span>
-        </a>
       </motion.div>
     );
   }
@@ -620,7 +537,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
       <div className="flex items-center justify-between gap-3">
         <motion.button
           whileTap={{ scale: 0.95 }}
-          onClick={() => setSubView(null)}
+          onClick={() => handleSubViewSelect(null)}
           className="py-2 md:py-2.5 px-3.5 md:px-4 bg-white hover:bg-slate-100 text-slate-800 border border-slate-200 rounded-2xl text-xs md:text-sm font-bold transition flex items-center gap-2 shadow-xs cursor-pointer group active:scale-95"
         >
           <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-emerald-600 transition group-hover:-translate-x-0.5" />

@@ -505,71 +505,22 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
   return (
     <div className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]">
-      {/* Top Header Card */}
-      <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100 shrink-0">
-            <ClipboardList className="w-6 h-6" />
-          </div>
-          <div className="space-y-0.5">
-            <h2 className="text-xl sm:text-2xl font-black text-slate-900">
-              قسم الواجبات المدرسية
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium">
-              استعراض الواجبات المحددة، رفع حلول الـ PDF، ومتابعة إنجازك الدراسي
-            </p>
-          </div>
-        </div>
-
-        {canUserAddAnyHomework && (
+      {/* Top Action Bar (Add Homework button if teacher/admin) */}
+      {canUserAddAnyHomework && (
+        <div className="flex justify-end">
           <button
             onClick={handleOpenAddModal}
-            className="py-2.5 px-4 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs shrink-0"
+            className="py-2.5 px-4 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
             <span>إضافة واجب جديد</span>
           </button>
-        )}
-      </div>
-
-      {/* Subject Filter Pills if homeworks exist */}
-      {homeworks.length > 0 && !isTeacher && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => setSelectedSubjectFilter('all')}
-            className={`py-1.5 px-3.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              selectedSubjectFilter === 'all'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            جميع المواد ({homeworks.length})
-          </button>
-          {allSubjects.filter((sub) => sub.semester === 1).map((sub) => {
-            const count = homeworks.filter((h) => h.subjectId === sub.id).length;
-            if (count === 0) return null;
-            return (
-              <button
-                key={sub.id}
-                onClick={() => setSelectedSubjectFilter(sub.id)}
-                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
-                  selectedSubjectFilter === sub.id
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                <span>{sub.emoji || '📖'}</span>
-                <span>{sub.name}</span>
-                <span className="text-[10px] opacity-80">({count})</span>
-              </button>
-            );
-          })}
         </div>
       )}
 
       {/* Teacher Assigned Subject Info Tag */}
       {isTeacher && allowedSubjects.length > 0 && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pt-1">
           <span className="px-3.5 py-1.5 rounded-xl bg-purple-50 text-purple-800 border border-purple-200 text-xs font-black inline-flex items-center gap-2">
             <span>📚</span>
             <span>واجبات مادتك المسندة إليك: {allowedSubjects.map((s) => s.name).join('، ')}</span>

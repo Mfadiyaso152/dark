@@ -154,7 +154,7 @@ export interface Lesson {
 export interface Subject {
   id: string;
   name: string;
-  code: string;
+  code?: string;
   semester: Semester;
   icon: string;
   emoji?: string;

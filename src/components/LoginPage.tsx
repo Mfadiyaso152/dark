@@ -129,10 +129,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             </motion.div>
             <div>
               <span className="font-black text-slate-900 text-base sm:text-lg block leading-tight">
-                منصة تفوّق
+                زاد | zad
               </span>
               <span className="text-[11px] text-slate-500 font-medium">
-                مسارات أول ثانوي • 1446-1447هـ
+                المنصة التعليمية • 1446-1447هـ
               </span>
             </div>
           </motion.div>
@@ -198,9 +198,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
             variants={itemVariants}
             className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 leading-snug sm:leading-normal"
           >
-            منصة تفوّق{' '}
+            منصة زاد{' '}
             <span className="text-indigo-600 inline-block">
-              | مسار أول ثانوي
+              | مسارات المرحلة الثانوية
             </span>
           </motion.h1>
 
