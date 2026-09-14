@@ -172,27 +172,40 @@ export function getSubjectSlug(subject: Subject): string {
  */
 export function findSubjectBySlug(slug: string, subjects: Subject[]): Subject | undefined {
   if (!slug) return undefined;
-  const normalized = decodeURIComponent(slug).toLowerCase().trim();
+  const raw = decodeURIComponent(slug).toLowerCase().trim();
+  const normalized = raw.replace(/[ـ\s\-_]+/g, '');
 
   // 1. Check known aliases
-  const mappedId = SUBJECT_SLUG_ALIASES[normalized];
+  const mappedId = SUBJECT_SLUG_ALIASES[normalized] || SUBJECT_SLUG_ALIASES[raw];
   if (mappedId) {
     const found = subjects.find(s => s.id === mappedId);
     if (found) return found;
   }
 
   // 2. Check exact ID match
-  const directId = subjects.find(s => s.id.toLowerCase() === normalized);
+  const directId = subjects.find(s => s.id.toLowerCase() === raw || s.id.toLowerCase().replace(/[\s\-_]+/g, '') === normalized);
   if (directId) return directId;
 
   // 3. Check calculated slug
-  const bySlug = subjects.find(s => getSubjectSlug(s) === normalized);
+  const bySlug = subjects.find(s => {
+    const sSlug = getSubjectSlug(s).toLowerCase();
+    return sSlug === raw || sSlug.replace(/[\s\-_]+/g, '') === normalized;
+  });
   if (bySlug) return bySlug;
 
-  // 4. Fuzzy name search
+  // 4. Check subject name match (exact or partial)
+  const byName = subjects.find(s => {
+    const sName = s.name.toLowerCase();
+    const cleanSName = sName.replace(/[^\u0621-\u064Aa-zA-Z0-9]/g, '');
+    const cleanNorm = normalized.replace(/[^\u0621-\u064Aa-zA-Z0-9]/g, '');
+    return sName === raw || cleanSName === cleanNorm || cleanSName.includes(cleanNorm) || cleanNorm.includes(cleanSName);
+  });
+  if (byName) return byName;
+
+  // 5. Fuzzy keyword search across subjects
   return subjects.find(s => {
     const cleanName = s.name.toLowerCase();
-    return cleanName.includes(normalized) || normalized.includes(cleanName);
+    return cleanName.includes(raw) || raw.includes(cleanName);
   });
 }
 
@@ -209,7 +222,6 @@ export function getLessonSlug(lesson: Lesson): string {
     .replace(/\s+/g, '-');
 
   if (cleanTitle) {
-    // If English/numbers, encode cleanly
     return encodeURIComponent(cleanTitle);
   }
 
@@ -221,16 +233,17 @@ export function getLessonSlug(lesson: Lesson): string {
  */
 export function findLessonBySlug(slug: string, lessons: Lesson[]): Lesson | undefined {
   if (!slug) return undefined;
-  const decoded = decodeURIComponent(slug).toLowerCase().trim();
+  const raw = decodeURIComponent(slug).toLowerCase().trim();
+  const decoded = raw.replace(/[ـ\s\-_]+/g, '');
 
   // 1. Direct ID match
-  const direct = lessons.find(l => l.id.toLowerCase() === decoded);
+  const direct = lessons.find(l => l.id.toLowerCase() === raw || l.id.toLowerCase().replace(/[\s\-_]+/g, '') === decoded);
   if (direct) return direct;
 
   // 2. Exact slug match
   const bySlug = lessons.find(l => {
     const lessonSlug = decodeURIComponent(getLessonSlug(l)).toLowerCase();
-    return lessonSlug === decoded;
+    return lessonSlug === raw || lessonSlug.replace(/[\s\-_]+/g, '') === decoded;
   });
   if (bySlug) return bySlug;
 
@@ -294,7 +307,19 @@ export function parsePathname(pathname: string, subjects: Subject[], lessons: Le
   }
 
   // Check if first segment is a Subject
-  const matchedSubject = findSubjectBySlug(first, subjects);
+  let matchedSubject = findSubjectBySlug(first, subjects);
+  
+  // If not matched by first segment, check any segment for a subject match
+  if (!matchedSubject) {
+    for (const seg of segments) {
+      const found = findSubjectBySlug(seg, subjects);
+      if (found) {
+        matchedSubject = found;
+        break;
+      }
+    }
+  }
+
   if (matchedSubject) {
     // e.g. /math
     if (segments.length === 1) {
@@ -305,7 +330,7 @@ export function parsePathname(pathname: string, subjects: Subject[], lessons: Le
       };
     }
 
-    // e.g. /math/summaries, /math/assignments, /math/booklets, /math/quizzes
+    // e.g. /math/summaries, /math/assignments, /math/booklets
     const second = segments[1].toLowerCase();
     const subView = SECTION_SLUGS[second] || null;
 
@@ -335,8 +360,12 @@ export function parsePathname(pathname: string, subjects: Subject[], lessons: Le
           activeLesson: matchedLesson
         };
       }
-      // If invalid sub-route under subject
-      return { type: 'not-found', path: pathname };
+      // Fallback to subject root instead of 404
+      return {
+        type: 'subject',
+        subject: matchedSubject,
+        subView: null
+      };
     }
 
     return {
@@ -346,7 +375,7 @@ export function parsePathname(pathname: string, subjects: Subject[], lessons: Le
     };
   }
 
-  // Unknown route -> 404
+  // Only return 404 if path doesn't match home, tabs, or any subject
   return { type: 'not-found', path: pathname };
 }
 
