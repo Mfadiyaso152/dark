@@ -110,7 +110,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   onSubmitSolution,
   onDeleteSubmission
 }) => {
-  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject, setIsAuthModalOpen } = useAuth();
 
   const isSupervisor =
     isSuperAdmin ||
@@ -124,8 +124,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     !isSupervisor &&
     (user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
 
-  // Submit button is ONLY for students, never for teachers or supervisors
-  const canSubmitHomework = !isTeacher && !isSupervisor;
+  // Submit button is available for students and supervisors
+  const canSubmitHomework = !isTeacher || isSupervisor;
 
   // Restrict allowed subjects for adding/editing homework - ONLY Semester 1 (P1)
   const allowedSubjects = useMemo(() => {
@@ -399,6 +399,10 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   };
 
   const handleOpenStudentSubmitModal = (hw: Homework) => {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setActiveHomeworkForSubmission(hw);
     setSubmitSuccess(false);
 

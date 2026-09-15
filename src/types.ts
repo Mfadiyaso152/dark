@@ -120,6 +120,7 @@ export interface User {
   grade: string;
   isSuperAdmin?: boolean;
   isAssistantAdmin?: boolean;
+  fullNameConfirmed?: boolean;
   joinedAt?: string;
   lastLogin?: string;
 }

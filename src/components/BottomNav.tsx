@@ -42,21 +42,34 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     showNavToast('قسم القدرات قريباً ⏳');
   };
 
-  // 1. Supervisors & Assistant Supervisors (المدير والمشرف المساعد فقط)
-  const isSupervisorOrAssistant = Boolean(
+  // 1. Super Admin (المشرف الأساسي)
+  const isSuper = Boolean(
     isSuperAdmin ||
+    user?.email?.toLowerCase() === 'mfb.15.f@gmail.com' ||
+    user?.jobTitle === 'المشرف الأساسي'
+  );
+
+  // 2. Supervisors / Assistant Admins (المشرف الرئيسي والمشرفين المساعدين)
+  const isSupervisorUser = Boolean(
+    isSuper ||
     isAssistantAdmin ||
     user?.jobTitle?.includes('مشرف') ||
-    user?.email?.toLowerCase() === 'mfb.15.f@gmail.com' ||
+    user?.role === 'supervisor' ||
     user?.email?.toLowerCase() === 'kalshrby90@gmail.com'
   );
 
-  // 2. Teachers ONLY (المعلمين فقط، ولا يظهر للمشرفين)
-  const isTeacherOnly = Boolean(
+  // 3. Teachers ONLY (المعلمون فقط، عدا المشرفين)
+  const isTeacher = Boolean(
     user &&
-    !isSupervisorOrAssistant &&
-    (user.role === 'teacher' || (user.jobTitle && user.jobTitle !== 'طالب'))
+    !isSupervisorUser &&
+    (user.role === 'teacher' || (user.jobTitle && (user.jobTitle.startsWith('أ.') || user.jobTitle.includes('معلم') || user.jobTitle !== 'طالب')))
   );
+
+  // Show User Management for Super Admin and Supervisors
+  const showUserManagement = Boolean(isSupervisorUser);
+
+  // Show Students for Teachers only
+  const showStudents = Boolean(isTeacher);
 
   return (
     <div className="fixed bottom-3 sm:bottom-5 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 w-auto sm:w-[420px] md:w-[460px] max-w-lg transition-all font-['Tajawal',sans-serif]">
@@ -141,7 +154,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         </motion.button>
 
         {/* 4. Students (الطلاب) - ONLY FOR TEACHERS (المعلمين فقط) */}
-        {isTeacherOnly && (
+        {showStudents && (
           <motion.button
             whileHover={{ scale: 1.15 }}
             whileTap={{ scale: 0.88 }}
@@ -164,8 +177,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           </motion.button>
         )}
 
-        {/* 5. User Management (إدارة المستخدمين) - ONLY FOR SUPERVISORS & ASSISTANT ADMIN */}
-        {isSupervisorOrAssistant && (
+        {/* 5. User Management (إدارة المستخدمين) - FOR SUPER ADMIN & SUPERVISORS */}
+        {showUserManagement && (
           <motion.button
             whileHover={{ scale: 1.15 }}
             whileTap={{ scale: 0.88 }}

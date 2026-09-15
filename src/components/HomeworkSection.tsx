@@ -115,7 +115,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   onSubmitSolution,
   onDeleteSubmission
 }) => {
-  const { user, isSuperAdmin, isAssistantAdmin, canAddContent } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, setIsAuthModalOpen } = useAuth();
   const isSupervisor =
     isSuperAdmin ||
     user?.email?.toLowerCase() === 'mfb.15.f@gmail.com' ||
@@ -128,8 +128,8 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
     !isSupervisor &&
     (user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
 
-  // Submit button is strictly for students, never for teachers or supervisors
-  const canSubmitHomework = !isTeacher && !isSupervisor;
+  // Submit button is available for students and supervisors
+  const canSubmitHomework = !isTeacher || isSupervisor;
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
@@ -362,6 +362,10 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
 
   // Open Student Submit Solution Modal
   const handleOpenStudentSubmitModal = (hw: Homework) => {
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
     setActiveHomeworkForSubmission(hw);
     setSubmitSuccess(false);
 
@@ -473,8 +477,8 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
         homeworkId: activeHomeworkForSubmission.id,
         subjectId: subject.id,
         studentId: user?.id || 'guest-' + Date.now(),
-        studentName: user?.name || 'طالب',
-        studentEmail: user?.email || 'student@thanaweya.sa',
+        studentName: user?.name || (isSupervisor ? 'المشرف' : 'طالب'),
+        studentEmail: user?.email || '',
         notes: studentNotes.trim() || undefined,
         attachedFile: studentAttachedFile
       });

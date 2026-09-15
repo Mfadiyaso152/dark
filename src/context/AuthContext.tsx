@@ -48,6 +48,16 @@ export const getSafeUserDocId = (email: string): string => {
   return (email || '').trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
 };
 
+export const isFullNameValid = (name?: string): boolean => {
+  if (!name) return false;
+  const trimmed = name.trim().replace(/\s+/g, ' ');
+  if (['طالب', 'مستخدم', 'طالب جديد', 'student', 'user', 'guest'].includes(trimmed.toLowerCase())) {
+    return false;
+  }
+  const parts = trimmed.split(' ').filter((p) => p.length >= 2);
+  return parts.length >= 3;
+};
+
 export const deduplicateUsersByEmail = (users: User[]): User[] => {
 
   const map = new Map<string, User>();
@@ -60,6 +70,7 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
     const isSuper = emailKey === SUPER_ADMIN_EMAIL.toLowerCase();
     const jobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || (u.role === 'supervisor' ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب')));
     const isTeacherOrSupervisor = isSuper || (jobTitle !== 'طالب');
+    const isConfirmed = !!u.fullNameConfirmed || isSuper;
 
     if (!map.has(emailKey)) {
       map.set(emailKey, {
@@ -68,6 +79,7 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
         jobTitle,
         isSuperAdmin: isSuper,
         isAssistantAdmin: !isSuper && isTeacherOrSupervisor,
+        fullNameConfirmed: isConfirmed,
         role: isSuper ? 'supervisor' : (u.role || (isTeacherOrSupervisor ? 'teacher' : 'student'))
       });
     } else {
@@ -79,14 +91,16 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
       const avatar = u.avatar && !u.avatar.includes('dicebear') ? u.avatar : existing.avatar;
       const finalJobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || existing.jobTitle || 'طالب');
       const finalIsTeacher = isSuper || finalJobTitle !== 'طالب';
+      const confirmedName = (existing.fullNameConfirmed ? existing.name : (u.fullNameConfirmed ? u.name : (u.name || existing.name)));
 
       map.set(emailKey, {
         ...existing,
         ...u,
-        name: isSuper ? (u.name || existing.name) : (existing.name || u.name),
+        name: isSuper ? (u.name || existing.name) : confirmedName,
         jobTitle: finalJobTitle,
         isSuperAdmin: isSuper,
         isAssistantAdmin: !isSuper && finalIsTeacher,
+        fullNameConfirmed: isSuper || !!(existing.fullNameConfirmed || u.fullNameConfirmed),
         role: isSuper ? 'supervisor' : (finalIsTeacher ? (u.role === 'supervisor' ? 'supervisor' : 'teacher') : 'student'),
         avatar,
         lastLogin
@@ -106,6 +120,7 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
       email: SUPER_ADMIN_EMAIL,
       isSuperAdmin: true,
       jobTitle: 'المشرف الأساسي',
+      fullNameConfirmed: true,
       role: 'supervisor'
     });
   }
@@ -158,6 +173,7 @@ interface AuthContextType {
   refreshUsers: () => Promise<void>;
   loginWithGoogle: () => Promise<boolean>;
   loginWithGoogleEmail: (email: string, name?: string, avatar?: string) => Promise<void>;
+  updateUserName: (fullName: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   switchRole: (role: UserRole) => void;
   updateUserJob: (email: string, jobTitle: string) => Promise<{ success: boolean; message: string }>;
@@ -269,6 +285,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           grade: userObj.grade || 'أول ثانوي',
           isSuperAdmin: !!userObj.isSuperAdmin,
           isAssistantAdmin: !!userObj.isAssistantAdmin,
+          fullNameConfirmed: !!userObj.fullNameConfirmed,
           joinedAt: userObj.joinedAt || nowIso.split('T')[0],
           lastLogin: nowIso,
           updatedAt: nowIso
@@ -309,6 +326,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const rawName = fbUser.displayName || cleanEmail.split('@')[0];
         const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
 
+        // Check if full name was already confirmed in cloud
+        let isConfirmed = isSuper;
+        try {
+          const docSnap = await getDoc(doc(db, 'users', getSafeUserDocId(cleanEmail)));
+          if (docSnap.exists()) {
+            const d = docSnap.data();
+            if (d && d.fullNameConfirmed) isConfirmed = true;
+          }
+        } catch (e) {
+          // ignore
+        }
+
         const newUserObj: User = {
           id: fbUser.uid,
           name: cleanName || 'طالب',
@@ -321,6 +350,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           grade: 'أول ثانوي',
           isSuperAdmin: isSuper,
           isAssistantAdmin: !isSuper && isTeacher,
+          fullNameConfirmed: isConfirmed,
           joinedAt: new Date().toISOString().split('T')[0],
           lastLogin: new Date().toISOString()
         };
@@ -575,6 +605,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
         const isTeacher = isSuper || (existingJob !== 'طالب');
 
+        let isConfirmed = isSuper || !!found?.fullNameConfirmed;
+
         const newUserObj: User = {
           id: result.user.uid,
           name: cleanName || 'طالب',
@@ -587,6 +619,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           grade: 'أول ثانوي',
           isSuperAdmin: isSuper,
           isAssistantAdmin: !isSuper && isTeacher,
+          fullNameConfirmed: isConfirmed,
           joinedAt: new Date().toISOString().split('T')[0],
           lastLogin: new Date().toISOString()
         };
@@ -627,12 +660,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (existing) {
       const jobTitle = isSuper ? 'المشرف الأساسي' : (existing.jobTitle || 'طالب');
       const isTeacher = isSuper || jobTitle !== 'طالب';
+      const isConfirmed = isSuper || !!existing.fullNameConfirmed;
       targetUser = {
         ...existing,
         name: cleanName,
         jobTitle,
         isSuperAdmin: isSuper,
         isAssistantAdmin: !isSuper && isTeacher,
+        fullNameConfirmed: isConfirmed,
         role: isSuper ? 'supervisor' : (isTeacher ? (existing.role === 'supervisor' ? 'supervisor' : 'teacher') : 'student'),
         lastLogin: nowIso
       };
@@ -652,6 +687,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         grade: 'أول ثانوي',
         isSuperAdmin: isSuper,
         isAssistantAdmin: isTeacher,
+        fullNameConfirmed: isSuper,
         joinedAt: nowIso.split('T')[0],
         lastLogin: nowIso
       };
@@ -667,6 +703,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await syncUserToCloud(targetUser);
 
     setIsAuthModalOpen(false);
+  };
+
+  // Update user's full 3-part name (mandatory on entry for everyone)
+  const updateUserName = async (fullName: string): Promise<{ success: boolean; message: string }> => {
+    if (!user) {
+      return { success: false, message: 'المستخدم غير مسجل' };
+    }
+
+    const trimmed = (fullName || '').trim().replace(/\s+/g, ' ');
+    const parts = trimmed.split(' ').filter((p) => p.length >= 2);
+    if (parts.length < 3) {
+      return { success: false, message: 'يرجى إدخال الاسم الثلاثي كاملاً (3 أسماء على الأقل: الاسم الأول، واسم الأب، واسم العائلة).' };
+    }
+
+    const cleanEmail = user.email.toLowerCase().trim();
+    const updatedUser: User = {
+      ...user,
+      name: trimmed,
+      fullNameConfirmed: true
+    };
+
+    setUser(updatedUser);
+    safeSetItem('thanaweya_user', JSON.stringify(updatedUser));
+
+    // Update in registeredUsers
+    setRegisteredUsers((prev) =>
+      prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, name: trimmed, fullNameConfirmed: true } : u))
+    );
+
+    // Save directly to Firestore Cloud
+    try {
+      const docId = getSafeUserDocId(cleanEmail);
+      await setDoc(
+        doc(db, 'users', docId),
+        {
+          name: trimmed,
+          fullNameConfirmed: true,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Error saving full name to cloud:', e);
+    }
+
+    return { success: true, message: 'تم حفظ الاسم الثلاثي بنجاح' };
   };
 
   const logout = async () => {
@@ -834,6 +916,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshUsers,
         loginWithGoogle,
         loginWithGoogleEmail,
+        updateUserName,
         logout,
         switchRole,
         updateUserJob,

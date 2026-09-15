@@ -105,10 +105,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       const emailLower = (u.email || '').toLowerCase().trim();
       const isSuper = u.isSuperAdmin || emailLower === SUPER_ADMIN_EMAIL.toLowerCase();
 
-      // The main supervisor (المشرف الأساسي) is explicitly visible to teachers and everyone!
+      // The main supervisor (المشرف الأساسي) is explicitly visible!
       if (isSuper) return true;
 
-      // Filter out teachers (معلمين) so teachers only see students, supervisors, and the main supervisor
+      // Supervisors & assistant admins are visible
+      const isSupervisorUser = u.role === 'supervisor' || (u.jobTitle && u.jobTitle.includes('مشرف')) || u.isAssistantAdmin;
+      if (isSupervisorUser) return true;
+
+      // Filter out other teachers (معلمين آخرين) so teachers do not see any other teacher
       const isTeacher =
         u.role === 'teacher' ||
         (!!u.jobTitle && u.jobTitle.startsWith('أ.')) ||
@@ -116,7 +120,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
       if (isTeacher) return false;
 
-      // Regular students AND student supervisors are visible!
+      // Regular students are visible
       return true;
     }).sort((a, b) => {
       const aIsSuper = a.isSuperAdmin || (a.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();

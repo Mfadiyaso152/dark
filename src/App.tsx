@@ -18,6 +18,7 @@ import { QuduratView } from './components/QuduratView';
 import { DailyHomeworksView } from './components/DailyHomeworksView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { SupervisorSettingsDrawer } from './components/SupervisorSettingsDrawer';
+import { FullNameRequiredModal } from './components/FullNameRequiredModal';
 import { NotFoundView } from './components/NotFoundView';
 import {
   parsePathname,
@@ -1336,6 +1337,9 @@ export default function App() {
 
         {/* Auth / Account Profile Modal */}
         <AuthModal />
+
+        {/* Mandatory Full Name Enforcement Modal */}
+        <FullNameRequiredModal />
 
         {/* Notifications Modal */}
         <NotificationsModal />
