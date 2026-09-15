@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Home, Sparkles, GraduationCap, ClipboardCheck, Clock, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export type TabType = 'home' | 'homeworks' | 'qudurat' | 'students' | 'users';
+export type TabType = 'home' | 'homeworks' | 'qudurat' | 'students' | 'users' | 'admin';
 
 interface BottomNavProps {
   activeTab: TabType;

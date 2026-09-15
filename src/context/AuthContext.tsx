@@ -58,6 +58,46 @@ export const isFullNameValid = (name?: string): boolean => {
   return parts.length >= 3;
 };
 
+export const resolveStudentFullName = (
+  studentEmail?: string,
+  fallbackName?: string,
+  usersList?: User[]
+): string => {
+  const cleanEmail = (studentEmail || '').trim().toLowerCase();
+
+  // 1. Check if present in usersList
+  if (cleanEmail && usersList && usersList.length > 0) {
+    const foundUser = usersList.find((u) => u.email && u.email.toLowerCase().trim() === cleanEmail);
+    if (foundUser?.name && isFullNameValid(foundUser.name)) {
+      return foundUser.name.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+    }
+    if (foundUser?.name && foundUser.name.trim() !== '' && !['طالب', 'مستخدم', 'student', 'user'].includes(foundUser.name.trim().toLowerCase())) {
+      return foundUser.name.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+    }
+  }
+
+  // 2. Check local confirmed full name cache
+  if (cleanEmail) {
+    const cached = safeGetItem(`thanaweya_confirmed_fullname_${cleanEmail}`);
+    if (cached && isFullNameValid(cached)) {
+      return cached.trim();
+    }
+  }
+
+  // 3. Check fallbackName
+  if (fallbackName && fallbackName.trim() && !['طالب', 'مستخدم', 'طالب جديد', 'student', 'user'].includes(fallbackName.trim().toLowerCase())) {
+    return fallbackName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+  }
+
+  // 4. Default to email username or 'طالب'
+  if (cleanEmail) {
+    const prefix = cleanEmail.split('@')[0];
+    return prefix;
+  }
+
+  return 'طالب';
+};
+
 export const deduplicateUsersByEmail = (users: User[]): User[] => {
   const map = new Map<string, User>();
 
@@ -178,6 +218,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   switchRole: (role: UserRole) => void;
   updateUserJob: (email: string, jobTitle: string) => Promise<{ success: boolean; message: string }>;
+  updateUserFullNameByAdmin: (email: string, newFullName: string) => Promise<{ success: boolean; message: string }>;
+  deleteUserByAdmin: (email: string) => Promise<{ success: boolean; message: string }>;
   addAssistantAdmin: (email: string, name: string) => { success: boolean; message: string };
   removeAssistantAdmin: (email: string) => { success: boolean; message: string };
   toggleUserRole: (userId: string) => { success: boolean; message: string };
@@ -908,6 +950,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
+  // Super Admin can update any user's full name directly
+  const updateUserFullNameByAdmin = async (
+    email: string,
+    newFullName: string
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!isSuperAdmin) {
+      return { success: false, message: 'عذراً، فقط المشرف الأساسي يملك صلاحية تعديل أسماء المستخدمين.' };
+    }
+
+    const trimmed = (newFullName || '').trim().replace(/\s+/g, ' ');
+    if (trimmed.length < 3) {
+      return { success: false, message: 'يرجى إدخال اسم صحيح يتكون من 3 أحرف على الأقل.' };
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Update in local state and cache
+    safeSetItem(`thanaweya_name_confirmed_${cleanEmail}`, 'true');
+    safeSetItem(`thanaweya_confirmed_fullname_${cleanEmail}`, trimmed);
+
+    setRegisteredUsers((prev) =>
+      prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, name: trimmed, fullNameConfirmed: true } : u))
+    );
+
+    if (user && user.email.toLowerCase() === cleanEmail) {
+      const updatedSelf = { ...user, name: trimmed, fullNameConfirmed: true };
+      setUser(updatedSelf);
+      safeSetItem('thanaweya_user', JSON.stringify(updatedSelf));
+    }
+
+    // Sync to Firestore
+    try {
+      const docId = getSafeUserDocId(cleanEmail);
+      await setDoc(
+        doc(db, 'users', docId),
+        {
+          name: trimmed,
+          fullNameConfirmed: true,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Error updating user name in Firestore:', e);
+    }
+
+    return { success: true, message: `تم تحديث اسم المستخدم إلى (${trimmed}) بنجاح.` };
+  };
+
+  // Super Admin can delete a user (remove duplicate / fake account)
+  const deleteUserByAdmin = async (email: string): Promise<{ success: boolean; message: string }> => {
+    if (!isSuperAdmin) {
+      return { success: false, message: 'عذراً، فقط المشرف الأساسي يملك صلاحية حذف المستخدمين.' };
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      return { success: false, message: 'لا يمكن حذف حساب المشرف الأساسي.' };
+    }
+
+    // Remove from state
+    setRegisteredUsers((prev) => prev.filter((u) => u.email.toLowerCase() !== cleanEmail));
+    setAssistantAdminEmails((prev) => prev.filter((e) => e.toLowerCase() !== cleanEmail));
+
+    // Update local storage
+    try {
+      const stored = JSON.parse(safeGetItem('thanaweya_registered_users') || '[]');
+      const filtered = stored.filter((u: any) => (u.email || '').toLowerCase() !== cleanEmail);
+      safeSetItem('thanaweya_registered_users', JSON.stringify(filtered));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // Mark as deleted in Firestore
+    try {
+      const docId = getSafeUserDocId(cleanEmail);
+      await setDoc(
+        doc(db, 'users', docId),
+        {
+          isDeleted: true,
+          deletedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Error deleting user from Firestore:', e);
+    }
+
+    return { success: true, message: 'تم حذف المستخدم بنجاح.' };
+  };
+
   const toggleUserRole = (userId: string): { success: boolean; message: string } => {
     if (!isSuperAdmin) {
       return { success: false, message: 'فقط المشرف يملك صلاحية تعديل الأدوار.' };
@@ -949,6 +1082,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         switchRole,
         updateUserJob,
+        updateUserFullNameByAdmin,
+        deleteUserByAdmin,
         addAssistantAdmin,
         removeAssistantAdmin,
         toggleUserRole,

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import { User, Lesson, Subject, Homework, HomeworkSubmission, USER_JOB_OPTIONS } from '../types';
 import {
   Search,
@@ -102,25 +102,28 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       if (!u || !u.email) continue;
       if (!isStudentUser(u)) continue;
       const key = u.email.trim().toLowerCase();
+      const resolvedName = resolveStudentFullName(u.email, u.name, registeredUsers);
+      const isConfirmed = isFullNameValid(resolvedName);
       if (!map.has(key)) {
-        map.set(key, u);
+        map.set(key, { ...u, name: resolvedName, fullNameConfirmed: isConfirmed });
       }
     }
     // Also include any students from submissions
     for (const s of allSubmissions) {
       if (!s || !s.studentEmail) continue;
       const key = s.studentEmail.trim().toLowerCase();
+      const resolvedName = resolveStudentFullName(s.studentEmail, s.studentName, registeredUsers);
+      const isConfirmed = isFullNameValid(resolvedName);
       if (!map.has(key)) {
-        const dummyName = s.studentName || key.split('@')[0];
         const dummyUser: User = {
           id: s.studentId || `user-${key}`,
-          name: dummyName,
+          name: resolvedName,
           email: key,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(dummyName)}`,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(resolvedName)}`,
           role: 'student',
           jobTitle: 'طالب',
           grade: 'أول ثانوي',
-          fullNameConfirmed: true
+          fullNameConfirmed: isConfirmed
         };
         if (isStudentUser(dummyUser)) {
           map.set(key, dummyUser);
@@ -551,6 +554,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
                       {u.name}
                     </h3>
+                    {isFullNameValid(u.name) && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        الاسم الثلاثي ✓
+                      </span>
+                    )}
                   </div>
 
                   {/* Number of submitted homeworks pill */}

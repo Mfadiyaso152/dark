@@ -16,6 +16,7 @@ import { StudentsManagementView } from './components/StudentsManagementView';
 import { StudentServiceView } from './components/StudentServiceView';
 import { QuduratView } from './components/QuduratView';
 import { DailyHomeworksView } from './components/DailyHomeworksView';
+import { AdminPortalView } from './components/AdminPortalView';
 import { BottomNav, TabType } from './components/BottomNav';
 import { SupervisorSettingsDrawer } from './components/SupervisorSettingsDrawer';
 import { FullNameRequiredModal } from './components/FullNameRequiredModal';
@@ -28,7 +29,7 @@ import {
   getSubjectSlug,
   getLessonSlug
 } from './utils/routes';
-import { useAuth } from './context/AuthContext';
+import { useAuth, resolveStudentFullName } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { db, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from './lib/firebase';
 import {
@@ -42,7 +43,7 @@ import { storeLargeFile, deleteLargeFile } from './utils/fileStorage';
 import { uploadFileToCloud, deleteFileFromCloud } from './utils/cloudStorage';
 
 export default function App() {
-  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject, setIsAuthModalOpen } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject, setIsAuthModalOpen, registeredUsers } = useAuth();
   const isSupervisorRole = canAddContent;
 
   // Run startup hygiene to clean any bloated keys causing QuotaExceededError
@@ -476,6 +477,13 @@ export default function App() {
         setSelectedSubView(null);
         setIsDetailModalOpen(false);
         document.title = 'الطلاب | زاد';
+      } else if (route.type === 'admin') {
+        setIsNotFound(false);
+        setActiveTab('admin');
+        setSelectedSubject(null);
+        setSelectedSubView(null);
+        setIsDetailModalOpen(false);
+        document.title = 'بوابة المشرف الأساسي | زاد';
       } else if (route.type === 'users') {
         setIsNotFound(false);
         setActiveTab('users');
@@ -568,6 +576,8 @@ export default function App() {
       document.title = 'القدرات | زاد';
     } else if (activeTab === 'students') {
       document.title = 'الطلاب | زاد';
+    } else if (activeTab === 'admin') {
+      document.title = 'بوابة المشرف الأساسي | زاد';
     } else if (activeTab === 'users') {
       document.title = 'إدارة المستخدمين | زاد';
     } else {
@@ -956,8 +966,15 @@ export default function App() {
     const hasFileData = !!subData.attachedFile?.dataUrl;
     const attachedDataUrl = subData.attachedFile?.dataUrl;
 
+    const studentFullName = resolveStudentFullName(
+      subData.studentEmail,
+      subData.studentName,
+      registeredUsers
+    );
+
     const cloudSub: HomeworkSubmission = {
       ...subData,
+      studentName: studentFullName,
       id: subId,
       submittedAt: new Date().toISOString(),
       attachedFile: subData.attachedFile ? {
@@ -1212,6 +1229,22 @@ export default function App() {
                   allSubmissions={submissions}
                   onSelectLesson={openLessonDetail}
                 />
+              ) : activeTab === 'admin' ? (
+                /* TAB: Secret Admin Portal (/admin) */
+                <AdminPortalView
+                  subjects={subjects}
+                  lessons={safeLessons}
+                  booklets={booklets}
+                  homeworks={homeworks}
+                  submissions={submissions}
+                  onNavigateHome={() => {
+                    setActiveTab('home');
+                    setSelectedSubject(null);
+                    setSelectedSubView(null);
+                    syncBrowserUrl('/');
+                  }}
+                  onSelectLesson={openLessonDetail}
+                />
               ) : activeTab === 'users' ? (
                 /* TAB: User Management (للإشراف والإدارة فقط) */
                 <UserManagementView />
@@ -1299,17 +1332,19 @@ export default function App() {
           </AnimatePresence>
         </main>
 
-        {/* Bottom Navigation */}
-        <BottomNav
-          activeTab={activeTab}
-          onTabChange={(tab) => {
-            setIsNotFound(false);
-            setSelectedSubject(null);
-            setSelectedSubView(null);
-            setIsDetailModalOpen(false);
-            setActiveTab(tab);
-          }}
-        />
+        {/* Bottom Navigation (Hidden on Secret Admin Portal) */}
+        {activeTab !== 'admin' && (
+          <BottomNav
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              setIsNotFound(false);
+              setSelectedSubject(null);
+              setSelectedSubView(null);
+              setIsDetailModalOpen(false);
+              setActiveTab(tab);
+            }}
+          />
+        )}
 
         {/* Lesson Detail Modal */}
         {isDetailModalOpen && activeLesson && (

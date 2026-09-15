@@ -264,6 +264,7 @@ export type AppRoute =
   | { type: 'qudurat' }
   | { type: 'students' }
   | { type: 'users' }
+  | { type: 'admin' }
   | {
       type: 'subject';
       subject: Subject;
@@ -302,7 +303,10 @@ export function parsePathname(pathname: string, subjects: Subject[], lessons: Le
   if (first === 'students' || first === 'services' || first === 'student-service') {
     return { type: 'students' };
   }
-  if (first === 'users' || first === 'management' || first === 'admin') {
+  if (first === 'admin' || first === 'secret-admin' || first === 'super-admin') {
+    return { type: 'admin' };
+  }
+  if (first === 'users' || first === 'management') {
     return { type: 'users' };
   }
 
@@ -416,6 +420,7 @@ export function buildUrl(
   if (tab === 'qudurat') return '/qudurat';
   if (tab === 'students') return '/students';
   if (tab === 'users') return '/users';
+  if (tab === 'admin') return '/admin';
 
   // Home
   if (selectedSemester === 2) return '/p2';

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Subject, Homework, HomeworkSubmission, AttachedFile } from '../types';
-import { useAuth, formatDisplayName } from '../context/AuthContext';
+import { useAuth, formatDisplayName, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import {
   ClipboardList,
   Plus,
@@ -112,7 +112,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   onSubmitSolution,
   onDeleteSubmission
 }) => {
-  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject, setIsAuthModalOpen } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject, setIsAuthModalOpen, registeredUsers } = useAuth();
 
   const isSupervisor =
     isSuperAdmin ||
@@ -454,11 +454,13 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         };
       }
 
+      const studentFullName = resolveStudentFullName(user?.email, user?.name, registeredUsers);
+
       await onSubmitSolution({
         homeworkId: activeHomeworkForSubmission.id,
         subjectId: activeHomeworkForSubmission.subjectId,
         studentId: user?.id || 'guest',
-        studentName: user?.name || 'طالب',
+        studentName: studentFullName,
         studentEmail: user?.email || '',
         notes: studentNotes.trim() || undefined,
         attachedFile
@@ -766,60 +768,72 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                             <div className="space-y-2 max-h-52 overflow-y-auto pr-0.5">
                               {submissions
                                 .filter((s) => s.homeworkId === hw.id)
-                                .map((sub) => (
-                                  <div
-                                    key={sub.id}
-                                    className="bg-white p-2.5 rounded-xl border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                                  >
-                                    <div>
-                                      <span className="font-bold text-slate-800 text-xs block">
-                                        {sub.studentName || 'طالب'}
-                                      </span>
-                                      <span className="text-[10px] text-slate-400">
-                                        بتاريخ: {formatGregorianDate(sub.submittedAt)}
-                                      </span>
-                                      {sub.notes && (
-                                        <p className="text-[11px] text-slate-600 mt-0.5 bg-slate-50 p-1 rounded">
-                                          {sub.notes}
-                                        </p>
-                                      )}
-                                    </div>
-                                    {sub.attachedFile?.hasFile && (
-                                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                                        {isImageAttachment(sub.attachedFile?.name, sub.attachedFile?.dataUrl) && (
+                                .map((sub) => {
+                                  const studentFullName = resolveStudentFullName(sub.studentEmail, sub.studentName, registeredUsers);
+                                  const isConfirmedName = isFullNameValid(studentFullName);
+
+                                  return (
+                                    <div
+                                      key={sub.id}
+                                      className="bg-white p-2.5 rounded-xl border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                    >
+                                      <div>
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <span className="font-black text-slate-900 text-xs sm:text-sm">
+                                            {studentFullName}
+                                          </span>
+                                          {isConfirmedName && (
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                              الاسم الثلاثي ✓
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 block mt-0.5">
+                                          بتاريخ: {formatGregorianDate(sub.submittedAt)}
+                                        </span>
+                                        {sub.notes && (
+                                          <p className="text-[11px] text-slate-600 mt-0.5 bg-slate-50 p-1 rounded">
+                                            {sub.notes}
+                                          </p>
+                                        )}
+                                      </div>
+                                      {sub.attachedFile?.hasFile && (
+                                        <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                          {isImageAttachment(sub.attachedFile?.name, sub.attachedFile?.dataUrl) && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handlePreviewImage(
+                                                  sub.attachedFile?.fileId,
+                                                  sub.attachedFile?.dataUrl,
+                                                  sub.attachedFile?.name || 'حل الطالب'
+                                                )
+                                              }
+                                              className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg hover:bg-indigo-100 cursor-pointer flex items-center gap-1"
+                                            >
+                                              <Eye className="w-3 h-3" />
+                                              <span>معاينة</span>
+                                            </button>
+                                          )}
                                           <button
                                             type="button"
                                             onClick={() =>
-                                              handlePreviewImage(
+                                              handleDownloadFile(
                                                 sub.attachedFile?.fileId,
                                                 sub.attachedFile?.dataUrl,
                                                 sub.attachedFile?.name || 'حل الطالب'
                                               )
                                             }
-                                            className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg hover:bg-indigo-100 cursor-pointer flex items-center gap-1"
+                                            className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-100 cursor-pointer flex items-center gap-1"
                                           >
-                                            <Eye className="w-3 h-3" />
-                                            <span>معاينة</span>
+                                            <Download className="w-3 h-3" />
+                                            <span>تحميل</span>
                                           </button>
-                                        )}
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleDownloadFile(
-                                              sub.attachedFile?.fileId,
-                                              sub.attachedFile?.dataUrl,
-                                              sub.attachedFile?.name || 'حل الطالب'
-                                            )
-                                          }
-                                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-100 cursor-pointer flex items-center gap-1"
-                                        >
-                                          <Download className="w-3 h-3" />
-                                          <span>تحميل</span>
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                             </div>
                           )}
                         </div>
