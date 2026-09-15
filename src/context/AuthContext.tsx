@@ -59,7 +59,6 @@ export const isFullNameValid = (name?: string): boolean => {
 };
 
 export const deduplicateUsersByEmail = (users: User[]): User[] => {
-
   const map = new Map<string, User>();
 
   for (const u of users) {
@@ -68,8 +67,9 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
     if (isInvalidOrFakeUser(u.name, emailKey)) continue;
 
     const isSuper = emailKey === SUPER_ADMIN_EMAIL.toLowerCase();
-    const jobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || (u.role === 'supervisor' ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب')));
-    const isTeacherOrSupervisor = isSuper || (jobTitle !== 'طالب');
+    const isAssistant = !isSuper && (u.role === 'supervisor' || u.jobTitle === 'مشرف مساعد' || emailKey === 'kalshrby90@gmail.com');
+    const jobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || (isAssistant ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب')));
+    const isTeacher = !isSuper && !isAssistant && (u.role === 'teacher' || (jobTitle !== 'طالب' && !jobTitle.includes('مشرف')));
     const isConfirmed = !!u.fullNameConfirmed || isSuper;
 
     if (!map.has(emailKey)) {
@@ -78,9 +78,9 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
         email: emailKey,
         jobTitle,
         isSuperAdmin: isSuper,
-        isAssistantAdmin: !isSuper && isTeacherOrSupervisor,
+        isAssistantAdmin: isAssistant,
         fullNameConfirmed: isConfirmed,
-        role: isSuper ? 'supervisor' : (u.role || (isTeacherOrSupervisor ? 'teacher' : 'student'))
+        role: isSuper ? 'supervisor' : (isAssistant ? 'supervisor' : (isTeacher ? 'teacher' : 'student'))
       });
     } else {
       const existing = map.get(emailKey)!;
@@ -90,7 +90,8 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
           : existing.lastLogin;
       const avatar = u.avatar && !u.avatar.includes('dicebear') ? u.avatar : existing.avatar;
       const finalJobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || existing.jobTitle || 'طالب');
-      const finalIsTeacher = isSuper || finalJobTitle !== 'طالب';
+      const finalIsAssistant = !isSuper && (finalJobTitle === 'مشرف مساعد' || existing.isAssistantAdmin || u.isAssistantAdmin || emailKey === 'kalshrby90@gmail.com');
+      const finalIsTeacher = !isSuper && !finalIsAssistant && (finalJobTitle !== 'طالب');
       const confirmedName = (existing.fullNameConfirmed ? existing.name : (u.fullNameConfirmed ? u.name : (u.name || existing.name)));
 
       map.set(emailKey, {
@@ -99,9 +100,9 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
         name: isSuper ? (u.name || existing.name) : confirmedName,
         jobTitle: finalJobTitle,
         isSuperAdmin: isSuper,
-        isAssistantAdmin: !isSuper && finalIsTeacher,
+        isAssistantAdmin: finalIsAssistant,
         fullNameConfirmed: isSuper || !!(existing.fullNameConfirmed || u.fullNameConfirmed),
-        role: isSuper ? 'supervisor' : (finalIsTeacher ? (u.role === 'supervisor' ? 'supervisor' : 'teacher') : 'student'),
+        role: isSuper ? 'supervisor' : (finalIsAssistant ? 'supervisor' : (finalIsTeacher ? 'teacher' : 'student')),
         avatar,
         lastLogin
       });
@@ -308,34 +309,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check if there is existing cloud data for this user
         let existingJobTitle = isSuper ? 'المشرف الأساسي' : 'طالب';
         let existingRole: UserRole = isSuper ? 'supervisor' : 'student';
+        let cloudSavedName: string | undefined = undefined;
+        let isConfirmed = isSuper || !!safeGetItem(`thanaweya_name_confirmed_${cleanEmail}`);
 
         try {
           const docSnap = await getDoc(doc(db, 'users', getSafeUserDocId(cleanEmail)));
           if (docSnap.exists()) {
             const d = docSnap.data();
-            if (d && d.jobTitle) {
-              existingJobTitle = d.jobTitle;
-              existingRole = d.role || (d.jobTitle === 'طالب' ? 'student' : 'teacher');
+            if (d) {
+              if (d.jobTitle) {
+                existingJobTitle = d.jobTitle;
+                existingRole = d.role || (d.jobTitle === 'طالب' ? 'student' : 'teacher');
+              }
+              if (d.name && isFullNameValid(d.name)) {
+                cloudSavedName = d.name;
+              }
+              if (d.fullNameConfirmed) {
+                isConfirmed = true;
+              }
             }
           }
         } catch (e) {
           console.warn('Cloud user lookup note:', e);
         }
 
-        const isTeacher = isSuper || (existingJobTitle !== 'طالب');
-        const rawName = fbUser.displayName || cleanEmail.split('@')[0];
+        const isAssistant = !isSuper && (existingRole === 'supervisor' || existingJobTitle === 'مشرف مساعد' || cleanEmail === 'kalshrby90@gmail.com');
+        const isTeacher = !isSuper && !isAssistant && (existingJobTitle !== 'طالب');
+        const rawName = cloudSavedName || fbUser.displayName || cleanEmail.split('@')[0];
         const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
 
-        // Check if full name was already confirmed in cloud
-        let isConfirmed = isSuper;
-        try {
-          const docSnap = await getDoc(doc(db, 'users', getSafeUserDocId(cleanEmail)));
-          if (docSnap.exists()) {
-            const d = docSnap.data();
-            if (d && d.fullNameConfirmed) isConfirmed = true;
-          }
-        } catch (e) {
-          // ignore
+        if (isFullNameValid(cleanName)) {
+          isConfirmed = true;
+          safeSetItem(`thanaweya_name_confirmed_${cleanEmail}`, 'true');
         }
 
         const newUserObj: User = {
@@ -345,11 +350,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatar:
             fbUser.photoURL ||
             `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
-          role: isSuper ? 'supervisor' : existingRole,
+          role: isSuper ? 'supervisor' : (isAssistant ? 'supervisor' : (isTeacher ? 'teacher' : 'student')),
           jobTitle: existingJobTitle,
           grade: 'أول ثانوي',
           isSuperAdmin: isSuper,
-          isAssistantAdmin: !isSuper && isTeacher,
+          isAssistantAdmin: isAssistant,
           fullNameConfirmed: isConfirmed,
           joinedAt: new Date().toISOString().split('T')[0],
           lastLogin: new Date().toISOString()
@@ -389,8 +394,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (isInvalidOrFakeUser(cleanName, email)) return;
 
             const isSuper = email === SUPER_ADMIN_EMAIL.toLowerCase();
-            const jobTitle = isSuper ? 'المشرف الأساسي' : (data.jobTitle || (data.role === 'supervisor' ? 'مشرف مساعد' : 'طالب'));
-            const isTeacher = isSuper || jobTitle !== 'طالب';
+            const isAssistant = !isSuper && (data.role === 'supervisor' || data.jobTitle === 'مشرف مساعد' || email === 'kalshrby90@gmail.com');
+            const jobTitle = isSuper ? 'المشرف الأساسي' : (data.jobTitle || (isAssistant ? 'مشرف مساعد' : 'طالب'));
+            const isTeacher = !isSuper && !isAssistant && jobTitle !== 'طالب';
+            const isConfirmed = isSuper || !!data.fullNameConfirmed || !!safeGetItem(`thanaweya_name_confirmed_${email}`) || isFullNameValid(cleanName);
 
             cloudUsers.push({
               id: docSnap.id,
@@ -399,11 +406,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               avatar:
                 data.avatar ||
                 `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName || email)}`,
-              role: isSuper ? 'supervisor' : (data.role || (isTeacher ? 'teacher' : 'student')),
+              role: isSuper ? 'supervisor' : (isAssistant ? 'supervisor' : (isTeacher ? 'teacher' : 'student')),
               jobTitle,
               grade: data.grade || 'أول ثانوي',
               isSuperAdmin: isSuper,
-              isAssistantAdmin: !isSuper && isTeacher,
+              isAssistantAdmin: isAssistant,
+              fullNameConfirmed: isConfirmed,
               joinedAt:
                 data.joinedAt ||
                 (data.lastLogin ? data.lastLogin.split('T')[0] : new Date().toISOString().split('T')[0]),
@@ -509,15 +517,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isSuperAdmin = user?.email?.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
   const isAssistantAdmin =
     !isSuperAdmin &&
-    (user?.role === 'supervisor' || user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
+    (user?.role === 'supervisor' || user?.jobTitle === 'مشرف مساعد' || user?.email?.toLowerCase() === 'kalshrby90@gmail.com');
 
-  const canAddContent =
-    isSuperAdmin ||
-    user?.role === 'supervisor' ||
-    user?.role === 'teacher' ||
-    (!!user?.jobTitle && user?.jobTitle !== 'طالب');
+  const isTeacher =
+    !isSuperAdmin &&
+    !isAssistantAdmin &&
+    (user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب' && !user?.jobTitle.includes('مشرف')));
 
-  const isTeacherOrSupervisor = isSuperAdmin || isAssistantAdmin || canAddContent;
+  const canAddContent = isSuperAdmin || isAssistantAdmin || isTeacher;
+
+  const isTeacherOrSupervisor = isSuperAdmin || isAssistantAdmin || isTeacher;
 
   // Specific Subject Authorization Check:
   // Teachers can ONLY manage their assigned subject.
@@ -653,28 +662,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let existing = registeredUsers.find((u) => u.email.toLowerCase() === cleanEmail);
     let targetUser: User;
 
-    const rawName = name || (existing ? existing.name : cleanEmail.split('@')[0]);
-    const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+    // Check if user already confirmed their full 3-part name
+    const storedConfirmedName = safeGetItem(`thanaweya_confirmed_fullname_${cleanEmail}`);
+    const isStoredConfirmed = !!safeGetItem(`thanaweya_name_confirmed_${cleanEmail}`);
+
+    let cleanName: string;
+    if (storedConfirmedName && isFullNameValid(storedConfirmedName)) {
+      cleanName = storedConfirmedName;
+    } else if (existing?.name && isFullNameValid(existing.name)) {
+      cleanName = existing.name;
+    } else {
+      const rawName = name || (existing ? existing.name : cleanEmail.split('@')[0]);
+      cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
+    }
+
+    const isConfirmed = isSuper || isStoredConfirmed || (existing?.fullNameConfirmed && isFullNameValid(cleanName)) || isFullNameValid(cleanName);
+    if (isConfirmed && isFullNameValid(cleanName)) {
+      safeSetItem(`thanaweya_name_confirmed_${cleanEmail}`, 'true');
+      safeSetItem(`thanaweya_confirmed_fullname_${cleanEmail}`, cleanName);
+    }
+
     const nowIso = new Date().toISOString();
 
     if (existing) {
       const jobTitle = isSuper ? 'المشرف الأساسي' : (existing.jobTitle || 'طالب');
-      const isTeacher = isSuper || jobTitle !== 'طالب';
-      const isConfirmed = isSuper || !!existing.fullNameConfirmed;
+      const isAssistant = !isSuper && (existing.role === 'supervisor' || existing.jobTitle === 'مشرف مساعد' || cleanEmail === 'kalshrby90@gmail.com');
+      const isTeacher = !isSuper && !isAssistant && jobTitle !== 'طالب';
       targetUser = {
         ...existing,
         name: cleanName,
         jobTitle,
         isSuperAdmin: isSuper,
-        isAssistantAdmin: !isSuper && isTeacher,
+        isAssistantAdmin: isAssistant,
         fullNameConfirmed: isConfirmed,
-        role: isSuper ? 'supervisor' : (isTeacher ? (existing.role === 'supervisor' ? 'supervisor' : 'teacher') : 'student'),
+        role: isSuper ? 'supervisor' : (isAssistant ? 'supervisor' : (isTeacher ? 'teacher' : 'student')),
         lastLogin: nowIso
       };
     } else {
       // First time registering -> Guaranteed 'طالب'
       const jobTitle = isSuper ? 'المشرف الأساسي' : 'طالب';
-      const isTeacher = isSuper;
       targetUser = {
         id: `user-${Date.now()}`,
         name: cleanName,
@@ -686,8 +712,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         jobTitle,
         grade: 'أول ثانوي',
         isSuperAdmin: isSuper,
-        isAssistantAdmin: isTeacher,
-        fullNameConfirmed: isSuper,
+        isAssistantAdmin: false,
+        fullNameConfirmed: isConfirmed,
         joinedAt: nowIso.split('T')[0],
         lastLogin: nowIso
       };
@@ -705,7 +731,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
-  // Update user's full 3-part name (mandatory on entry for everyone)
+  // Update user's full 3-part name (mandatory on entry for everyone - once and never repeated)
   const updateUserName = async (fullName: string): Promise<{ success: boolean; message: string }> => {
     if (!user) {
       return { success: false, message: 'المستخدم غير مسجل' };
@@ -718,6 +744,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const cleanEmail = user.email.toLowerCase().trim();
+    safeSetItem(`thanaweya_name_confirmed_${cleanEmail}`, 'true');
+    safeSetItem(`thanaweya_confirmed_fullname_${cleanEmail}`, trimmed);
+
     const updatedUser: User = {
       ...user,
       name: trimmed,

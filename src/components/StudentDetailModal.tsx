@@ -20,6 +20,7 @@ import { motion } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
+import { formatGregorianDate } from '../utils/dateFormatter';
 
 interface StudentDetailModalProps {
   student: User;
@@ -195,7 +196,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   )}
                 </span>
               </div>
-              <p className="text-xs text-slate-300 font-mono truncate">{student.email}</p>
+              <p className="text-xs text-indigo-200/80 font-medium">{student.grade || 'المرحلة الثانوية'}</p>
             </div>
           </div>
 
@@ -255,7 +256,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       )}
                       <span className="text-[10px] text-slate-500 font-medium flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-md">
                         <Clock className="w-3 h-3 text-slate-400" />
-                        تاريخ التسليم: {submission.submittedAt ? submission.submittedAt.split('T')[0] : 'اليوم'}
+                        تاريخ التسليم: {formatGregorianDate(submission.submittedAt)}
                       </span>
                     </div>
 

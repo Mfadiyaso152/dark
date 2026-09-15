@@ -25,6 +25,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
+import { formatGregorianDate } from '../utils/dateFormatter';
 
 interface StudentsManagementViewProps {
   allLessons?: Lesson[];
@@ -68,110 +69,91 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  // Strictly deduplicate users
-  const uniqueUsers = useMemo(() => {
+  // Helper to determine if a user is purely a student (strictly excluding all teachers, supervisors, and admins)
+  const isStudentUser = (u: User): boolean => {
+    const emailLower = (u.email || '').toLowerCase().trim();
+    if (u.isSuperAdmin || emailLower === SUPER_ADMIN_EMAIL.toLowerCase() || emailLower === 'mfb.15.f@gmail.com') {
+      return false;
+    }
+    if (u.isAssistantAdmin || u.role === 'supervisor' || (u.jobTitle && (u.jobTitle.includes('مشرف') || u.jobTitle.includes('إدارة')))) {
+      return false;
+    }
+    if (u.role === 'teacher') {
+      return false;
+    }
+    if (
+      u.jobTitle &&
+      (u.jobTitle.startsWith('أ.') ||
+        u.jobTitle.includes('معلم') ||
+        u.jobTitle.includes('أستاذ') ||
+        u.jobTitle.includes('مرشد') ||
+        u.jobTitle.includes('المرشد') ||
+        (u.jobTitle !== 'طالب' && u.jobTitle !== ''))
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  // Strictly filter only genuine students
+  const uniqueStudents = useMemo(() => {
     const map = new Map<string, User>();
     for (const u of registeredUsers) {
       if (!u || !u.email) continue;
+      if (!isStudentUser(u)) continue;
       const key = u.email.trim().toLowerCase();
       if (!map.has(key)) {
         map.set(key, u);
-      } else {
-        const existing = map.get(key)!;
-        if (u.isSuperAdmin || key === SUPER_ADMIN_EMAIL.toLowerCase()) {
-          map.set(key, {
-            ...existing,
-            ...u,
-            isSuperAdmin: true,
-            role: 'supervisor'
-          });
+      }
+    }
+    // Also include any students from submissions
+    for (const s of allSubmissions) {
+      if (!s || !s.studentEmail) continue;
+      const key = s.studentEmail.trim().toLowerCase();
+      if (!map.has(key)) {
+        const dummyName = s.studentName || key.split('@')[0];
+        const dummyUser: User = {
+          id: s.studentId || `user-${key}`,
+          name: dummyName,
+          email: key,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(dummyName)}`,
+          role: 'student',
+          jobTitle: 'طالب',
+          grade: 'أول ثانوي',
+          fullNameConfirmed: true
+        };
+        if (isStudentUser(dummyUser)) {
+          map.set(key, dummyUser);
         }
       }
     }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  }, [registeredUsers, allSubmissions]);
 
-    // Always ensure the main supervisor (المشرف الأساسي) is in the list
-    const superKey = SUPER_ADMIN_EMAIL.toLowerCase();
-    if (!map.has(superKey)) {
-      map.set(superKey, SUPER_ADMIN_USER);
-    }
-
-    return Array.from(map.values());
-  }, [registeredUsers]);
-
-  // Visible users in students service: All genuine students, student supervisors, AND the main supervisor.
-  // Other teachers are excluded so teachers don't see other teachers.
-  const visibleStudentsAndSupervisors = useMemo(() => {
-    return uniqueUsers.filter((u) => {
-      const emailLower = (u.email || '').toLowerCase().trim();
-      const isSuper = u.isSuperAdmin || emailLower === SUPER_ADMIN_EMAIL.toLowerCase();
-
-      // The main supervisor (المشرف الأساسي) is explicitly visible!
-      if (isSuper) return true;
-
-      // Supervisors & assistant admins are visible
-      const isSupervisorUser = u.role === 'supervisor' || (u.jobTitle && u.jobTitle.includes('مشرف')) || u.isAssistantAdmin;
-      if (isSupervisorUser) return true;
-
-      // Filter out other teachers (معلمين آخرين) so teachers do not see any other teacher
-      const isTeacher =
-        u.role === 'teacher' ||
-        (!!u.jobTitle && u.jobTitle.startsWith('أ.')) ||
-        (u.email && user?.role === 'teacher' && u.email.toLowerCase() === user.email.toLowerCase());
-
-      if (isTeacher) return false;
-
-      // Regular students are visible
-      return true;
-    }).sort((a, b) => {
-      const aIsSuper = a.isSuperAdmin || (a.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-      const bIsSuper = b.isSuperAdmin || (b.email || '').toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-      if (aIsSuper && !bIsSuper) return -1;
-      if (!aIsSuper && bIsSuper) return 1;
-      return a.name.localeCompare(b.name, 'ar');
-    });
-  }, [uniqueUsers, user]);
-
-  // Filtered students according to search
+  // Filtered students according to search name
   const filteredUsers = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return visibleStudentsAndSupervisors;
-    return visibleStudentsAndSupervisors.filter((u) => {
-      const matchesName = u.name.toLowerCase().includes(q);
-      // Only super admin can search by email
-      const matchesEmail = isSuperAdmin && u.email.toLowerCase().includes(q);
-      return matchesName || matchesEmail;
-    });
-  }, [visibleStudentsAndSupervisors, searchQuery, isSuperAdmin]);
+    if (!q) return uniqueStudents;
+    return uniqueStudents.filter((u) => u.name.toLowerCase().includes(q));
+  }, [uniqueStudents, searchQuery]);
 
-  // Get student's submissions count (scoped to teacher's subject if teacher)
+  // Get student's submissions count
   const getStudentSubmissions = (u: User) => {
     const email = (u.email || '').toLowerCase().trim();
-    const subs = allSubmissions.filter(
+    return allSubmissions.filter(
       (s) =>
         (s.studentEmail && s.studentEmail.toLowerCase().trim() === email) ||
-        (s.studentId && s.studentId === u.id)
+        (s.studentId && s.studentId === u.id) ||
+        (s.studentName && u.name && s.studentName.trim() === u.name.trim())
     );
-    if (isViewerSuperOrAssistant) {
-      return subs;
-    }
-    return subs.filter((s) => {
-      const hw = allHomeworks.find((h) => h.id === s.homeworkId);
-      return hw ? canManageSubject(hw.subjectId) : false;
-    });
   };
 
   const getStudentSubmissionsCount = (u: User): number => {
     return getStudentSubmissions(u).length;
   };
 
-  // Click on student card: if has submitted homework -> enter student homework page; else show alert message
+  // Click on student card: open student's homework submissions page
   const handleStudentClick = (u: User) => {
-    const subsCount = getStudentSubmissionsCount(u);
-    if (subsCount === 0) {
-      setNoHomeworkToast(`الطالب (${u.name}) لم يرسل أي واجب بعد`);
-      setTimeout(() => setNoHomeworkToast(null), 3500);
-      return;
-    }
     setActiveStudentPage(u);
   };
 
@@ -247,12 +229,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             <div className="space-y-0.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-slate-900">
-                  {activeStudentPage.isSuperAdmin || (activeStudentPage.email && activeStudentPage.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase())
-                    ? `واجبات المشرف الأساسي: ${activeStudentPage.name}`
-                    : (activeStudentPage.role === 'supervisor' ? `واجبات المشرف: ${activeStudentPage.name}` : `واجبات الطالب: ${activeStudentPage.name}`)}
+                  واجبات الطالب: {activeStudentPage.name}
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-black border border-purple-200">
-                  {studentSubs.length} واجبات مرسلة
+                  {studentSubs.length} واجبات مسلّمة
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -272,144 +252,156 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
         {/* List of Submitted Homeworks by this student */}
         <div className="space-y-3.5">
-          {studentSubs.map((sub) => {
-            const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
-            const subject = hw ? allSubjects.find((s) => s.id === hw.subjectId) : undefined;
-            const hasSolutionFile = !!sub.attachedFile?.hasFile;
+          {studentSubs.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
+              <ClipboardList className="w-10 h-10 text-slate-300 mx-auto" />
+              <h4 className="text-sm sm:text-base font-black text-slate-800">
+                لم يقم الطالب ({activeStudentPage.name}) بتسليم أي واجبات بعد
+              </h4>
+              <p className="text-xs text-slate-400">
+                ستظهر هنا حلول الواجبات فور قيام الطالب برفعها وتسليمها
+              </p>
+            </div>
+          ) : (
+            studentSubs.map((sub) => {
+              const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+              const subject = hw ? allSubjects.find((s) => s.id === hw.subjectId) : undefined;
+              const hasSolutionFile = !!sub.attachedFile?.hasFile;
 
-            return (
-              <motion.div
-                key={sub.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all space-y-3"
-              >
-                {/* Subject Tag & Submission Date */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1.5">
-                      <span>{subject?.emoji || '📖'}</span>
-                      <span>{subject?.name || 'مقرر دراسي'}</span>
-                    </span>
-                    {hw?.dueDate && (
-                      <span className="text-xs text-slate-500 flex items-center gap-1">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>تاريخ استحقاق الواجب: {hw.dueDate}</span>
+              return (
+                <motion.div
+                  key={sub.id}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all space-y-3"
+                >
+                  {/* Subject Tag & Submission Date */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1.5">
+                        <span>{subject?.emoji || '📖'}</span>
+                        <span>{subject?.name || 'مقرر دراسي'}</span>
                       </span>
+                      {hw?.dueDate && (
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
+                          <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                          <span>تاريخ استحقاق الواجب: {hw.dueDate}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>تم التسليم: {formatGregorianDate(sub.submittedAt)}</span>
+                    </span>
+                  </div>
+
+                  {/* Assignment Title & Details */}
+                  <div className="space-y-1.5 pt-1">
+                    <h3 className="font-black text-slate-900 text-sm sm:text-base">
+                      {hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}`}
+                    </h3>
+
+                    {hw && (
+                      <div className="grid grid-cols-2 gap-2 text-xs max-w-sm">
+                        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
+                          <BookOpen className="w-4 h-4 text-blue-600" />
+                          <span>صفحة: <strong className="text-slate-800">{hw.pageNumber}</strong></span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
+                          <HelpCircle className="w-4 h-4 text-purple-600" />
+                          <span>سؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>تم التسليم: {new Date(sub.submittedAt).toLocaleDateString('ar-SA')}</span>
-                  </span>
-                </div>
-
-                {/* Assignment Title & Details */}
-                <div className="space-y-1.5 pt-1">
-                  <h3 className="font-black text-slate-900 text-sm sm:text-base">
-                    {hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}`}
-                  </h3>
-
-                  {hw && (
-                    <div className="grid grid-cols-2 gap-2 text-xs max-w-sm">
-                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
-                        <BookOpen className="w-4 h-4 text-blue-600" />
-                        <span>صفحة: <strong className="text-slate-800">{hw.pageNumber}</strong></span>
-                      </div>
-                      <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
-                        <HelpCircle className="w-4 h-4 text-purple-600" />
-                        <span>سؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
-                      </div>
+                  {/* Student Notes if any */}
+                  {sub.notes && (
+                    <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-2xl text-xs space-y-0.5">
+                      <span className="font-bold text-indigo-900 block">ملاحظات الطالب مع الحل:</span>
+                      <p className="text-slate-700 leading-relaxed">{sub.notes}</p>
                     </div>
                   )}
-                </div>
 
-                {/* Student Notes if any */}
-                {sub.notes && (
-                  <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-2xl text-xs space-y-0.5">
-                    <span className="font-bold text-indigo-900 block">ملاحظات الطالب مع الحل:</span>
-                    <p className="text-slate-700 leading-relaxed">{sub.notes}</p>
-                  </div>
-                )}
+                  {/* Solution File Download/View (PDF or Image) */}
+                  <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                    {hasSolutionFile ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isImageFile(sub.attachedFile?.name, sub.attachedFile?.dataUrl) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handlePreviewImage(
+                                sub.attachedFile?.fileId,
+                                sub.attachedFile?.dataUrl,
+                                sub.attachedFile?.name
+                              )
+                            }
+                            className="py-2 px-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          >
+                            <Eye className="w-4 h-4 text-indigo-600" />
+                            <span>معاينة صورة الحل</span>
+                          </button>
+                        )}
 
-                {/* Solution File Download/View (PDF or Image) */}
-                <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                  {hasSolutionFile ? (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {isImageFile(sub.attachedFile?.name, sub.attachedFile?.dataUrl) && (
                         <button
-                          type="button"
                           onClick={() =>
-                            handlePreviewImage(
+                            handleDownloadPdf(
                               sub.attachedFile?.fileId,
                               sub.attachedFile?.dataUrl,
-                              sub.attachedFile?.name
+                              sub.attachedFile?.name || `${activeStudentPage.name}_حل_واجب`
                             )
                           }
-                          className="py-2 px-3.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                          disabled={downloadingFileId === (sub.attachedFile?.fileId || sub.attachedFile?.name)}
+                          className="py-2 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
                         >
-                          <Eye className="w-4 h-4 text-indigo-600" />
-                          <span>معاينة صورة الحل</span>
+                          <Download className="w-4 h-4 text-emerald-600" />
+                          <span>تحميل {isImageFile(sub.attachedFile?.name, sub.attachedFile?.dataUrl) ? 'الصورة' : 'الملف'} ({sub.attachedFile?.name})</span>
                         </button>
-                      )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-slate-400">لم يتم إرفاق ملف أو صورة للحل</span>
+                    )}
 
-                      <button
-                        onClick={() =>
-                          handleDownloadPdf(
-                            sub.attachedFile?.fileId,
-                            sub.attachedFile?.dataUrl,
-                            sub.attachedFile?.name || `${activeStudentPage.name}_حل_واجب`
-                          )
-                        }
-                        disabled={downloadingFileId === (sub.attachedFile?.fileId || sub.attachedFile?.name)}
-                        className="py-2 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50 shadow-2xs"
-                      >
-                        <Download className="w-4 h-4 text-emerald-600" />
-                        <span>تحميل {isImageFile(sub.attachedFile?.name, sub.attachedFile?.dataUrl) ? 'الصورة' : 'الملف'} ({sub.attachedFile?.name})</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-slate-400">لم يتم إرفاق ملف أو صورة للحل</span>
-                  )}
-
-                  {hw?.solutionFile?.hasFile && (
-                    <div className="flex items-center gap-2">
-                      {isImageFile(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
+                    {hw?.solutionFile?.hasFile && (
+                      <div className="flex items-center gap-2">
+                        {isImageFile(hw.solutionFile?.name, hw.solutionFile?.dataUrl) && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handlePreviewImage(
+                                hw.solutionFile?.fileId,
+                                hw.solutionFile?.dataUrl,
+                                hw.solutionFile?.name
+                              )
+                            }
+                            className="py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-4 h-4 text-purple-600" />
+                            <span>معاينة النموذج</span>
+                          </button>
+                        )}
                         <button
-                          type="button"
                           onClick={() =>
-                            handlePreviewImage(
+                            handleDownloadPdf(
                               hw.solutionFile?.fileId,
                               hw.solutionFile?.dataUrl,
-                              hw.solutionFile?.name
+                              hw.solutionFile?.name || 'الحل_النموذجي'
                             )
                           }
-                          className="py-2 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                          className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                         >
-                          <Eye className="w-4 h-4 text-purple-600" />
-                          <span>معاينة النموذج</span>
+                          <FileCheck className="w-4 h-4 text-slate-500" />
+                          <span>الحل النموذجي</span>
                         </button>
-                      )}
-                      <button
-                        onClick={() =>
-                          handleDownloadPdf(
-                            hw.solutionFile?.fileId,
-                            hw.solutionFile?.dataUrl,
-                            hw.solutionFile?.name || 'الحل_النموذجي'
-                          )
-                        }
-                        className="py-2 px-3 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <FileCheck className="w-4 h-4 text-slate-500" />
-                        <span>الحل النموذجي</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })
+          )}
         </div>
 
         {/* Lightbox Image Preview Modal inside activeStudentPage */}
@@ -559,16 +551,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
                       {u.name}
                     </h3>
-                    {(u.isSuperAdmin || (u.email && u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase())) ? (
-                      <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 shrink-0 flex items-center gap-1 shadow-2xs">
-                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                        <span>المشرف الأساسي</span>
-                      </span>
-                    ) : (u.role === 'supervisor' || u.isAssistantAdmin || (u.jobTitle && u.jobTitle !== 'طالب')) ? (
-                      <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200/80 shrink-0">
-                        {u.jobTitle || 'مشرف'}
-                      </span>
-                    ) : null}
                   </div>
 
                   {/* Number of submitted homeworks pill */}
@@ -583,13 +565,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       <ClipboardList className="w-3.5 h-3.5" />
                       <span>{subsCount > 0 ? `${subsCount} واجبات تم إرسالها` : 'لم يرسل واجبات'}</span>
                     </span>
-
-                    {/* Only super admin sees email if necessary */}
-                    {isSuperAdmin && (
-                      <span className="text-[11px] text-slate-400 font-mono hidden sm:inline-block">
-                        {u.email}
-                      </span>
-                    )}
                   </div>
                 </div>
               </div>

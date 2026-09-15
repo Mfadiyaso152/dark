@@ -49,27 +49,27 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     user?.jobTitle === 'المشرف الأساسي'
   );
 
-  // 2. Supervisors / Assistant Admins (المشرف الرئيسي والمشرفين المساعدين)
+  // 2. Supervisors / Assistant Admins (المشرف الرئيسي والمشرفين المساعدين فقط)
   const isSupervisorUser = Boolean(
     isSuper ||
     isAssistantAdmin ||
-    user?.jobTitle?.includes('مشرف') ||
+    user?.jobTitle === 'مشرف مساعد' ||
     user?.role === 'supervisor' ||
     user?.email?.toLowerCase() === 'kalshrby90@gmail.com'
   );
 
-  // 3. Teachers ONLY (المعلمون فقط، عدا المشرفين)
+  // 3. Teachers (المعلمون)
   const isTeacher = Boolean(
     user &&
     !isSupervisorUser &&
-    (user.role === 'teacher' || (user.jobTitle && (user.jobTitle.startsWith('أ.') || user.jobTitle.includes('معلم') || user.jobTitle !== 'طالب')))
+    (user.role === 'teacher' || (user.jobTitle && user.jobTitle !== 'طالب' && !user.jobTitle.includes('مشرف')))
   );
 
-  // Show User Management for Super Admin and Supervisors
+  // Show User Management ONLY for Super Admin and Assistant Supervisor
   const showUserManagement = Boolean(isSupervisorUser);
 
-  // Show Students for Teachers only
-  const showStudents = Boolean(isTeacher);
+  // Show Students for Teachers and Supervisors (المعلمون والمشرفون)
+  const showStudents = Boolean(isTeacher || isSupervisorUser);
 
   return (
     <div className="fixed bottom-3 sm:bottom-5 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 w-auto sm:w-[420px] md:w-[460px] max-w-lg transition-all font-['Tajawal',sans-serif]">

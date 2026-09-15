@@ -11,8 +11,19 @@ export const FullNameRequiredModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // If no user or if full name is already confirmed/valid for super admin, do not render
-  if (!user) return null;
+  if (!user || !user.email) return null;
   if (user.isSuperAdmin) return null;
+
+  const cleanEmail = user.email.toLowerCase().trim();
+  const isPermanentlyConfirmed = 
+    typeof window !== 'undefined' && 
+    (localStorage.getItem(`thanaweya_name_confirmed_${cleanEmail}`) === 'true' || 
+     localStorage.getItem(`thanaweya_name_confirmed_${user.email}`) === 'true');
+
+  if (isPermanentlyConfirmed && user.name && !['طالب', 'مستخدم', 'طالب جديد'].includes(user.name)) {
+    return null;
+  }
+
   if (user.fullNameConfirmed && isFullNameValid(user.name)) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {

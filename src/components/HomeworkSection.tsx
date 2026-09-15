@@ -24,12 +24,14 @@ import {
   Image as ImageIcon,
   Eye,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
+import { formatGregorianDate } from '../utils/dateFormatter';
 
 // Image compression helper to optimize image & camera captures
 const processImageFile = (file: File): Promise<{ dataUrl: string; sizeFormatted: string }> => {
@@ -751,7 +753,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                               تم تسليم حلك بنجاح ✓
                             </span>
                             <span className="text-slate-400 font-normal">
-                              {studentSub.submittedAt ? studentSub.submittedAt.split('T')[0] : ''}
+                              {formatGregorianDate(studentSub.submittedAt)}
                             </span>
                           </div>
 
@@ -804,6 +806,81 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                             <p className="text-[11px] text-slate-600 italic bg-white/70 p-1.5 rounded-lg">
                               "{studentSub.notes}"
                             </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Teacher / Supervisor View: All Student Submissions for this Homework */}
+                      {(isTeacher || isSupervisor || canEdit) && (
+                        <div className="p-3 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-2 text-xs">
+                          <div className="flex items-center justify-between text-purple-900 font-bold border-b border-purple-200/60 pb-1.5">
+                            <span className="flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5 text-purple-700" />
+                              <span>حلول الطلاب المسلمة لهذا الواجب ({submissions.filter((s) => s.homeworkId === hw.id).length})</span>
+                            </span>
+                          </div>
+
+                          {submissions.filter((s) => s.homeworkId === hw.id).length === 0 ? (
+                            <p className="text-[11px] text-slate-400 py-1">لم يقم أي طالب بتسليم هذا الواجب بعد.</p>
+                          ) : (
+                            <div className="space-y-2 max-h-52 overflow-y-auto pr-0.5">
+                              {submissions
+                                .filter((s) => s.homeworkId === hw.id)
+                                .map((sub) => (
+                                  <div
+                                    key={sub.id}
+                                    className="bg-white p-2.5 rounded-xl border border-purple-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                  >
+                                    <div>
+                                      <span className="font-bold text-slate-800 text-xs block">
+                                        {sub.studentName || 'طالب'}
+                                      </span>
+                                      <span className="text-[10px] text-slate-400">
+                                        بتاريخ: {formatGregorianDate(sub.submittedAt)}
+                                      </span>
+                                      {sub.notes && (
+                                        <p className="text-[11px] text-slate-600 mt-0.5 bg-slate-50 p-1 rounded">
+                                          {sub.notes}
+                                        </p>
+                                      )}
+                                    </div>
+                                    {sub.attachedFile?.hasFile && (
+                                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                        {isImageAttachment(sub.attachedFile?.name, sub.attachedFile?.dataUrl) && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handlePreviewImage(
+                                                sub.attachedFile?.fileId,
+                                                sub.attachedFile?.dataUrl,
+                                                sub.attachedFile?.name || 'حل الطالب'
+                                              )
+                                            }
+                                            className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-1 rounded-lg hover:bg-indigo-100 cursor-pointer flex items-center gap-1"
+                                          >
+                                            <Eye className="w-3 h-3" />
+                                            <span>معاينة</span>
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleDownloadFile(
+                                              sub.attachedFile?.fileId,
+                                              sub.attachedFile?.dataUrl,
+                                              sub.attachedFile?.name || 'حل الطالب'
+                                            )
+                                          }
+                                          className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg hover:bg-emerald-100 cursor-pointer flex items-center gap-1"
+                                        >
+                                          <Download className="w-3 h-3" />
+                                          <span>تحميل</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                            </div>
                           )}
                         </div>
                       )}
