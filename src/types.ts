@@ -202,6 +202,34 @@ export interface Homework {
   createdAt: string;
   supervisorName: string;
   solutionFile?: AttachedFile; // Optional PDF solution file attached by teacher
+  isClosed?: boolean; // إنهاء الواجب بعد انتهاء مدة التسليم
+  closedAt?: string;
+}
+
+export function isHomeworkDeadlinePassed(dueDate?: string): boolean {
+  if (!dueDate) return false;
+  const clean = dueDate.trim();
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const todayStr = `${year}-${month}-${day}`;
+
+  const match = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (match) {
+    const formattedDue = `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
+    return todayStr > formattedDue;
+  }
+
+  try {
+    const parsed = new Date(clean);
+    if (!isNaN(parsed.getTime())) {
+      parsed.setHours(23, 59, 59, 999);
+      return Date.now() > parsed.getTime();
+    }
+  } catch {}
+
+  return false;
 }
 
 export interface SubjectFeatureControl {
@@ -224,7 +252,19 @@ export interface HomeworkSubmission {
   studentEmail: string;
   submittedAt: string;
   notes?: string;
-  attachedFile?: AttachedFile; // Optional PDF solution attached by student
+  attachedFile?: AttachedFile; // Optional PDF/image solution attached by student (backward compatibility)
+  attachedFiles?: AttachedFile[]; // Multiple solution files & images attached by student
+}
+
+export function getSubmissionFiles(sub?: HomeworkSubmission | null): AttachedFile[] {
+  if (!sub) return [];
+  if (Array.isArray(sub.attachedFiles) && sub.attachedFiles.length > 0) {
+    return sub.attachedFiles;
+  }
+  if (sub.attachedFile && sub.attachedFile.hasFile) {
+    return [sub.attachedFile];
+  }
+  return [];
 }
 
 export interface AppNotification {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission } from './types';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
 import { Header } from './components/Header';
 import { SubjectCard } from './components/SubjectCard';
@@ -962,9 +962,31 @@ export default function App() {
     subData: Omit<HomeworkSubmission, 'id' | 'submittedAt'>
   ) => {
     const subId = 'sub-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-    const fileId = subData.attachedFile?.dataUrl ? 'sub-sol-' + subId : undefined;
-    const hasFileData = !!subData.attachedFile?.dataUrl;
-    const attachedDataUrl = subData.attachedFile?.dataUrl;
+
+    // Collect all attached files (supporting both multi-file array and single fallback)
+    const rawFiles: AttachedFile[] = [];
+    if (Array.isArray(subData.attachedFiles) && subData.attachedFiles.length > 0) {
+      rawFiles.push(...subData.attachedFiles);
+    } else if (subData.attachedFile && subData.attachedFile.hasFile) {
+      rawFiles.push(subData.attachedFile);
+    }
+
+    // Prepare files with deterministic fileIds
+    const cloudFiles: AttachedFile[] = rawFiles.map((f, idx) => {
+      const fileId = f.fileId || (f.dataUrl ? `sub-sol-${subId}-${idx}` : undefined);
+      return {
+        name: f.name || `حل_الواجب_${idx + 1}.pdf`,
+        type: f.type || 'pdf',
+        size: f.size || '1 MB',
+        hasFile: true,
+        fileId
+      };
+    });
+
+    const localFiles: AttachedFile[] = cloudFiles.map((cf, idx) => ({
+      ...cf,
+      dataUrl: rawFiles[idx]?.dataUrl
+    }));
 
     const studentFullName = resolveStudentFullName(
       subData.studentEmail,
@@ -977,21 +999,14 @@ export default function App() {
       studentName: studentFullName,
       id: subId,
       submittedAt: new Date().toISOString(),
-      attachedFile: subData.attachedFile ? {
-        name: subData.attachedFile.name || 'حل_الواجب.pdf',
-        type: subData.attachedFile.type || 'pdf',
-        size: subData.attachedFile.size || '1 MB',
-        hasFile: true,
-        fileId
-      } : undefined
+      attachedFile: cloudFiles[0] || undefined,
+      attachedFiles: cloudFiles
     };
 
     const localSub: HomeworkSubmission = {
       ...cloudSub,
-      attachedFile: subData.attachedFile ? {
-        ...cloudSub.attachedFile!,
-        dataUrl: attachedDataUrl
-      } : undefined
+      attachedFile: localFiles[0] || undefined,
+      attachedFiles: localFiles
     };
 
     // Replace previous submission if exists or add new
@@ -1006,7 +1021,7 @@ export default function App() {
       return [localSub, ...filtered];
     });
 
-    // Cloud Firestore save
+    // Cloud Firestore metadata save
     try {
       const sanitized = JSON.parse(JSON.stringify(cloudSub));
       await setDoc(doc(db, 'homework_submissions', subId), sanitized, { merge: true });
@@ -1014,11 +1029,19 @@ export default function App() {
       console.warn('Firestore homework submission save error:', err);
     }
 
-    // Upload cloud chunks if PDF attached
-    if (hasFileData && attachedDataUrl && fileId) {
-      uploadFileToCloud(fileId, attachedDataUrl).catch((err) => {
-        console.warn('Failed to upload student solution PDF to cloud:', err);
-      });
+    // Upload cloud chunks for each file in parallel
+    const uploadPromises = rawFiles.map((rf, idx) => {
+      const fId = cloudFiles[idx]?.fileId;
+      if (rf.dataUrl && fId) {
+        return uploadFileToCloud(fId, rf.dataUrl);
+      }
+      return Promise.resolve(null);
+    });
+
+    try {
+      await Promise.all(uploadPromises);
+    } catch (uploadErr) {
+      console.warn('Student submission files cloud upload note:', uploadErr);
     }
 
     // Also mark as completed in student's progress
@@ -1042,7 +1065,19 @@ export default function App() {
       console.warn('Firestore homework submission delete error:', err);
     }
 
-    // 3. Untoggle completion status if it was completed
+    // 3. Clean up cloud chunks
+    if (target) {
+      const allFiles = target.attachedFiles && target.attachedFiles.length > 0
+        ? target.attachedFiles
+        : target.attachedFile ? [target.attachedFile] : [];
+      allFiles.forEach((f) => {
+        if (f.fileId) {
+          deleteFileFromCloud(f.fileId).catch(() => {});
+        }
+      });
+    }
+
+    // 4. Untoggle completion status if it was completed
     if (target && progress.completedHomeworkIds?.includes(target.homeworkId)) {
       handleToggleCompleteHomework(target.homeworkId);
     }
