@@ -698,8 +698,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                         </p>
                       )}
 
-                      {/* Teacher Model Solution Download / Preview */}
-                      {hw.solutionFile?.hasFile && (
+                      {/* Teacher Model Solution Download / Preview (Visible to teachers/supervisors only) */}
+                      {canManageThis && hw.solutionFile?.hasFile && (
                         <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
@@ -708,7 +708,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                               <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                             )}
                             <span className="truncate max-w-[200px]">
-                              الملف المرفق ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
+                              الحل النموذجي للمعلم ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
                             </span>
                           </div>
 

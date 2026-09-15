@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -42,6 +42,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [activeBlobUrl, setActiveBlobUrl] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [rotation, setRotation] = useState<number>(0);
+  const [reloadTrigger, setReloadTrigger] = useState<number>(0);
+
+  // In-component cache of resolved blob URLs so navigating between items is instantaneous (0ms)
+  const resolvedCache = useRef<Map<string, { blobUrl: string; revoke: () => void }>>(new Map());
 
   // Sync index when initialIndex changes or modal opens
   useEffect(() => {
@@ -61,13 +65,21 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return type === 'pdf' || name.endsWith('.pdf');
   }, [currentFile]);
 
-  // Load and resolve blob URL for active file
+  // Load and resolve blob URL for active file at lightning speed
   useEffect(() => {
     let active = true;
-    let revokeFn: (() => void) | null = null;
 
     if (!isOpen || !currentFile) {
       setIsLoading(false);
+      return;
+    }
+
+    const cacheKey = currentFile.fileId || currentFile.name || `idx-${currentIndex}`;
+    const cached = resolvedCache.current.get(cacheKey);
+    if (cached) {
+      setActiveBlobUrl(cached.blobUrl);
+      setIsLoading(false);
+      setError(null);
       return;
     }
 
@@ -80,18 +92,50 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       try {
         let contentUrl = currentFile.dataUrl;
 
-        // If dataUrl not present in object, retrieve from IndexedDB or Cloud
+        // 1. Direct memory or local check for fileId
         if (!contentUrl && currentFile.fileId) {
-          contentUrl = (await getLargeFile(currentFile.fileId)) || undefined;
-          if (!contentUrl) {
-            contentUrl = (await downloadFileFromCloud(currentFile.fileId)) || undefined;
+          try {
+            contentUrl = (await getLargeFile(currentFile.fileId)) || undefined;
+          } catch {
+            // ignore
           }
+        }
+
+        // 2. High-speed cloud fetch
+        if (!contentUrl && currentFile.fileId) {
+          contentUrl = (await downloadFileFromCloud(currentFile.fileId, undefined, currentFile.name)) || undefined;
+        }
+
+        // 3. Fallback: check sibling files if single submission had multiple parts
+        if (!contentUrl && files.length > 1) {
+          for (const f of files) {
+            if (f.fileId && f.fileId !== currentFile.fileId) {
+              const fromSibling = await downloadFileFromCloud(f.fileId, undefined, currentFile.name);
+              if (fromSibling) {
+                contentUrl = fromSibling;
+                break;
+              }
+            }
+          }
+        }
+
+        // 4. Fallback by name
+        if (!contentUrl && currentFile.name) {
+          contentUrl = (await downloadFileFromCloud(currentFile.name, undefined, currentFile.name)) || undefined;
         }
 
         if (!active) return;
 
         if (!contentUrl) {
           setError('تعذر استرداد محتوى الملف من السحابة أو الذاكرة.');
+          setIsLoading(false);
+          return;
+        }
+
+        // If it's an image data URL, display immediately
+        if (!isPdf && contentUrl.startsWith('data:image/')) {
+          resolvedCache.current.set(cacheKey, { blobUrl: contentUrl, revoke: () => {} });
+          setActiveBlobUrl(contentUrl);
           setIsLoading(false);
           return;
         }
@@ -104,7 +148,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           return;
         }
 
-        revokeFn = revoke;
+        resolvedCache.current.set(cacheKey, { blobUrl, revoke });
         setActiveBlobUrl(blobUrl);
         setIsLoading(false);
       } catch (err) {
@@ -119,10 +163,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     return () => {
       active = false;
-      if (revokeFn) revokeFn();
-      setActiveBlobUrl(null);
     };
-  }, [isOpen, currentIndex, currentFile]);
+  }, [isOpen, currentIndex, currentFile, reloadTrigger, isPdf, files]);
+
+  // Clean up cache when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      resolvedCache.current.forEach((item) => item.revoke());
+      resolvedCache.current.clear();
+      setActiveBlobUrl(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen || !currentFile) return null;
 
@@ -138,11 +189,26 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     }
   };
 
-  const handleDownloadCurrent = () => {
+  const handleDownloadCurrent = async () => {
+    const targetName = currentFile.name || (isPdf ? 'ملف.pdf' : 'صورة.jpg');
     if (activeBlobUrl) {
-      triggerFileDownload(activeBlobUrl, currentFile.name || (isPdf ? 'ملف.pdf' : 'صورة.jpg'));
-    } else if (currentFile.dataUrl) {
-      triggerFileDownload(currentFile.dataUrl, currentFile.name || (isPdf ? 'ملف.pdf' : 'صورة.jpg'));
+      triggerFileDownload(activeBlobUrl, targetName);
+      return;
+    }
+    if (currentFile.dataUrl) {
+      triggerFileDownload(currentFile.dataUrl, targetName);
+      return;
+    }
+    if (currentFile.fileId) {
+      try {
+        const dl = (await getLargeFile(currentFile.fileId)) || (await downloadFileFromCloud(currentFile.fileId, undefined, targetName));
+        if (dl) {
+          triggerFileDownload(dl, targetName);
+          return;
+        }
+      } catch {
+        // ignore
+      }
     }
   };
 
@@ -240,17 +306,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
                 </button>
               )}
 
-              {/* Fast Download button */}
-              <button
-                type="button"
-                onClick={handleDownloadCurrent}
-                disabled={isLoading}
-                title="تنزيل الملف إلى جهازك"
-                className="py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">تحميل سريع</span>
-              </button>
+
 
               {/* Close Button */}
               <button
@@ -265,23 +321,31 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           </div>
 
           {/* Main Viewer Area */}
-          <div className="flex-1 relative bg-slate-100/90 overflow-hidden flex items-center justify-center p-2 sm:p-4">
+          <div className="flex-1 relative bg-slate-900/5 overflow-hidden flex items-center justify-center p-2 sm:p-4">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center gap-3 text-slate-600">
-                <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-                <span className="text-xs sm:text-sm font-bold">جاري فتح وتجهيز المعاينة الفورية...</span>
+                <div className="w-9 h-9 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+                <span className="text-xs font-medium text-slate-500">جاري المعاينة...</span>
               </div>
             ) : error ? (
-              <div className="text-center p-6 max-w-md bg-white rounded-2xl border border-red-200 shadow-sm space-y-3">
-                <AlertCircle className="w-10 h-10 text-red-500 mx-auto" />
-                <p className="text-xs sm:text-sm font-bold text-slate-700">{error}</p>
-                <div className="flex justify-center gap-2 pt-2">
+              <div className="text-center p-6 max-w-sm bg-white rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                <AlertCircle className="w-8 h-8 text-rose-500 mx-auto" />
+                <p className="text-xs font-bold text-slate-700">{error}</p>
+                <div className="flex justify-center gap-2 pt-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setReloadTrigger((n) => n + 1)}
+                    className="py-1.5 px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>إعادة المحاولة</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleDownloadCurrent}
-                    className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition"
+                    className="py-1.5 px-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                   >
-                    محاولة التحميل المباشر
+                    <Download className="w-3.5 h-3.5" />
+                    <span>تحميل الملف</span>
                   </button>
                 </div>
               </div>

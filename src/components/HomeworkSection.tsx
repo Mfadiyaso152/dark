@@ -566,7 +566,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
           return;
         }
 
-        const downloaded = await downloadFileFromCloud(fileId);
+        const downloaded = await downloadFileFromCloud(fileId, undefined, fileName);
         if (downloaded) {
           triggerFileDownload(downloaded, fileName);
         } else {
@@ -611,7 +611,9 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
               واجبات {subject.name}
             </h3>
             <p className="text-xs text-slate-500">
-              تابع الواجبات المدرسية وقم بإرفاق حلولك والاطلاع على الحل النموذجي
+              {canEdit
+                ? 'إدارة واجبات المادة ومتابعة تسليمات وحلول الطلاب'
+                : 'تابع الواجبات المدرسية وقم بإرفاق حلولك ومتابعة تقييمك'}
             </p>
           </div>
         </div>
@@ -741,8 +743,8 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                         </p>
                       )}
 
-                      {/* Teacher Model Solution Download / Preview */}
-                      {hw.solutionFile?.hasFile && (
+                      {/* Teacher Model Solution Download / Preview (Visible to teachers/supervisors only) */}
+                      {canEdit && hw.solutionFile?.hasFile && (
                         <div className="w-full p-2 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center justify-between gap-2 flex-wrap text-xs font-bold text-emerald-800">
                           <div className="flex items-center gap-1.5 min-w-0">
                             {isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? (
@@ -751,7 +753,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                               <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                             )}
                             <span className="truncate max-w-[200px]">
-                              الملف المرفق ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
+                              الحل النموذجي للمعلم ({isImageAttachment(hw.solutionFile?.name, hw.solutionFile?.dataUrl) ? 'صورة' : 'PDF'})
                             </span>
                           </div>
 

@@ -258,13 +258,23 @@ export interface HomeworkSubmission {
 
 export function getSubmissionFiles(sub?: HomeworkSubmission | null): AttachedFile[] {
   if (!sub) return [];
+  const rawList: AttachedFile[] = [];
   if (Array.isArray(sub.attachedFiles) && sub.attachedFiles.length > 0) {
-    return sub.attachedFiles;
+    rawList.push(...sub.attachedFiles);
+  } else if (sub.attachedFile && sub.attachedFile.hasFile) {
+    rawList.push(sub.attachedFile);
   }
-  if (sub.attachedFile && sub.attachedFile.hasFile) {
-    return [sub.attachedFile];
-  }
-  return [];
+
+  return rawList
+    .filter((f) => !!f && f.hasFile !== false)
+    .map((f, idx) => {
+      const fallbackId = idx === 0 ? `sub-sol-${sub.id}` : `sub-sol-${sub.id}-${idx}`;
+      return {
+        ...f,
+        fileId: f.fileId || fallbackId,
+        hasFile: true
+      };
+    });
 }
 
 export interface AppNotification {

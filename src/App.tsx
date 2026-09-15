@@ -270,7 +270,19 @@ export default function App() {
         });
         cloudHws.forEach((ch) => {
           if (!deletedIds.has(ch.id)) {
-            map.set(ch.id, ch);
+            const existing = map.get(ch.id);
+            if (existing?.solutionFile?.dataUrl && !ch.solutionFile?.dataUrl) {
+              map.set(ch.id, {
+                ...ch,
+                solutionFile: {
+                  ...ch.solutionFile,
+                  ...existing.solutionFile,
+                  fileId: ch.solutionFile?.fileId || existing.solutionFile.fileId
+                }
+              });
+            } else {
+              map.set(ch.id, ch);
+            }
           }
         });
         const merged = Array.from(map.values());
@@ -318,7 +330,32 @@ export default function App() {
       setSubmissions((prev) => {
         const map = new Map<string, HomeworkSubmission>();
         prev.forEach((s) => map.set(s.id, s));
-        cloudSubs.forEach((cs) => map.set(cs.id, cs));
+        cloudSubs.forEach((cs) => {
+          const existing = map.get(cs.id);
+          if (existing) {
+            // Preserve local dataUrls if cloud document does not have them
+            const mergedAttachedFile = existing.attachedFile?.dataUrl && !cs.attachedFile?.dataUrl
+              ? { ...cs.attachedFile, dataUrl: existing.attachedFile.dataUrl, fileId: cs.attachedFile?.fileId || existing.attachedFile.fileId }
+              : (cs.attachedFile || existing.attachedFile);
+
+            const mergedAttachedFiles = (cs.attachedFiles || existing.attachedFiles || []).map((cf, idx) => {
+              const existingF = existing.attachedFiles?.[idx];
+              if (existingF?.dataUrl && !cf.dataUrl) {
+                return { ...cf, dataUrl: existingF.dataUrl, fileId: cf.fileId || existingF.fileId };
+              }
+              return cf;
+            });
+
+            map.set(cs.id, {
+              ...existing,
+              ...cs,
+              attachedFile: mergedAttachedFile,
+              attachedFiles: mergedAttachedFiles.length > 0 ? mergedAttachedFiles : cs.attachedFiles
+            });
+          } else {
+            map.set(cs.id, cs);
+          }
+        });
         const merged = Array.from(map.values());
         safeSetItem('thanaweya_homework_submissions_v1', JSON.stringify(merged));
         return merged;
@@ -973,7 +1010,8 @@ export default function App() {
 
     // Prepare files with deterministic fileIds
     const cloudFiles: AttachedFile[] = rawFiles.map((f, idx) => {
-      const fileId = f.fileId || (f.dataUrl ? `sub-sol-${subId}-${idx}` : undefined);
+      const defaultId = idx === 0 ? `sub-sol-${subId}` : `sub-sol-${subId}-${idx}`;
+      const fileId = f.fileId || defaultId;
       return {
         name: f.name || `حل_الواجب_${idx + 1}.pdf`,
         type: f.type || 'pdf',

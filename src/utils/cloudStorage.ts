@@ -12,10 +12,19 @@ import {
 import { storeLargeFile, getLargeFile, deleteLargeFile } from './fileStorage';
 import { normalizeFileDataUrl } from './pdfGenerator';
 
-const CHUNK_SIZE = 400 * 1024; // 400,000 characters per chunk (safe within Firestore 1MB doc limit)
+const CHUNK_SIZE = 450 * 1024; // 450,000 characters per chunk (safe within Firestore 1MB doc limit)
 
-// In-memory hot cache for instant re-access during the session
+// In-memory hot cache for instant re-access during the session (LRU protected)
 const memoryFileCache = new Map<string, string>();
+const MAX_MEMORY_CACHE_ITEMS = 25;
+
+function setMemoryCache(key: string, value: string) {
+  if (memoryFileCache.size >= MAX_MEMORY_CACHE_ITEMS) {
+    const firstKey = memoryFileCache.keys().next().value;
+    if (firstKey) memoryFileCache.delete(firstKey);
+  }
+  memoryFileCache.set(key, value);
+}
 
 export interface CloudFileMeta {
   fileId: string;
@@ -35,8 +44,19 @@ export async function uploadFileToCloud(
   const normalized = normalizeFileDataUrl(dataUrl);
 
   // 1. Immediately cache in memory & IndexedDB
-  memoryFileCache.set(fileId, normalized);
+  setMemoryCache(fileId, normalized);
   await storeLargeFile(fileId, normalized);
+
+  // Also cache under stripped ID if applicable
+  const strippedId = fileId.replace(/^(sub-sol-|hw-sol-|booklet-|lesson-file-)/, '');
+  if (strippedId !== fileId) {
+    setMemoryCache(strippedId, normalized);
+    try {
+      await storeLargeFile(strippedId, normalized);
+    } catch {
+      // ignore
+    }
+  }
 
   const totalLength = normalized.length;
   const chunks: string[] = [];
@@ -59,8 +79,23 @@ export async function uploadFileToCloud(
     console.warn('[CloudStorage] Note on file_meta write:', metaErr);
   }
 
-  // 3. Upload chunks to Firestore collection 'file_chunks' in parallel batches
-  const BATCH_SIZE = 5;
+  // If only 1 chunk, also save direct doc for instant 1-query fetch
+  if (totalChunks === 1) {
+    try {
+      await setDoc(doc(db, 'file_chunks', fileId), {
+        fileId,
+        index: 0,
+        totalChunks: 1,
+        data: chunks[0],
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Upload chunks to Firestore collection 'file_chunks' in high-speed parallel batches
+  const BATCH_SIZE = 12;
   let completed = 0;
 
   for (let b = 0; b < chunks.length; b += BATCH_SIZE) {
@@ -85,6 +120,91 @@ export async function uploadFileToCloud(
   }
 
   return { fileId, totalChunks, size: totalLength };
+}
+
+/**
+ * Searches local browser persistence (localStorage) for any backup of the file dataURL.
+ * This ensures that if the file was created or submitted locally, it can never be lost.
+ */
+function searchLocalStorageForFile(targetId: string, fileName?: string): string | null {
+  if (typeof window === 'undefined' || !window.localStorage) return null;
+  const cleanId = targetId.replace(/^(sub-sol-|hw-sol-|booklet-|lesson-file-)/, '');
+
+  const keys = [
+    'thanaweya_homework_submissions_v1',
+    'thanaweya_homeworks_v2',
+    'thanaweya_subject_booklets_v4',
+    'thanaweya_custom_lessons_v4'
+  ];
+
+  for (const key of keys) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const items = JSON.parse(raw);
+      if (!Array.isArray(items)) continue;
+
+      for (const item of items) {
+        if (!item) continue;
+
+        // 1. Check attachedFiles array
+        if (Array.isArray(item.attachedFiles)) {
+          for (const f of item.attachedFiles) {
+            if (f && typeof f.dataUrl === 'string' && f.dataUrl.length > 50) {
+              if (
+                f.fileId === targetId ||
+                f.fileId === cleanId ||
+                (fileName && f.name === fileName) ||
+                (item.id && (targetId.includes(item.id) || cleanId === item.id))
+              ) {
+                return f.dataUrl;
+              }
+            }
+          }
+        }
+
+        // 2. Check attachedFile single object
+        if (item.attachedFile && typeof item.attachedFile.dataUrl === 'string' && item.attachedFile.dataUrl.length > 50) {
+          const f = item.attachedFile;
+          if (
+            f.fileId === targetId ||
+            f.fileId === cleanId ||
+            (fileName && f.name === fileName) ||
+            (item.id && (targetId.includes(item.id) || cleanId === item.id))
+          ) {
+            return f.dataUrl;
+          }
+        }
+
+        // 3. Check solutionFile
+        if (item.solutionFile && typeof item.solutionFile.dataUrl === 'string' && item.solutionFile.dataUrl.length > 50) {
+          const f = item.solutionFile;
+          if (
+            f.fileId === targetId ||
+            f.fileId === cleanId ||
+            (fileName && f.name === fileName) ||
+            (item.id && (targetId.includes(item.id) || cleanId === item.id))
+          ) {
+            return f.dataUrl;
+          }
+        }
+
+        // 4. Check fileDataUrl directly (e.g. booklets or lessons)
+        if (typeof item.fileDataUrl === 'string' && item.fileDataUrl.length > 50) {
+          if (
+            item.id === targetId ||
+            item.id === cleanId ||
+            (item.id && (targetId.includes(item.id) || cleanId === item.id))
+          ) {
+            return item.fileDataUrl;
+          }
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+  return null;
 }
 
 /**
@@ -120,15 +240,28 @@ async function fetchChunksForId(
     console.warn(`[CloudStorage] file_meta check note for ${targetId}:`, err);
   }
 
-  // 2. Direct probe for chunk 0 (`${targetId}_0` or `${targetId}`)
-  // This avoids query index requirements and is ultra-fast
+  // 2. Direct probe for chunk 0 (`${targetId}_0`, `${targetId}-0`, or `${targetId}`) in parallel
   try {
-    const chunk0Snap = await getDoc(doc(db, 'file_chunks', `${targetId}_0`));
-    if (chunk0Snap.exists()) {
-      const c0Data = chunk0Snap.data();
+    const [c0UnderscoreSnap, c0DashSnap, singleDocSnap] = await Promise.all([
+      getDoc(doc(db, 'file_chunks', `${targetId}_0`)),
+      getDoc(doc(db, 'file_chunks', `${targetId}-0`)),
+      getDoc(doc(db, 'file_chunks', targetId))
+    ]);
+
+    // Direct single document match
+    if (singleDocSnap.exists()) {
+      const d = singleDocSnap.data();
+      if (typeof d?.data === 'string' && d.data.length > 0) {
+        return d.data;
+      }
+    }
+
+    // Direct underscore pattern (_0, _1...)
+    if (c0UnderscoreSnap.exists()) {
+      const c0Data = c0UnderscoreSnap.data();
       const totalChunks = c0Data?.totalChunks || 1;
       if (totalChunks === 1) {
-        return c0Data?.data || null;
+        return (c0Data?.data as string) || null;
       }
 
       const otherChunkPromises = Array.from({ length: totalChunks - 1 }, async (_, i) => {
@@ -141,8 +274,7 @@ async function fetchChunksForId(
       });
 
       const otherResults = await Promise.all(otherChunkPromises);
-      const allFound = otherResults.every((c) => c !== null && typeof c?.data === 'string');
-      if (allFound) {
+      if (otherResults.every((c) => c !== null && typeof c?.data === 'string')) {
         const allChunks = [
           { index: 0, data: c0Data?.data as string },
           ...otherResults.map((r) => r!)
@@ -152,12 +284,31 @@ async function fetchChunksForId(
       }
     }
 
-    // Also probe doc `${targetId}` directly (if stored as single document)
-    const singleDocSnap = await getDoc(doc(db, 'file_chunks', targetId));
-    if (singleDocSnap.exists()) {
-      const d = singleDocSnap.data();
-      if (typeof d?.data === 'string' && d.data.length > 0) {
-        return d.data;
+    // Direct dash pattern (-0, -1...)
+    if (c0DashSnap.exists()) {
+      const c0Data = c0DashSnap.data();
+      const totalChunks = c0Data?.totalChunks || 1;
+      if (totalChunks === 1) {
+        return (c0Data?.data as string) || null;
+      }
+
+      const otherChunkPromises = Array.from({ length: totalChunks - 1 }, async (_, i) => {
+        const idx = i + 1;
+        const snap = await getDoc(doc(db, 'file_chunks', `${targetId}-${idx}`));
+        if (snap.exists()) {
+          return { index: idx, data: snap.data()?.data as string };
+        }
+        return null;
+      });
+
+      const otherResults = await Promise.all(otherChunkPromises);
+      if (otherResults.every((c) => c !== null && typeof c?.data === 'string')) {
+        const allChunks = [
+          { index: 0, data: c0Data?.data as string },
+          ...otherResults.map((r) => r!)
+        ];
+        allChunks.sort((a, b) => a.index - b.index);
+        return allChunks.map((c) => c.data).join('');
       }
     }
   } catch (err) {
@@ -188,8 +339,10 @@ async function fetchChunksForId(
         }
       });
 
-      chunkDocs.sort((a, b) => a.index - b.index);
-      return chunkDocs.map((c) => c.data).join('');
+      if (chunkDocs.length > 0) {
+        chunkDocs.sort((a, b) => a.index - b.index);
+        return chunkDocs.map((c) => c.data).join('');
+      }
     }
   } catch (err) {
     console.warn(`[CloudStorage] Collection query note for ${targetId}:`, err);
@@ -205,23 +358,29 @@ async function fetchChunksForId(
  */
 export async function downloadFileFromCloud(
   fileId: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  fileName?: string
 ): Promise<string | null> {
   if (!fileId) return null;
 
-  // Build candidate fileIds to handle variations, prefixes, or legacy formats
+  // Build intelligently ordered candidate fileIds:
+  // Place the most probable ID first so direct gets succeed on attempt #1!
+  const rawClean = fileId.replace(/^(sub-sol-|hw-sol-|booklet-|lesson-file-)/, '');
+  const primaryPrefixed = fileId.startsWith('sub-') && !fileId.startsWith('sub-sol-')
+    ? `sub-sol-${fileId}`
+    : fileId.startsWith('hw-') && !fileId.startsWith('hw-sol-')
+    ? `hw-sol-${fileId}`
+    : fileId;
+
   const candidateIds: string[] = [
+    primaryPrefixed,
     fileId,
-    fileId.replace(/^sub-sol-/, ''),
-    fileId.replace(/^hw-sol-/, ''),
-    fileId.replace(/^booklet-/, ''),
-    `sub-sol-${fileId}`,
-    `hw-sol-${fileId}`,
-    `${fileId}-0`,
-    fileId.replace(/-\d+$/, '')
+    `sub-sol-${rawClean}`,
+    `hw-sol-${rawClean}`,
+    rawClean
   ].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx);
 
-  // 1. Check memory cache for any candidate ID
+  // 1. Check in-memory LRU cache (0ms)
   for (const cid of candidateIds) {
     if (memoryFileCache.has(cid)) {
       if (onProgress) onProgress(100);
@@ -229,41 +388,134 @@ export async function downloadFileFromCloud(
     }
   }
 
-  // 2. Check local IndexedDB for any candidate ID (<5ms)
-  for (const cid of candidateIds) {
-    try {
-      const cached = await getLargeFile(cid);
+  // 2. Check local IndexedDB in parallel (<3ms)
+  try {
+    const localResults = await Promise.all(candidateIds.map((cid) => getLargeFile(cid)));
+    for (let i = 0; i < localResults.length; i++) {
+      const cached = localResults[i];
       if (cached && cached.length > 50) {
-        const normalized = normalizeFileDataUrl(cached);
-        memoryFileCache.set(fileId, normalized);
-        memoryFileCache.set(cid, normalized);
+        const normalized = normalizeFileDataUrl(cached, fileName);
+        setMemoryCache(fileId, normalized);
+        setMemoryCache(candidateIds[i], normalized);
         if (onProgress) onProgress(100);
         return normalized;
       }
-    } catch (err) {
-      console.warn('[CloudStorage] Local cache check note:', err);
     }
+  } catch (err) {
+    console.warn('[CloudStorage] Local IndexedDB check note:', err);
   }
 
-  // 3. Search cloud using candidate IDs
+  // 3. Ultra-fast parallel Firestore candidate probe (direct getDoc on chunk 0 & single doc)
+  try {
+    const probePromises = candidateIds.map(async (cid) => {
+      try {
+        const [c0Snap, singleSnap] = await Promise.all([
+          getDoc(doc(db, 'file_chunks', `${cid}_0`)),
+          getDoc(doc(db, 'file_chunks', cid))
+        ]);
+
+        if (singleSnap.exists()) {
+          const singleData = singleSnap.data()?.data;
+          if (typeof singleData === 'string' && singleData.length > 20) {
+            return { cid, fullData: singleData };
+          }
+        }
+
+        if (c0Snap.exists()) {
+          return { cid, c0Data: c0Snap.data() };
+        }
+      } catch {
+        // ignore probe error for this candidate
+      }
+      return null;
+    });
+
+    const probeResults = await Promise.all(probePromises);
+    const matchedProbe = probeResults.find((p) => p !== null);
+
+    if (matchedProbe) {
+      // Direct single document match
+      if (matchedProbe.fullData) {
+        const normalized = normalizeFileDataUrl(matchedProbe.fullData, fileName);
+        setMemoryCache(fileId, normalized);
+        setMemoryCache(matchedProbe.cid, normalized);
+        storeLargeFile(fileId, normalized);
+        if (onProgress) onProgress(100);
+        return normalized;
+      }
+
+      // Chunked document match: fetch remaining chunks in parallel
+      if (matchedProbe.c0Data) {
+        const totalChunks = matchedProbe.c0Data.totalChunks || 1;
+        const firstChunk = (matchedProbe.c0Data.data as string) || '';
+
+        if (totalChunks === 1) {
+          const normalized = normalizeFileDataUrl(firstChunk, fileName);
+          setMemoryCache(fileId, normalized);
+          setMemoryCache(matchedProbe.cid, normalized);
+          storeLargeFile(fileId, normalized);
+          if (onProgress) onProgress(100);
+          return normalized;
+        }
+
+        // Parallel fetch for chunks 1 to totalChunks - 1
+        const restPromises = Array.from({ length: totalChunks - 1 }, async (_, i) => {
+          const idx = i + 1;
+          const chunkSnap = await getDoc(doc(db, 'file_chunks', `${matchedProbe.cid}_${idx}`));
+          return { index: idx, data: (chunkSnap.data()?.data as string) || '' };
+        });
+
+        const restResults = await Promise.all(restPromises);
+        const allChunks = [{ index: 0, data: firstChunk }, ...restResults];
+        allChunks.sort((a, b) => a.index - b.index);
+        const reconstructed = allChunks.map((c) => c.data).join('');
+
+        if (reconstructed.length > 20) {
+          const normalized = normalizeFileDataUrl(reconstructed, fileName);
+          setMemoryCache(fileId, normalized);
+          setMemoryCache(matchedProbe.cid, normalized);
+          storeLargeFile(fileId, normalized);
+          if (onProgress) onProgress(100);
+          return normalized;
+        }
+      }
+    }
+  } catch (probeErr) {
+    console.warn('[CloudStorage] Parallel probe note:', probeErr);
+  }
+
+  // 4. Secondary search using fetchChunksForId (if legacy dash format or collection query needed)
   for (const cid of candidateIds) {
     try {
       const rawData = await fetchChunksForId(cid, onProgress);
       if (rawData && rawData.length > 20) {
-        const normalized = normalizeFileDataUrl(rawData);
-        memoryFileCache.set(fileId, normalized);
-        memoryFileCache.set(cid, normalized);
-        await storeLargeFile(fileId, normalized);
-        await storeLargeFile(cid, normalized);
+        const normalized = normalizeFileDataUrl(rawData, fileName);
+        setMemoryCache(fileId, normalized);
+        setMemoryCache(cid, normalized);
+        storeLargeFile(fileId, normalized);
         if (onProgress) onProgress(100);
         return normalized;
       }
-    } catch (err) {
-      console.warn(`[CloudStorage] Error trying candidate ${cid}:`, err);
+    } catch {
+      // ignore
     }
   }
 
-  console.warn(`[CloudStorage] No cloud chunks found for file: ${fileId}`);
+  // 5. Ultimate safety fallback: inspect localStorage backups
+  const localBackup = searchLocalStorageForFile(fileId, fileName);
+  if (localBackup && localBackup.length > 50) {
+    const normalized = normalizeFileDataUrl(localBackup, fileName);
+    setMemoryCache(fileId, normalized);
+    try {
+      await storeLargeFile(fileId, normalized);
+    } catch {
+      // ignore
+    }
+    if (onProgress) onProgress(100);
+    return normalized;
+  }
+
+  console.warn(`[CloudStorage] No chunks or local cache found for file: ${fileId}`);
   return null;
 }
 

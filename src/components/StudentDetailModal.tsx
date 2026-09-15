@@ -119,7 +119,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           return;
         }
 
-        const downloaded = await downloadFileFromCloud(fileId);
+        const downloaded = await downloadFileFromCloud(fileId, undefined, fileName);
         if (downloaded) {
           triggerFileDownload(downloaded, fileName);
         } else {

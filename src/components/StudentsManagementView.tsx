@@ -49,6 +49,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const {
     user,
     isSuperAdmin,
+    isTeacherOrSupervisor,
     registeredUsers,
     refreshUsers,
     canManageSubject
@@ -237,7 +238,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           triggerFileDownload(cached, targetName);
           return;
         }
-        const cloudUrl = await downloadFileFromCloud(fileId);
+        const cloudUrl = await downloadFileFromCloud(fileId, undefined, targetName);
         if (cloudUrl) {
           triggerFileDownload(cloudUrl, targetName);
           return;
@@ -312,9 +313,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       {getStudentSubmissionsCount(activeStudentPage)} واجبات مسلّمة
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    استعراض ومعاينة حلول الواجبات المسلّمة وملفات الـ PDF مباشرة بدون تحميل
-                  </p>
                 </div>
               </div>
 
@@ -355,51 +353,24 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       animate={{ opacity: 1, y: 0 }}
                       className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all space-y-3.5"
                     >
-                      {/* Top Row: Subject Tag & Submission Date & Ended Status */}
+                      {/* Top Row: Submission Date */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1.5">
-                            <span>{subject?.emoji || '📖'}</span>
-                            <span>{subject?.name || 'مقرر دراسي'}</span>
-                          </span>
-                          {hw?.dueDate && (
-                            <span className="text-xs text-slate-500 flex items-center gap-1 font-bold">
-                              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                              <span>تاريخ الواجب: {hw.dueDate}</span>
-                            </span>
-                          )}
-                          {hw?.isClosed && (
-                            <span className="px-2 py-0.5 rounded-lg bg-rose-100 text-rose-800 text-[11px] font-black border border-rose-200 flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-rose-600" />
-                              <span>واجب منتهي</span>
-                            </span>
-                          )}
-                        </div>
+                        <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1.5">
+                          <span>{subject?.emoji || '📖'}</span>
+                          <span>{subject?.name || 'مقرر دراسي'}</span>
+                        </span>
 
                         <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
                           <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>تم التسليم: {formatGregorianDate(sub.submittedAt)}</span>
+                          <span>تاريخ التسليم: {formatGregorianDate(sub.submittedAt)}</span>
                         </span>
                       </div>
 
-                      {/* Assignment Title & Details */}
-                      <div className="space-y-1.5 pt-1">
+                      {/* Assignment Name Only */}
+                      <div className="pt-1">
                         <h3 className="font-black text-slate-900 text-sm sm:text-base">
                           {hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}`}
                         </h3>
-
-                        {hw && (
-                          <div className="grid grid-cols-2 gap-2 text-xs max-w-sm">
-                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
-                              <BookOpen className="w-4 h-4 text-blue-600" />
-                              <span>صفحة: <strong className="text-slate-800">{hw.pageNumber}</strong></span>
-                            </div>
-                            <div className="bg-slate-50 p-2 rounded-xl border border-slate-100 flex items-center gap-1.5">
-                              <HelpCircle className="w-4 h-4 text-purple-600" />
-                              <span>سؤال: <strong className="text-slate-800">{hw.questionNumber}</strong></span>
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       {/* Student Notes if any */}
@@ -500,8 +471,8 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                         </div>
                       )}
 
-                      {/* Teacher Model Solution Link if attached */}
-                      {hw?.solutionFile?.hasFile && (
+                      {/* Teacher Model Solution Link if attached (Teachers & Supervisors only) */}
+                      {(isTeacherOrSupervisor || isSuperAdmin) && hw?.solutionFile?.hasFile && (
                         <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2 text-xs">
                           <span className="text-slate-500 font-bold">الحل النموذجي المرفق من المعلم:</span>
                           <div className="flex items-center gap-1.5">
@@ -581,19 +552,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             {/* Header Banner */}
             <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                  <GraduationCap className="w-6 h-6" />
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <GraduationCap className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-black text-slate-900 text-base sm:text-lg flex items-center gap-2">
-                    <span>خدمة الطلاب</span>
-                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    <span>قائمة الطلاب</span>
+                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
                       {filteredUsers.length} من {uniqueStudents.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-slate-500">
-                    اضغط على أي طالب لاستعراض حلول واجباته وملفات الـ PDF المرفقة
-                  </p>
                 </div>
               </div>
 
