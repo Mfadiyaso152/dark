@@ -224,17 +224,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 md:p-6 bg-slate-950/80 backdrop-blur-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.96 }}
-          transition={{ duration: 0.2 }}
-          className="relative w-full max-w-5xl h-[92vh] sm:h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200"
-          dir="rtl"
-        >
-          {/* Header Bar */}
-          <div className="shrink-0 px-4 py-3 sm:px-6 sm:py-3.5 bg-slate-900 text-white flex items-center justify-between gap-3 border-b border-slate-800">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
+        className="fixed inset-0 z-[100] w-full h-full bg-slate-950 flex flex-col overflow-hidden select-none font-['IBM_Plex_Sans_Arabic',sans-serif]"
+        dir="rtl"
+      >
+        <div className="relative w-full h-full flex flex-col overflow-hidden bg-slate-950">
+          {/* Full-Page Header Bar */}
+          <div className="shrink-0 px-4 py-3 sm:px-6 sm:py-3.5 bg-slate-900/95 backdrop-blur-md text-white flex items-center justify-between gap-3 border-b border-slate-800 z-10">
             {/* Title & Metadata */}
             <div className="flex items-center gap-3 overflow-hidden">
               <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${
@@ -427,8 +427,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               })}
             </div>
           )}
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </AnimatePresence>
   );
 };

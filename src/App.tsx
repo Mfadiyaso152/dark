@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
 import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
-import { Header } from './components/Header';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
 import { LessonCard } from './components/LessonCard';
@@ -11,13 +10,12 @@ import { AddLessonModal } from './components/AddLessonModal';
 import { AuthModal } from './components/AuthModal';
 import { NotificationsModal } from './components/NotificationsModal';
 import { LoginPage } from './components/LoginPage';
-import { UserManagementView } from './components/UserManagementView';
 import { StudentsManagementView } from './components/StudentsManagementView';
 import { StudentServiceView } from './components/StudentServiceView';
 import { QuduratView } from './components/QuduratView';
 import { DailyHomeworksView } from './components/DailyHomeworksView';
 import { AdminPortalView } from './components/AdminPortalView';
-import { BottomNav, TabType } from './components/BottomNav';
+import { TopNav, TabType } from './components/TopNav';
 import { SupervisorSettingsDrawer } from './components/SupervisorSettingsDrawer';
 import { FullNameRequiredModal } from './components/FullNameRequiredModal';
 import { NotFoundView } from './components/NotFoundView';
@@ -523,11 +521,11 @@ export default function App() {
         document.title = 'بوابة المشرف الأساسي | زاد';
       } else if (route.type === 'users') {
         setIsNotFound(false);
-        setActiveTab('users');
+        setActiveTab('admin');
         setSelectedSubject(null);
         setSelectedSubView(null);
         setIsDetailModalOpen(false);
-        document.title = 'إدارة المستخدمين | زاد';
+        document.title = 'بوابة المشرف الأساسي | زاد';
       } else if (route.type === 'subject') {
         setIsNotFound(false);
         setActiveTab('home');
@@ -615,8 +613,6 @@ export default function App() {
       document.title = 'الطلاب | زاد';
     } else if (activeTab === 'admin') {
       document.title = 'بوابة المشرف الأساسي | زاد';
-    } else if (activeTab === 'users') {
-      document.title = 'إدارة المستخدمين | زاد';
     } else {
       document.title = 'زاد | zad';
     }
@@ -1200,12 +1196,23 @@ export default function App() {
   return (
     <div
       dir="rtl"
-      className="min-h-screen bg-[#F8FAFC] text-slate-800 font-['Tajawal',sans-serif] flex justify-center selection:bg-blue-500 selection:text-white"
+      className="min-h-screen text-slate-900 font-['IBM_Plex_Sans_Arabic',sans-serif] flex justify-center selection:bg-slate-900 selection:text-white"
     >
       {/* Container: comfortably wider and scalable on iPad (md/lg) and Desktop (xl/2xl) */}
-      <div className="w-full max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-[1380px] bg-[#F8FAFC] min-h-screen flex flex-col shadow-xl pb-24 md:pb-28 relative transition-all">
-        {/* Top Header - with greeting & small logout button */}
-        <Header />
+      <div className="w-full max-w-3xl md:max-w-5xl lg:max-w-6xl xl:max-w-[1380px] min-h-screen flex flex-col pb-10 md:pb-14 relative transition-all">
+        {/* Sculpted Conical Beveled Glass Top Navigation Bar */}
+        {activeTab !== 'admin' && (
+          <TopNav
+            activeTab={activeTab}
+            onTabChange={(tab) => {
+              setIsNotFound(false);
+              setSelectedSubject(null);
+              setSelectedSubView(null);
+              setIsDetailModalOpen(false);
+              setActiveTab(tab);
+            }}
+          />
+        )}
 
         {/* Main Content Area */}
         <main className="flex-1 p-4 sm:p-6 md:p-8 lg:p-10 space-y-4 md:space-y-6 lg:space-y-8">
@@ -1318,9 +1325,6 @@ export default function App() {
                   }}
                   onSelectLesson={openLessonDetail}
                 />
-              ) : activeTab === 'users' ? (
-                /* TAB: User Management (للإشراف والإدارة فقط) */
-                <UserManagementView />
               ) : (
                 /* TAB: Home (الرئيسية) */
                 <div className="space-y-4 md:space-y-6">
@@ -1356,21 +1360,21 @@ export default function App() {
                     />
                   ) : (
                     /* All Subjects Grid */
-                    <div className="space-y-3.5 md:space-y-5">
+                    <div className="space-y-4 md:space-y-6">
                       {/* Search Bar */}
                       <div className="relative">
                         <input
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
-                          placeholder="ابحث عن درس أو مادة..."
-                          className="w-full py-2.5 md:py-3.5 pr-10 md:pr-12 pl-4 bg-white border border-slate-200/90 rounded-2xl text-xs md:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xs"
+                          placeholder="ابحث عن مادة..."
+                          className="w-full py-3.5 sm:py-4 pr-11 md:pr-12 pl-4 bg-white border border-slate-200/90 rounded-2xl md:rounded-3xl text-xs md:text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-2xs transition"
                         />
-                        <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 absolute right-3.5 md:right-4 top-3 md:top-3.5" />
+                        <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 absolute right-4 top-4 sm:top-4.5" />
                       </div>
 
                       {/* 2-Column Responsive Subject Grid */}
-                      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:gap-5 w-full">
+                      <div className="grid grid-cols-2 gap-3.5 sm:gap-4.5 md:gap-5 w-full">
                         {displayedSubjects.map((sub) => (
                           <SubjectCard
                             key={sub.id}
@@ -1393,8 +1397,8 @@ export default function App() {
 
                       {/* App Version Tag */}
                       <div className="text-center pt-2 pb-6">
-                        <span className="inline-block text-[11px] sm:text-xs font-medium text-slate-400/90 tracking-wide">
-                          النسخة 1.2
+                        <span className="inline-block text-[11px] sm:text-xs font-medium text-slate-400 tracking-wide">
+                          منصة زاد • الإصدار ٢.٠
                         </span>
                       </div>
                     </div>
@@ -1404,20 +1408,6 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </main>
-
-        {/* Bottom Navigation (Hidden on Secret Admin Portal) */}
-        {activeTab !== 'admin' && (
-          <BottomNav
-            activeTab={activeTab}
-            onTabChange={(tab) => {
-              setIsNotFound(false);
-              setSelectedSubject(null);
-              setSelectedSubView(null);
-              setIsDetailModalOpen(false);
-              setActiveTab(tab);
-            }}
-          />
-        )}
 
         {/* Lesson Detail Modal */}
         {isDetailModalOpen && activeLesson && (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Subject, Homework, HomeworkSubmission, AttachedFile, isHomeworkDeadlinePassed } from '../types';
+import { Subject, Homework, HomeworkSubmission, AttachedFile, isHomeworkDeadlinePassed, AVAILABLE_CLASSES } from '../types';
 import { useAuth, formatDisplayName, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
+import { ClassFilterDropdown } from './ClassFilterDropdown';
 import {
   ArrowRight,
   ClipboardList,
@@ -155,6 +156,23 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState('');
+  const [targetClasses, setTargetClasses] = useState<string[]>(['all']);
+
+  const toggleClass = (cls: string) => {
+    if (cls === 'all') {
+      setTargetClasses(['all']);
+      return;
+    }
+    setTargetClasses((prev) => {
+      const withoutAll = prev.filter((c) => c !== 'all');
+      if (withoutAll.includes(cls)) {
+        const next = withoutAll.filter((c) => c !== cls);
+        return next.length === 0 ? ['all'] : next;
+      } else {
+        return [...withoutAll, cls];
+      }
+    });
+  };
 
   // Teacher Optional Model Solution
   const [solutionFileName, setSolutionFileName] = useState('');
@@ -195,8 +213,16 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   // File Download tracking
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+
   // Sort homeworks: unsubmitted/pending homeworks come first; submitted homeworks are placed at the very bottom
-  const subjectHomeworks = [...homeworks.filter((h) => h.subjectId === subject.id)].sort((a, b) => {
+  const subjectHomeworks = [...homeworks.filter((h) => h.subjectId === subject.id)]
+    .filter((h) => {
+      if (selectedClassFilter === 'all') return true;
+      if (!h.targetClasses || h.targetClasses.length === 0 || h.targetClasses.includes('all')) return true;
+      return h.targetClasses.includes(selectedClassFilter);
+    })
+    .sort((a, b) => {
     const aSub = submissions.some(
       (s) =>
         s.homeworkId === a.id &&
@@ -232,6 +258,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
     setQuestionNumber('');
     setTitle('');
     setNotes('');
+    setTargetClasses(['all']);
     setFormError('');
     setSolutionFileName('');
     setSolutionFileSize('');
@@ -248,6 +275,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
     setQuestionNumber(hw.questionNumber || '');
     setTitle(hw.title || '');
     setNotes(hw.notes || '');
+    setTargetClasses(hw.targetClasses && hw.targetClasses.length > 0 ? hw.targetClasses : ['all']);
     setFormError('');
     if (hw.solutionFile?.hasFile) {
       setSolutionFileName(hw.solutionFile.name || 'الحل_النموذجي');
@@ -360,6 +388,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
           questionNumber: questionNumber.trim(),
           title: title.trim() || undefined,
           notes: notes.trim() || undefined,
+          targetClasses: targetClasses.length === 0 ? ['all'] : targetClasses,
           solutionFile
         });
       }
@@ -373,6 +402,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
         title: title.trim() || undefined,
         notes: notes.trim() || undefined,
         supervisorName,
+        targetClasses: targetClasses.length === 0 ? ['all'] : targetClasses,
         solutionFile
       });
     }
@@ -629,6 +659,14 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
             <span>إضافة واجب جديد</span>
           </motion.button>
         )}
+      </div>
+
+      {/* Class filter dropdown button (الافتراضي جميع الفصول) */}
+      <div className="flex items-center">
+        <ClassFilterDropdown
+          selectedClass={selectedClassFilter}
+          onSelectClass={setSelectedClassFilter}
+        />
       </div>
 
       {/* Homework Cards List */}
@@ -1118,8 +1156,18 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                     {/* زر عرض المزيد / عرض أقل */}
                     <button
                       type="button"
-                      onClick={() => toggleExpand(hw.id)}
-                      className="py-1 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700"
+                      onClick={() => {
+                        if ((isClosed || deadlinePassed) && !canEdit && !hasStudentSubmission) {
+                          alert('هذا الواجب منتهي ولا يمكن الدخول إليه.');
+                          return;
+                        }
+                        toggleExpand(hw.id);
+                      }}
+                      className={`py-1 px-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
+                        (isClosed || deadlinePassed) && !canEdit && !hasStudentSubmission
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
                     >
                       <span>{isExpanded ? 'عرض أقل' : 'عرض المزيد'}</span>
                       {isExpanded ? (
@@ -1131,10 +1179,10 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
 
                     {/* زر التسليم: متاح للطلاب والمشرفين فقط */}
                     {canSubmitHomework && (
-                      isClosed ? (
+                      (isClosed || deadlinePassed) ? (
                         <div
                           className="py-1 px-3 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1.5 cursor-not-allowed select-none"
-                          title="هذا الواجب منتهي ولم يعد يقبل تسليم حلول جديدة"
+                          title="هذا الواجب منتهي ومغلق ولا يمكن تسليم أو تعديل حلول"
                         >
                           <Lock className="w-3.5 h-3.5 text-rose-500" />
                           <span>واجب منتهي</span>
@@ -1281,6 +1329,50 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                     onChange={(e) => setTitle(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs md:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white transition"
                   />
+                </div>
+
+                {/* Target Classes Selector */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700">
+                      الفصول المستهدفة *
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {targetClasses.includes('all')
+                        ? 'محدد لجميع الفصول (١/١ - ١/٧)'
+                        : `${targetClasses.length} فصول محددة`}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleClass('all')}
+                      className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                        targetClasses.includes('all')
+                          ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-transparent'
+                      }`}
+                    >
+                      جميع الفصول
+                    </button>
+                    {AVAILABLE_CLASSES.map((cls) => {
+                      const isSelected = !targetClasses.includes('all') && targetClasses.includes(cls);
+                      return (
+                        <button
+                          key={cls}
+                          type="button"
+                          onClick={() => toggleClass(cls)}
+                          className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                            isSelected
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-transparent'
+                          }`}
+                        >
+                          {cls}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Optional Model Solution Upload (Images / Camera / PDF) */}

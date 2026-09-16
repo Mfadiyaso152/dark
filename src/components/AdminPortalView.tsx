@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, SUPER_ADMIN_EMAIL, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, USER_JOB_OPTIONS, User } from '../types';
 import { formatGregorianDate } from '../utils/dateFormatter';
@@ -63,15 +63,21 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     logout
   } = useAuth();
 
-  // 1. Secret Passcode State
+  // 1. Secret Passcode State (Never persisted in storage, must be entered on every single visit)
   const [passcode, setPasscode] = useState('');
-  const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('thanaweya_admin_passcode_session') === ADMIN_SECRET_PASSCODE;
-    }
-    return false;
-  });
+  const [isPasscodeUnlocked, setIsPasscodeUnlocked] = useState<boolean>(false);
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
+
+  // Clear any existing session storage from older sessions on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        sessionStorage.removeItem('thanaweya_admin_passcode_session');
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
 
   // 2. Active Tab in Admin Dashboard
   const [activeTab, setActiveTab] = useState<AdminTab>('stats');
@@ -105,9 +111,6 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     if (passcode.trim() === ADMIN_SECRET_PASSCODE) {
       setIsPasscodeUnlocked(true);
       setPasscodeError(null);
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('thanaweya_admin_passcode_session', ADMIN_SECRET_PASSCODE);
-      }
     } else {
       setPasscodeError('رمز المرور السري غير صحيح!');
       setTimeout(() => setPasscodeError(null), 3000);
@@ -117,9 +120,6 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   const handleLockPortal = () => {
     setIsPasscodeUnlocked(false);
     setPasscode('');
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('thanaweya_admin_passcode_session');
-    }
   };
 
   const handleRefresh = async () => {
@@ -308,19 +308,22 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   // ==========================================
   if (!isPasscodeUnlocked) {
     return (
-      <div className="min-h-[75vh] flex items-center justify-center p-4 font-['Tajawal',sans-serif] text-right">
+      <div className="min-h-[75vh] flex items-center justify-center p-4 font-['IBM_Plex_Sans_Arabic',sans-serif] text-right">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl shadow-lg p-6 space-y-4"
+          className="w-full max-w-sm bg-white border border-slate-200/90 rounded-3xl shadow-xl p-6 sm:p-7 space-y-4"
         >
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-purple-50 border border-purple-200 text-purple-700 flex items-center justify-center mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 text-sky-400 flex items-center justify-center mx-auto shadow-md ring-1 ring-sky-500/20">
               <Lock className="w-6 h-6" />
             </div>
-            <h2 className="text-base font-black text-slate-900">
-              رمز المرور
+            <h2 className="text-base sm:text-lg font-bold font-['Alexandria',sans-serif] text-slate-900">
+              رمز المرور السري
             </h2>
+            <p className="text-xs text-slate-500">
+              أدخل رمز المرور للمتابعة إلى لوحة التحكم
+            </p>
           </div>
 
           <form onSubmit={handleVerifyPasscode} className="space-y-3">
@@ -332,13 +335,13 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                 placeholder="أدخل رمز المرور..."
                 maxLength={10}
                 autoFocus
-                className="w-full py-3 pr-10 pl-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-base font-mono font-bold tracking-widest text-slate-800 placeholder:text-xs placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                className="w-full py-3 pr-10 pl-4 bg-slate-50 border border-slate-200 rounded-2xl text-center text-base font-mono font-bold tracking-widest text-slate-900 placeholder:text-xs placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-400 focus:outline-none focus:border-sky-600 focus:bg-white transition"
               />
               <KeyRound className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5" />
             </div>
 
             {passcodeError && (
-              <div className="p-2 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center gap-2">
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center gap-2">
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                 <span>{passcodeError}</span>
               </div>
@@ -346,16 +349,16 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
             <button
               type="submit"
-              className="w-full py-3 bg-purple-700 hover:bg-purple-800 text-white font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer border border-white/10"
             >
-              <Unlock className="w-3.5 h-3.5" />
+              <Unlock className="w-3.5 h-3.5 text-sky-400" />
               <span>دخول</span>
             </button>
 
             <button
               type="button"
               onClick={onNavigateHome}
-              className="w-full py-2 text-slate-500 hover:text-slate-700 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
+              className="w-full py-2 text-slate-500 hover:text-slate-800 font-bold text-xs transition flex items-center justify-center gap-1 cursor-pointer"
             >
               <ArrowRight className="w-3.5 h-3.5" />
               <span>العودة للرئيسية</span>
@@ -371,18 +374,18 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   // ==========================================
   if (!isAuthorizedSuperAdmin) {
     return (
-      <div className="min-h-[75vh] flex items-center justify-center p-4 font-['Tajawal',sans-serif] text-right">
+      <div className="min-h-[75vh] flex items-center justify-center p-4 font-['IBM_Plex_Sans_Arabic',sans-serif] text-right">
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl shadow-lg p-6 space-y-4 text-center"
+          className="w-full max-w-sm bg-white border border-slate-200/90 rounded-3xl shadow-xl p-6 sm:p-7 space-y-4 text-center"
         >
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto">
+          <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 text-sky-400 flex items-center justify-center mx-auto shadow-md ring-1 ring-sky-500/20">
             <Crown className="w-6 h-6" />
           </div>
 
           <div className="space-y-1">
-            <h2 className="text-base font-black text-slate-900">
+            <h2 className="text-base sm:text-lg font-bold font-['Alexandria',sans-serif] text-slate-900">
               تسجيل الدخول مطلوب
             </h2>
             <p className="text-xs text-slate-500 font-medium">
@@ -399,7 +402,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
           <div className="space-y-2 pt-2">
             <button
               onClick={loginWithGoogle}
-              className="w-full py-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-black text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer border border-white/10"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path
@@ -433,7 +436,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
             <button
               onClick={handleLockPortal}
-              className="w-full py-2 text-slate-500 hover:text-slate-700 font-bold text-xs transition cursor-pointer"
+              className="w-full py-2 text-slate-500 hover:text-slate-800 font-bold text-xs transition cursor-pointer"
             >
               قفل والعودة
             </button>
@@ -447,45 +450,48 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   // UNLOCKED: Admin Options & Dashboard
   // ==========================================
   return (
-    <div className="space-y-4 text-right font-['Tajawal',sans-serif] pb-10">
+    <div className="space-y-4 text-right font-['IBM_Plex_Sans_Arabic',sans-serif] pb-10">
       {/* Clean Options & Action Header Bar */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        {/* Navigation Tabs */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        {/* Navigation Tabs - Icon only without text as requested */}
         <div className="flex items-center gap-1.5 overflow-x-auto">
           <button
             onClick={() => setActiveTab('stats')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+            aria-label="الإحصائيات"
+            title="الإحصائيات"
+            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
               activeTab === 'stats'
-                ? 'bg-purple-700 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            <BarChart3 className="w-3.5 h-3.5" />
-            <span>الإحصائيات</span>
+            <BarChart3 className="w-4 h-4" />
           </button>
 
           <button
             onClick={() => setActiveTab('users')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+            aria-label={`إدارة المستخدمين (${uniqueUsers.length})`}
+            title={`إدارة المستخدمين (${uniqueUsers.length})`}
+            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
               activeTab === 'users'
-                ? 'bg-purple-700 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>إدارة المستخدمين والأسماء ({uniqueUsers.length})</span>
+            <Users className="w-4 h-4" />
           </button>
 
           <button
             onClick={() => setActiveTab('activity')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+            aria-label={`سجل التسليمات (${submissions.length})`}
+            title={`سجل التسليمات (${submissions.length})`}
+            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
               activeTab === 'activity'
-                ? 'bg-purple-700 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            <Activity className="w-3.5 h-3.5" />
-            <span>سجل التسليمات ({submissions.length})</span>
+            <Activity className="w-4 h-4" />
           </button>
         </div>
 
@@ -494,29 +500,29 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            className="p-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer border border-slate-200"
             title="تحديث البيانات"
+            aria-label="تحديث البيانات"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-purple-700' : ''}`} />
-            <span className="hidden sm:inline">تحديث</span>
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
           </button>
 
           <button
             onClick={handleLockPortal}
-            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer border border-rose-200"
+            className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer border border-rose-200"
             title="قفل البوابة"
+            aria-label="قفل البوابة"
           >
-            <Lock className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">قفل</span>
+            <Lock className="w-4 h-4" />
           </button>
 
           <button
             onClick={onNavigateHome}
-            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+            className="p-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer border border-slate-200"
             title="الرئيسية"
+            aria-label="الرئيسية"
           >
-            <Home className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">الرئيسية</span>
+            <Home className="w-4 h-4" />
           </button>
         </div>
       </div>

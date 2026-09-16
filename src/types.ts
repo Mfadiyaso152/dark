@@ -150,6 +150,7 @@ export interface Lesson {
   attachedFile?: AttachedFile;
   authorId?: string;
   authorName?: string;
+  targetClasses?: string[]; // e.g. ["1/1", "1/2"] or ["all"]
 }
 
 export interface Subject {
@@ -189,6 +190,7 @@ export interface SubjectBooklet {
   supervisorName: string;
   hasFile?: boolean;
   fileSize?: string;
+  targetClasses?: string[];
 }
 
 export interface Homework {
@@ -204,6 +206,7 @@ export interface Homework {
   solutionFile?: AttachedFile; // Optional PDF solution file attached by teacher
   isClosed?: boolean; // إنهاء الواجب بعد انتهاء مدة التسليم
   closedAt?: string;
+  targetClasses?: string[];
 }
 
 export function isHomeworkDeadlinePassed(dueDate?: string): boolean {
@@ -291,6 +294,9 @@ export interface AppNotification {
   createdAt: string;
   isDeleted?: boolean;
 }
+
+export const AVAILABLE_CLASSES = ['1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7'] as const;
+export type ClassName = typeof AVAILABLE_CLASSES[number];
 
 
 

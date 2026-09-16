@@ -96,6 +96,7 @@ export const SubjectControlsProvider: React.FC<{ children: ReactNode }> = ({ chi
 
   const isSubjectPaused = useCallback(
     (subjectId: string): boolean => {
+      if (subjectId === 'tafsir-1') return false;
       return !!controls[subjectId]?.isPaused;
     },
     [controls]

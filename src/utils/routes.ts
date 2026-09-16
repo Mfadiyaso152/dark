@@ -303,11 +303,8 @@ export function parsePathname(pathname: string, subjects: Subject[], lessons: Le
   if (first === 'students' || first === 'services' || first === 'student-service') {
     return { type: 'students' };
   }
-  if (first === 'admin' || first === 'secret-admin' || first === 'super-admin') {
+  if (first === 'admin' || first === 'secret-admin' || first === 'super-admin' || first === 'users' || first === 'management') {
     return { type: 'admin' };
-  }
-  if (first === 'users' || first === 'management') {
-    return { type: 'users' };
   }
 
   // Check if first segment is a Subject
@@ -419,7 +416,6 @@ export function buildUrl(
   if (tab === 'homeworks') return '/homeworks';
   if (tab === 'qudurat') return '/qudurat';
   if (tab === 'students') return '/students';
-  if (tab === 'users') return '/users';
   if (tab === 'admin') return '/admin';
 
   // Home

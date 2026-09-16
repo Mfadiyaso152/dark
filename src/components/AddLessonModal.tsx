@@ -10,7 +10,7 @@ import {
   Cloud,
   Loader2
 } from 'lucide-react';
-import { Subject, Lesson, AttachedFile } from '../types';
+import { Subject, Lesson, AttachedFile, AVAILABLE_CLASSES } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { db, doc, setDoc } from '../lib/firebase';
 
@@ -45,12 +45,33 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
     return fallbackSubjectId;
   });
   const [title, setTitle] = useState<string>(editingLesson ? editingLesson.title : '');
+  const [targetClasses, setTargetClasses] = useState<string[]>(
+    editingLesson?.targetClasses && editingLesson.targetClasses.length > 0
+      ? editingLesson.targetClasses
+      : ['all']
+  );
   const [attachedFile, setAttachedFile] = useState<AttachedFile | undefined>(
     editingLesson?.attachedFile
   );
   const [error, setError] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  const toggleClass = (cls: string) => {
+    if (cls === 'all') {
+      setTargetClasses(['all']);
+      return;
+    }
+    setTargetClasses((prev) => {
+      const withoutAll = prev.filter((c) => c !== 'all');
+      if (withoutAll.includes(cls)) {
+        const next = withoutAll.filter((c) => c !== cls);
+        return next.length === 0 ? ['all'] : next;
+      } else {
+        return [...withoutAll, cls];
+      }
+    });
+  };
 
   if (!isOpen) return null;
 
@@ -120,7 +141,8 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
       attachedFile,
       authorId: user?.id || 'supervisor',
       authorName: user?.name || targetSub?.supervisorName || 'مشرف المادة',
-      createdAt: editingLesson?.createdAt || new Date().toISOString()
+      createdAt: editingLesson?.createdAt || new Date().toISOString(),
+      targetClasses: targetClasses.length === 0 ? ['all'] : targetClasses
     };
 
     try {
@@ -202,6 +224,50 @@ export const AddLessonModal: React.FC<AddLessonModalProps> = ({
               placeholder="اكتب عنوان الدرس هنا..."
               className="w-full py-3 px-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:outline-none"
             />
+          </div>
+
+          {/* Target Classes Selection */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-black text-slate-700">
+                الفصول المستهدفة *
+              </label>
+              <span className="text-[10px] text-slate-400 font-medium">
+                {targetClasses.includes('all')
+                  ? 'محدد لجميع الفصول (١/١ - ١/٧)'
+                  : `${targetClasses.length} فصول محددة`}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => toggleClass('all')}
+                className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  targetClasses.includes('all')
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                    : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 border-transparent'
+                }`}
+              >
+                جميع الفصول
+              </button>
+              {AVAILABLE_CLASSES.map((cls) => {
+                const isSelected = !targetClasses.includes('all') && targetClasses.includes(cls);
+                return (
+                  <button
+                    key={cls}
+                    type="button"
+                    onClick={() => toggleClass(cls)}
+                    className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      isSelected
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                        : 'bg-slate-100/80 hover:bg-slate-200/80 text-slate-600 border-transparent'
+                    }`}
+                  >
+                    {cls}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* File Attachment: PDF or Image */}

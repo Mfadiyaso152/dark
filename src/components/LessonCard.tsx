@@ -102,14 +102,14 @@ export const LessonCard: React.FC<LessonCardProps> = ({
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 450, damping: 30 }}
       onClick={handleCardClick}
-      className={`group cursor-pointer rounded-2xl p-4 transition-all duration-200 border text-right relative overflow-hidden bg-white ${
+      className={`group cursor-pointer rounded-2xl md:rounded-3xl p-4 sm:p-5 transition-all duration-300 border text-right relative overflow-hidden bg-white ${
         isCompleted
-          ? 'border-[#86EFAC] bg-[#F0FDF4]/30'
-          : 'border-[#E2E8F0] hover:border-[#94A3B8] shadow-2xs hover:shadow-xs'
+          ? 'border-emerald-300/80 bg-[#FAFDF8] shadow-[0_2px_12px_-3px_rgba(16,185,129,0.06)]'
+          : 'border-[#E7E2D8] hover:border-[#D0C8B8] hover:bg-[#FFFCF9] shadow-[0_2px_12px_-3px_rgba(28,25,23,0.04)] hover:shadow-[0_8px_20px_-6px_rgba(28,25,23,0.08)]'
       }`}
     >
       {/* Top row: Badges & Actions */}
-      <div className="flex items-center justify-between gap-2 mb-2">
+      <div className="flex items-center justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-1">
           {/* Teacher/Supervisor Actions */}
           {canEditThisLesson && (
@@ -120,7 +120,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
                     e.stopPropagation();
                     onEdit(lesson);
                   }}
-                  className="p-1.5 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                  className="p-1.5 rounded-xl text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF] transition cursor-pointer"
                   title="تعديل الدرس"
                 >
                   <Edit className="w-3.5 h-3.5" />
@@ -133,7 +133,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
                     e.stopPropagation();
                     onDelete(lesson.id);
                   }}
-                  className="p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:scale-90"
+                  className="p-1.5 rounded-xl transition cursor-pointer flex items-center gap-1 text-[#78716C] hover:text-rose-600 hover:bg-rose-50 active:scale-90"
                   title="حذف الدرس مباشرة"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -145,31 +145,31 @@ export const LessonCard: React.FC<LessonCardProps> = ({
 
         {/* Attached File Badge if any */}
         {lesson.attachedFile && (
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60 flex items-center gap-1">
+          <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-[#F5F3EF] text-[#1C1917] border border-[#E7E2D8] flex items-center gap-1">
             {lesson.attachedFile.type === 'pdf' ? '📄' : '🖼️'}
             <span>{lesson.attachedFile.type.toUpperCase()}</span>
           </span>
         )}
       </div>
 
-      {/* Lesson Title ONLY (No summary or description at all) */}
-      <h3 className="font-bold text-[#1E293B] text-sm sm:text-base leading-snug mb-3 group-hover:text-[#3B82F6] transition">
+      {/* Lesson Title */}
+      <h3 className="font-bold font-['Alexandria',sans-serif] text-[#1C1917] text-sm sm:text-base leading-snug mb-3.5 group-hover:text-amber-800 transition-colors">
         {lesson.title}
       </h3>
 
       {/* Action Bar */}
-      <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+      <div className="pt-3 border-t border-[#F2EEE9] flex items-center justify-between gap-2 font-['IBM_Plex_Sans_Arabic',sans-serif]">
         {/* Check completed toggle */}
         <button
           onClick={handleComplete}
           className={`text-xs font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 transition cursor-pointer ${
             isCompleted
-              ? 'bg-[#DCFCE7] text-[#14532D]'
-              : 'bg-[#F8FAFC] hover:bg-[#F1F5F9] text-[#475569]'
+              ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+              : 'bg-[#F5F3EF] hover:bg-[#EBE7DF] text-[#44403C]'
           }`}
         >
           <CheckCircle2
-            className={`w-3.5 h-3.5 ${isCompleted ? 'text-[#16A34A]' : 'text-slate-400'}`}
+            className={`w-3.5 h-3.5 ${isCompleted ? 'text-emerald-700' : 'text-[#A8A29E]'}`}
           />
           <span>{isCompleted ? 'تم إنجازه' : 'تحديد كـ منجز'}</span>
         </button>
@@ -178,13 +178,13 @@ export const LessonCard: React.FC<LessonCardProps> = ({
         <button
           onClick={handleDownload}
           disabled={isDownloading}
-          className="text-xs font-bold py-1.5 px-3.5 rounded-xl bg-[#1E293B] hover:bg-[#0F172A] text-white flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-2xs"
+          className="text-xs font-bold py-1.5 px-3.5 rounded-xl bg-[#1C1917] hover:bg-[#292524] text-[#FAF8F5] flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-xs border border-white/10"
           title="تنزيل ملخص هذا الدرس بصيغة PDF"
         >
           {isDownloading ? (
-            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-3.5 h-3.5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
           ) : (
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-3.5 h-3.5 text-amber-400" />
           )}
           <span>{downloadDone ? 'تم التنزيل!' : 'تنزيل PDF'}</span>
         </button>

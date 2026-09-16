@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAIL, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import { User, Lesson, Subject, Homework, HomeworkSubmission, AttachedFile, getSubmissionFiles } from '../types';
 import {
   Search,
@@ -11,25 +11,18 @@ import {
   ChevronLeft,
   ArrowRight,
   Download,
-  FileCheck,
-  Calendar,
-  AlertCircle,
-  BookOpen,
-  HelpCircle,
-  Image as ImageIcon,
   Eye,
   X,
   SlidersHorizontal,
-  FileText,
-  Clock,
-  RotateCcw
+  RotateCcw,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
-import { formatGregorianDate } from '../utils/dateFormatter';
 import { FilePreviewModal } from './FilePreviewModal';
+import { ClassFilterDropdown } from './ClassFilterDropdown';
 
 interface StudentsManagementViewProps {
   allLessons?: Lesson[];
@@ -48,20 +41,17 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 }) => {
   const {
     user,
-    isSuperAdmin,
-    isTeacherOrSupervisor,
     registeredUsers,
-    refreshUsers,
-    canManageSubject
+    refreshUsers
   } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeStudentPage, setActiveStudentPage] = useState<User | null>(null);
-  const [noHomeworkToast, setNoHomeworkToast] = useState<string | null>(null);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   // Filter & Sort State
+  const [selectedClass, setSelectedClass] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'submitted' | 'not_submitted'>('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -175,25 +165,39 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const filteredUsers = useMemo(() => {
     let result = uniqueStudents;
 
-    // 1. Text Search query
+    // 1. Class filter
+    if (selectedClass && selectedClass !== 'all') {
+      result = result.filter((u) => {
+        // If student has submissions with matching class or student's class matches
+        const studentSubs = getStudentSubmissions(u);
+        const hasClassSub = studentSubs.some((sub) => {
+          const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+          return hw && (hw.targetClasses?.includes(selectedClass) || hw.targetClasses?.includes('all') || (hw as any).targetClass === selectedClass || (hw as any).classNumber === selectedClass);
+        });
+        const userClassMatches = (u as any).class === selectedClass || (u as any).section === selectedClass;
+        return hasClassSub || userClassMatches || studentSubs.length > 0;
+      });
+    }
+
+    // 2. Text Search query
     const q = searchQuery.toLowerCase().trim();
     if (q) {
       result = result.filter((u) => u.name.toLowerCase().includes(q));
     }
 
-    // 2. Submission status filter (مسلم الواجب / لم يسلم)
+    // 3. Submission status filter (مسلم الواجب / لم يسلم)
     if (statusFilter === 'submitted') {
       result = result.filter((u) => getStudentSubmissionsCount(u) > 0);
     } else if (statusFilter === 'not_submitted') {
       result = result.filter((u) => getStudentSubmissionsCount(u) === 0);
     }
 
-    // 3. Alphabetical sorting (أ إلى ي / ي إلى أ)
+    // 4. Alphabetical sorting (أ إلى ي / ي إلى أ)
     return [...result].sort((a, b) => {
       const cmp = a.name.localeCompare(b.name, 'ar');
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [uniqueStudents, searchQuery, statusFilter, sortOrder, allSubmissions]);
+  }, [uniqueStudents, selectedClass, searchQuery, statusFilter, sortOrder, allSubmissions, allHomeworks]);
 
   // Submission count metrics for the filter badges
   const totalSubmittedCount = useMemo(() => {
@@ -253,20 +257,23 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     }
   };
 
-  const isImageFile = (fileName?: string, dataUrl?: string) => {
-    if (dataUrl?.startsWith('data:image/')) return true;
-    if (!fileName) return false;
-    return /\.(png|jpe?g|webp|gif|bmp)$/i.test(fileName);
+  // Download all files attached to a submission
+  const handleDownloadAllFiles = async (files: AttachedFile[]) => {
+    if (!files || files.length === 0) return;
+    for (const file of files) {
+      await handleDownloadFile(file.fileId, file.dataUrl, file.name);
+    }
   };
 
   // Click on student card
   const handleStudentClick = (u: User) => {
     setActiveStudentPage(u);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
   return (
-    <div className="space-y-4 md:space-y-6 text-right font-['Tajawal',sans-serif]">
-      {/* File Preview Modal (PDF and Image viewer directly in-browser) */}
+    <div className="space-y-4 md:space-y-5 text-right font-['IBM_Plex_Sans_Arabic',sans-serif]">
+      {/* File Preview Modal (PDF and Image viewer directly in-browser full page) */}
       <FilePreviewModal
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
@@ -276,23 +283,23 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         title={previewTitle}
       />
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence initial={false}>
         {/* ---------------------------------------------------- */}
         {/* VIEW 1: FULL STUDENT HOMEWORKS PAGE (صفحة واجبات الطالب) */}
         {/* ---------------------------------------------------- */}
         {activeStudentPage ? (
           <motion.div
-            key="student-detail-page"
-            initial={{ opacity: 0, x: -16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 16 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="space-y-4 md:space-y-6"
+            key={`student-detail-${activeStudentPage.id || activeStudentPage.email}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-4 min-h-[60vh]"
           >
-            {/* Header: Exactly ONE Single Back Button & Student Info Header */}
-            <div className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-xl shadow-xs shrink-0 overflow-hidden">
+            {/* Header: Student Info Header & Icon-only Back Button */}
+            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xl shadow-xs shrink-0 overflow-hidden">
                   {activeStudentPage.avatar ? (
                     <img
                       src={activeStudentPage.avatar}
@@ -300,40 +307,48 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <GraduationCap className="w-6 h-6 sm:w-7 sm:h-7" />
+                    <GraduationCap className="w-5 h-5" />
+                  )}
+                  {isFullNameValid(activeStudentPage.name) && (
+                    <span className="absolute bottom-0.5 left-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-white text-[9px] font-bold">
+                      ✓
+                    </span>
                   )}
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-lg sm:text-xl font-black text-slate-900">
-                      واجبات الطالب: {activeStudentPage.name}
-                    </h2>
-                    <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-xs font-black border border-purple-200">
-                      {getStudentSubmissionsCount(activeStudentPage)} واجبات مسلّمة
-                    </span>
-                  </div>
+                <div className="space-y-0.5">
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                    {activeStudentPage.name}
+                  </h2>
+                  <span className="text-xs text-slate-500 font-medium">
+                    {getStudentSubmissionsCount(activeStudentPage)} واجبات مسلّمة
+                  </span>
                 </div>
               </div>
 
-              {/* SINGLE Prominent Back Button */}
+              {/* Single Prominent Back Button (Icon Only) */}
               <button
-                onClick={() => setActiveStudentPage(null)}
-                className="py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 text-xs sm:text-sm font-black transition flex items-center gap-2 cursor-pointer shadow-2xs self-start sm:self-auto"
+                type="button"
+                onClick={() => {
+                  setIsPreviewOpen(false);
+                  setActiveStudentPage(null);
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                }}
+                className="p-2.5 sm:p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
                 title="الرجوع لقائمة الطلاب"
+                aria-label="الرجوع لقائمة الطلاب"
               >
-                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600" />
-                <span>الرجوع لقائمة الطلاب</span>
+                <ArrowRight className="w-5 h-5 text-slate-700" />
               </button>
             </div>
 
             {/* List of Submitted Homeworks by this student */}
-            <div className="space-y-3.5">
+            <div className="space-y-2.5">
               {getStudentSubmissions(activeStudentPage).length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
                   <ClipboardList className="w-10 h-10 text-slate-300 mx-auto" />
-                  <h4 className="text-sm sm:text-base font-black text-slate-800">
-                    لم يقم الطالب ({activeStudentPage.name}) بتسليم أي واجبات بعد
+                  <h4 className="text-sm sm:text-base font-bold text-slate-800">
+                    لا توجد واجبات مسلّمة
                   </h4>
                   <p className="text-xs text-slate-400">
                     ستظهر هنا حلول الواجبات فور قيام الطالب برفعها وتسليمها
@@ -342,172 +357,67 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               ) : (
                 getStudentSubmissions(activeStudentPage).map((sub) => {
                   const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
-                  const subject = hw ? allSubjects.find((s) => s.id === hw.subjectId) : undefined;
                   const studentFiles = getSubmissionFiles(sub);
-                  const hasStudentFiles = studentFiles.length > 0;
+                  const hasFiles = studentFiles.length > 0;
+                  const homeworkTitle = hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}` || 'واجب مدرسي';
 
                   return (
                     <motion.div
                       key={sub.id}
-                      initial={{ opacity: 0, y: 6 }}
+                      initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-white rounded-3xl p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all space-y-3.5"
+                      className="bg-white rounded-2xl sm:rounded-3xl p-4 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-3 text-right"
                     >
-                      {/* Top Row: Submission Date */}
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="px-3 py-1 rounded-xl bg-purple-50 text-purple-700 border border-purple-200/70 text-xs font-black flex items-center gap-1.5">
-                          <span>{subject?.emoji || '📖'}</span>
-                          <span>{subject?.name || 'مقرر دراسي'}</span>
-                        </span>
-
-                        <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl flex items-center gap-1">
-                          <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>تاريخ التسليم: {formatGregorianDate(sub.submittedAt)}</span>
-                        </span>
-                      </div>
-
-                      {/* Assignment Name Only */}
-                      <div className="pt-1">
-                        <h3 className="font-black text-slate-900 text-sm sm:text-base">
-                          {hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}`}
+                      {/* ONLY Homework Title (No subject, notes, or date) */}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">
+                          {homeworkTitle}
                         </h3>
                       </div>
 
-                      {/* Student Notes if any */}
-                      {sub.notes && (
-                        <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-2xl text-xs space-y-0.5">
-                          <span className="font-bold text-indigo-900 block">ملاحظات الطالب مع الحل:</span>
-                          <p className="text-slate-700 leading-relaxed">{sub.notes}</p>
-                        </div>
-                      )}
+                      {/* Action buttons: ONLY 2 Icon-Only Buttons (View All, Download All) */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* 1. View All Icon Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!hasFiles) {
+                              alert('لا توجد ملفات مرفقة مع هذا الواجب.');
+                              return;
+                            }
+                            handleOpenPreview(
+                              studentFiles,
+                              0,
+                              activeStudentPage.name,
+                              homeworkTitle
+                            );
+                          }}
+                          disabled={!hasFiles}
+                          className="p-2.5 sm:p-3 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs"
+                          title="عرض الكل"
+                          aria-label="عرض الكل"
+                        >
+                          <Eye className="w-4 h-4 text-slate-700" />
+                        </button>
 
-                      {/* Student Attached Files: Multi-file preview & download support */}
-                      {hasStudentFiles ? (
-                        <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                              <FileCheck className="w-4 h-4 text-emerald-600" />
-                              <span>ملفات الحل المرفقة من الطالب ({studentFiles.length}):</span>
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleOpenPreview(
-                                  studentFiles,
-                                  0,
-                                  activeStudentPage.name,
-                                  `${hw?.title || 'واجب'} - حل ${activeStudentPage.name}`
-                                )
-                              }
-                              className="py-1 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>معاينة الكل بدون تحميل</span>
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                            {studentFiles.map((file, fIdx) => {
-                              const isImg = isImageFile(file.name, file.dataUrl);
-                              return (
-                                <div
-                                  key={file.fileId || fIdx}
-                                  className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 text-xs shadow-2xs"
-                                >
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    {isImg ? (
-                                      <ImageIcon className="w-4 h-4 text-indigo-500 shrink-0" />
-                                    ) : (
-                                      <FileText className="w-4 h-4 text-red-500 shrink-0" />
-                                    )}
-                                    <div className="min-w-0">
-                                      <p className="font-bold text-slate-800 truncate" title={file.name}>
-                                        {file.name}
-                                      </p>
-                                      {file.size && (
-                                        <p className="text-[10px] text-slate-400">{file.size}</p>
-                                      )}
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleOpenPreview(
-                                          studentFiles,
-                                          fIdx,
-                                          activeStudentPage.name,
-                                          `${file.name} - ${activeStudentPage.name}`
-                                        )
-                                      }
-                                      className="p-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                                      title="معاينة الملف مباشرة"
-                                    >
-                                      <Eye className="w-3.5 h-3.5" />
-                                      <span className="hidden sm:inline">معاينة</span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleDownloadFile(file.fileId, file.dataUrl, file.name)
-                                      }
-                                      disabled={downloadingFileId === (file.fileId || file.name)}
-                                      className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                                      title="تحميل الملف"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                      <span className="hidden sm:inline">تحميل</span>
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-400">
-                          لم يتم إرفاق أي ملفات أو صور مع حل هذا الواجب.
-                        </div>
-                      )}
-
-                      {/* Teacher Model Solution Link if attached (Teachers & Supervisors only) */}
-                      {(isTeacherOrSupervisor || isSuperAdmin) && hw?.solutionFile?.hasFile && (
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2 text-xs">
-                          <span className="text-slate-500 font-bold">الحل النموذجي المرفق من المعلم:</span>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleOpenPreview(
-                                  [hw.solutionFile!],
-                                  0,
-                                  'المعلم',
-                                  `${hw.title || 'واجب'} - الحل النموذجي`
-                                )
-                              }
-                              className="py-1 px-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                            >
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>معاينة النموذج</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleDownloadFile(
-                                  hw.solutionFile?.fileId,
-                                  hw.solutionFile?.dataUrl,
-                                  hw.solutionFile?.name || 'الحل_النموذجي.pdf'
-                                )
-                              }
-                              className="py-1 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>تحميل</span>
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                        {/* 2. Download All Icon Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!hasFiles) {
+                              alert('لا توجد ملفات مرفقة لتحميلها.');
+                              return;
+                            }
+                            handleDownloadAllFiles(studentFiles);
+                          }}
+                          disabled={!hasFiles || Boolean(downloadingFileId)}
+                          className="p-2.5 sm:p-3 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs"
+                          title="تحميل الكل"
+                          aria-label="تحميل الكل"
+                        >
+                          <Download className="w-4 h-4 text-sky-400" />
+                        </button>
+                      </div>
                     </motion.div>
                   );
                 })
@@ -516,67 +426,40 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           </motion.div>
         ) : (
           /* ---------------------------------------------------- */
-          /* VIEW 2: UNIFIED STUDENTS LIST WITH FILTER BUTTON */
+          /* VIEW 2: UNIFIED STUDENTS LIST */
           /* ---------------------------------------------------- */
           <motion.div
             key="students-list-view"
-            initial={{ opacity: 0, x: 16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -16 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="space-y-4 md:space-y-6"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-4"
           >
-            {/* Toast Notice */}
-            <AnimatePresence>
-              {noHomeworkToast && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.96 }}
-                  className="p-4 bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 shadow-md"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                    <span>{noHomeworkToast}</span>
-                  </div>
-                  <button
-                    onClick={() => setNoHomeworkToast(null)}
-                    className="text-amber-700 hover:text-amber-900 font-bold text-xs cursor-pointer"
-                  >
-                    إغلاق
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Header Banner */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                  <GraduationCap className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-black text-slate-900 text-base sm:text-lg flex items-center gap-2">
-                    <span>قائمة الطلاب</span>
-                    <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                      {filteredUsers.length} من {uniqueStudents.length}
-                    </span>
-                  </h3>
-                </div>
+            {/* Header: Counter only + Refresh button */}
+            <div className="bg-white rounded-3xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-black px-3 py-1 rounded-xl bg-slate-100 text-slate-800 border border-slate-200">
+                  {uniqueStudents.length}
+                </span>
+                <ClassFilterDropdown
+                  selectedClass={selectedClass}
+                  onSelectClass={setSelectedClass}
+                />
               </div>
 
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="py-2 px-3.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-2xs"
+                className="p-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer disabled:opacity-50 shadow-2xs"
                 title="تحديث البيانات"
+                aria-label="تحديث البيانات"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
-                <span>تحديث</span>
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
               </button>
             </div>
 
-            {/* Search Bar + Simple Compact Filter Button (زر صغير جمب البحث) */}
+            {/* Search Bar + Simple Compact Filter Button */}
             <div className="flex items-center gap-2 w-full">
               {/* Search Input */}
               <div className="relative flex-1">
@@ -585,27 +468,27 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ابحث باسم الطالب..."
-                  className="w-full py-3 pr-11 pl-9 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-2xs transition"
+                  className="w-full py-2.5 pr-10 pl-9 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-2xs transition"
                 />
-                <Search className="w-4 h-4 sm:w-5 sm:h-5 text-slate-400 absolute right-3.5 top-3.5" />
+                <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute left-3 top-3 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                    className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
 
-              {/* Filter Button next to search (زر الفلترة الصغير) */}
+              {/* Filter Button next to search */}
               <div className="relative shrink-0" ref={filterRef}>
                 <button
                   type="button"
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`h-[46px] px-3 sm:px-3.5 rounded-2xl border flex items-center gap-1.5 text-xs font-bold transition cursor-pointer shadow-2xs ${
+                  className={`h-[42px] px-3 sm:px-3.5 rounded-2xl border flex items-center gap-1.5 text-xs font-bold transition cursor-pointer shadow-2xs ${
                     statusFilter !== 'all' || sortOrder === 'desc'
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-100'
+                      ? 'bg-slate-900 text-white border-slate-900'
                       : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                   }`}
                   title="تصفية وترتيب الطلاب"
@@ -613,7 +496,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   <SlidersHorizontal className="w-4 h-4" />
                   <span className="hidden sm:inline">تصفية</span>
                   {statusFilter !== 'all' && (
-                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span className="w-2 h-2 rounded-full bg-sky-400"></span>
                   )}
                 </button>
 
@@ -629,7 +512,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     >
                       {/* Section 1: الترتيب من أ إلى ي */}
                       <div>
-                        <span className="text-[11px] font-black text-slate-400 block mb-1.5">
+                        <span className="text-[11px] font-bold text-slate-400 block mb-1.5">
                           ترتيب الأسماء
                         </span>
                         <div className="grid grid-cols-2 gap-1.5">
@@ -638,24 +521,24 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                             onClick={() => setSortOrder('asc')}
                             className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
                               sortOrder === 'asc'
-                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                ? 'bg-slate-900 text-white'
                                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-transparent'
                             }`}
                           >
                             <span>من أ إلى ي</span>
-                            {sortOrder === 'asc' && <CheckCircle className="w-3 h-3 text-indigo-600" />}
+                            {sortOrder === 'asc' && <Check className="w-3 h-3 text-white" />}
                           </button>
                           <button
                             type="button"
                             onClick={() => setSortOrder('desc')}
                             className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
                               sortOrder === 'desc'
-                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                ? 'bg-slate-900 text-white'
                                 : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-transparent'
                             }`}
                           >
                             <span>من ي إلى أ</span>
-                            {sortOrder === 'desc' && <CheckCircle className="w-3 h-3 text-indigo-600" />}
+                            {sortOrder === 'desc' && <Check className="w-3 h-3 text-white" />}
                           </button>
                         </div>
                       </div>
@@ -664,7 +547,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                       {/* Section 2: مسلم الواجب و لم يسلم */}
                       <div>
-                        <span className="text-[11px] font-black text-slate-400 block mb-1.5">
+                        <span className="text-[11px] font-bold text-slate-400 block mb-1.5">
                           حالة تسليم الواجبات
                         </span>
                         <div className="space-y-1">
@@ -676,11 +559,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                             }}
                             className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
                               statusFilter === 'all'
-                                ? 'bg-indigo-50 text-indigo-700 font-black'
+                                ? 'bg-slate-100 text-slate-900 font-black'
                                 : 'text-slate-700 hover:bg-slate-50'
                             }`}
                           >
-                            <span>الكل (عرض جميع الطلاب)</span>
+                            <span>الكل</span>
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                               {uniqueStudents.length}
                             </span>
@@ -753,83 +636,53 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               </div>
             </div>
 
-            {/* Active filter pills if any */}
-            {statusFilter !== 'all' && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 font-bold">التصفية النشطة:</span>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs font-bold">
-                  <span>{statusFilter === 'submitted' ? 'مسلّم الواجب' : 'لم يسلّم الواجب'}</span>
-                  <button
-                    onClick={() => setStatusFilter('all')}
-                    className="hover:text-indigo-950 p-0.5 cursor-pointer"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              </div>
-            )}
-
-            {/* Stacked Cards: Formatted just like Subject Cards */}
-            <div className="flex flex-col gap-3 md:gap-3.5 w-full">
+            {/* Students List: ONLY Avatar with Checkmark if triple name, Student Name, and Arrow */}
+            <div className="flex flex-col gap-2.5 w-full">
               {filteredUsers.map((u) => {
-                const subsCount = getStudentSubmissionsCount(u);
+                const hasValidTripleName = isFullNameValid(u.name);
 
                 return (
                   <motion.div
                     key={u.id || u.email}
-                    whileHover={{ y: -2, scale: 1.005 }}
-                    whileTap={{ scale: 0.99 }}
+                    whileHover={{ y: -1 }}
+                    whileTap={{ scale: 0.995 }}
                     transition={{ type: 'spring', stiffness: 450, damping: 25 }}
                     onClick={() => handleStudentClick(u)}
                     role="button"
-                    className="group w-full rounded-2xl md:rounded-3xl p-3 sm:p-4 md:p-4.5 transition-all duration-200 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-right relative overflow-hidden bg-white border-slate-200/90 hover:border-indigo-300 hover:shadow-md cursor-pointer active:scale-[0.99]"
+                    className="group w-full rounded-2xl p-3 sm:p-3.5 transition-all duration-200 border flex items-center justify-between gap-3 text-right bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-2xs cursor-pointer"
                   >
-                    {/* Right Side: Icon & Student Name */}
-                    <div className="flex items-center gap-3 md:gap-4 min-w-0">
-                      <div className="w-12 h-12 md:w-13 md:h-13 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl flex items-center justify-center text-xl shadow-xs shrink-0 overflow-hidden">
+                    {/* Right Side: Avatar (with checkmark if triple name registered) + Student Name */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-slate-100 text-slate-700 rounded-xl flex items-center justify-center text-base shadow-2xs shrink-0">
                         {u.avatar ? (
                           <img
                             src={u.avatar}
                             alt={u.name}
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-cover rounded-xl"
                           />
                         ) : (
-                          <GraduationCap className="w-6 h-6 md:w-7 md:h-7" />
+                          <GraduationCap className="w-5 h-5 text-slate-500" />
+                        )}
+                        {hasValidTripleName && (
+                          <span
+                            className="absolute -bottom-1 -left-1 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-white text-[9px] font-black shadow-2xs"
+                            title="الاسم الثلاثي مسجل ومؤكد"
+                          >
+                            ✓
+                          </span>
                         )}
                       </div>
 
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="font-black text-base sm:text-lg md:text-xl text-slate-900 leading-tight truncate group-hover:text-indigo-600 transition-colors">
-                            {u.name}
-                          </h3>
-                          {isFullNameValid(u.name) && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              الاسم الثلاثي ✓
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Number of submitted homeworks pill */}
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
-                              subsCount > 0
-                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                : 'bg-slate-50 text-slate-400 border-slate-200'
-                            }`}
-                          >
-                            <ClipboardList className="w-3.5 h-3.5" />
-                            <span>{subsCount > 0 ? `${subsCount} واجبات تم إرسالها` : 'لم يرسل واجبات'}</span>
-                          </span>
-                        </div>
+                      <div className="min-w-0">
+                        <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-snug truncate group-hover:text-sky-600 transition-colors">
+                          {u.name}
+                        </h3>
                       </div>
                     </div>
 
-                    {/* Left Side: View Arrow / Action */}
-                    <div className="flex items-center gap-1 text-xs font-black text-indigo-600 group-hover:-translate-x-1.5 transition-transform self-end sm:self-center">
-                      <span>{subsCount > 0 ? 'عرض الواجبات' : 'التفاصيل'}</span>
-                      <ChevronLeft className="w-4 h-4" />
+                    {/* Left Side: Arrow icon only */}
+                    <div className="flex items-center justify-center text-slate-400 group-hover:text-slate-800 transition-colors shrink-0">
+                      <ChevronLeft className="w-5 h-5" />
                     </div>
                   </motion.div>
                 );
@@ -838,7 +691,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               {filteredUsers.length === 0 && (
                 <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
                   <GraduationCap className="w-10 h-10 text-slate-300 mx-auto" />
-                  <h4 className="text-sm sm:text-base font-black text-slate-800">
+                  <h4 className="text-sm sm:text-base font-bold text-slate-800">
                     لا توجد نتائج مطابقة
                   </h4>
                   <p className="text-xs text-slate-400">

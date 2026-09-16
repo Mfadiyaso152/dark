@@ -53,10 +53,10 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: '',
     supervisorName: 'مشرف الأحياء'
   },
-  // 4. إنجليزي 1-1
+  // 4. Mega Goal 1
   {
     id: 'eng-1',
-    name: 'إنجليزي 1-1 (Mega Goal)',
+    name: 'Mega Goal 1',
     semester: 1,
     icon: 'BookOpenCheck',
     emoji: '🔤',
@@ -68,7 +68,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     titleColor: 'text-[#7C2D12]',
     countColor: 'text-[#FB923C]',
     description: '',
-    supervisorName: 'أحمد & David'
+    supervisorName: 'David & أحمد'
   },
   // 5. تقنية رقمية 1-1
   {
@@ -104,10 +104,10 @@ export const INITIAL_SUBJECTS: Subject[] = [
     description: '',
     supervisorName: 'فاطمة الغامدي'
   },
-  // 7. قرآن و تفسير
+  // 7. القرآن الكريم والتفسير
   {
     id: 'tafsir-1',
-    name: 'قرآن و تفسير',
+    name: 'القرآن الكريم والتفسير',
     semester: 1,
     icon: 'BookOpenCheck',
     emoji: '📖',

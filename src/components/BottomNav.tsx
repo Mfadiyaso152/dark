@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Home, Sparkles, GraduationCap, ClipboardCheck, Clock, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-export type TabType = 'home' | 'homeworks' | 'qudurat' | 'students' | 'users' | 'admin';
+export type TabType = 'home' | 'homeworks' | 'qudurat' | 'students' | 'admin';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -65,14 +65,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     (user.role === 'teacher' || (user.jobTitle && user.jobTitle !== 'طالب' && !user.jobTitle.includes('مشرف')))
   );
 
-  // Show User Management ONLY for Super Admin and Assistant Supervisor
-  const showUserManagement = Boolean(isSupervisorUser);
-
   // Show Students for Teachers and Supervisors (المعلمون والمشرفون)
   const showStudents = Boolean(isTeacher || isSupervisorUser);
 
   return (
-    <div className="fixed bottom-3 sm:bottom-5 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 w-auto sm:w-[420px] md:w-[460px] max-w-lg transition-all font-['Tajawal',sans-serif]">
+    <div className="fixed bottom-3 sm:bottom-5 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 z-40 w-auto sm:w-[380px] md:w-[410px] max-w-lg transition-all font-['IBM_Plex_Sans_Arabic',sans-serif]">
       {/* Toast notifications */}
       <AnimatePresence>
         {toastMessage && (
@@ -80,7 +77,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             initial={{ opacity: 0, y: 12, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
-            className="fixed bottom-20 md:bottom-22 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-xs sm:text-sm px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 z-50 backdrop-blur-xl font-bold whitespace-nowrap border border-white/15"
+            className="fixed bottom-20 md:bottom-22 left-1/2 -translate-x-1/2 bg-[#1C1917] text-[#FAF8F5] text-xs sm:text-sm px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 z-50 backdrop-blur-xl font-bold whitespace-nowrap border border-amber-500/30 ring-1 ring-white/10"
           >
             <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-spin" />
             <span>{toastMessage}</span>
@@ -88,66 +85,66 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Cylindrical Floating Glass Navigation Bar (Icons Only) */}
-      <div className="h-14 sm:h-16 px-3 sm:px-6 rounded-full bg-white/55 backdrop-blur-2xl backdrop-saturate-200 border border-white/80 shadow-[0_8px_32px_rgba(15,23,42,0.12)] flex items-center justify-around gap-1 sm:gap-2">
+      {/* Luxury Floating Architectural Dock */}
+      <div className="h-15 sm:h-16 px-4 sm:px-6 rounded-2xl sm:rounded-3xl bg-white/90 backdrop-blur-2xl border border-[#E5DFD5] shadow-[0_16px_36px_-8px_rgba(28,25,23,0.12)] flex items-center justify-around gap-2 sm:gap-4">
         {/* 1. Home (الرئيسية) */}
         <motion.button
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.88 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={() => onTabChange('home')}
           title="الرئيسية"
           aria-label="الرئيسية"
-          className={`relative p-2.5 sm:p-3 rounded-full transition flex items-center justify-center cursor-pointer select-none ${
+          className={`relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition flex items-center justify-center cursor-pointer select-none ${
             activeTab === 'home'
-              ? 'text-blue-600 bg-blue-50/80 shadow-2xs'
-              : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'
+              ? 'text-[#FAF8F5] bg-[#1C1917] shadow-md font-bold'
+              : 'text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF]'
           }`}
         >
           <Home className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
           {activeTab === 'home' && (
             <motion.div
               layoutId="bottom-nav-active"
-              className="absolute -bottom-1 w-2 h-2 bg-blue-600 rounded-full"
+              className="absolute -bottom-1 w-1.5 h-1.5 bg-amber-400 rounded-full"
             />
           )}
         </motion.button>
 
         {/* 2. Homeworks (الواجبات) */}
         <motion.button
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.88 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={handleHomeworksClick}
           type="button"
           title="الواجبات"
           aria-label="الواجبات"
-          className={`relative p-2.5 sm:p-3 rounded-full transition flex items-center justify-center cursor-pointer select-none ${
+          className={`relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition flex items-center justify-center cursor-pointer select-none ${
             activeTab === 'homeworks'
-              ? 'text-purple-600 bg-purple-50/80 shadow-2xs'
-              : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'
+              ? 'text-[#FAF8F5] bg-[#1C1917] shadow-md font-bold'
+              : 'text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF]'
           }`}
         >
           <ClipboardCheck className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
           {activeTab === 'homeworks' && (
             <motion.div
               layoutId="bottom-nav-active"
-              className="absolute -bottom-1 w-2 h-2 bg-purple-600 rounded-full"
+              className="absolute -bottom-1 w-1.5 h-1.5 bg-amber-400 rounded-full"
             />
           )}
         </motion.button>
 
         {/* 3. Qudurat (القدرات - إشعار قريباً) */}
         <motion.button
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.88 }}
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={handleQuduratClick}
           type="button"
           title="القدرات (قريباً)"
           aria-label="القدرات"
-          className="relative p-2.5 sm:p-3 rounded-full transition flex items-center justify-center cursor-pointer select-none text-slate-500 hover:text-slate-900 hover:bg-white/60"
+          className="relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition flex items-center justify-center cursor-pointer select-none text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF]"
         >
           <div className="relative">
-            <Sparkles className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-amber-500" />
-            <span className="absolute -top-1 -right-2 bg-amber-400 text-amber-950 text-[7px] font-black px-1 rounded-full leading-tight">
+            <Sparkles className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-amber-600" />
+            <span className="absolute -top-1.5 -right-2 bg-amber-500 text-white text-[7px] font-black px-1 rounded-full leading-tight shadow-xs">
               قريباً
             </span>
           </div>
@@ -156,46 +153,22 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         {/* 4. Students (الطلاب) - ONLY FOR TEACHERS (المعلمين فقط) */}
         {showStudents && (
           <motion.button
-            whileHover={{ scale: 1.15 }}
-            whileTap={{ scale: 0.88 }}
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             onClick={() => onTabChange('students')}
             title="الطلاب والواجبات"
             aria-label="الطلاب"
-            className={`relative p-2.5 sm:p-3 rounded-full transition flex items-center justify-center cursor-pointer select-none ${
+            className={`relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition flex items-center justify-center cursor-pointer select-none ${
               activeTab === 'students'
-                ? 'text-emerald-600 bg-emerald-50/80 shadow-2xs'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'
+                ? 'text-[#FAF8F5] bg-[#1C1917] shadow-md font-bold'
+                : 'text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF]'
             }`}
           >
             <GraduationCap className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
             {activeTab === 'students' && (
               <motion.div
                 layoutId="bottom-nav-active"
-                className="absolute -bottom-1 w-2 h-2 bg-emerald-600 rounded-full"
-              />
-            )}
-          </motion.button>
-        )}
-
-        {/* 5. User Management (إدارة المستخدمين) - FOR SUPER ADMIN & SUPERVISORS */}
-        {showUserManagement && (
-          <motion.button
-            whileHover={{ scale: 1.15 }}
-            whileTap={{ scale: 0.88 }}
-            onClick={() => onTabChange('users')}
-            title="إدارة المستخدمين"
-            aria-label="إدارة المستخدمين"
-            className={`relative p-2.5 sm:p-3 rounded-full transition flex items-center justify-center cursor-pointer select-none ${
-              activeTab === 'users'
-                ? 'text-indigo-600 bg-indigo-50/80 shadow-2xs'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-white/60'
-            }`}
-          >
-            <ShieldCheck className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
-            {activeTab === 'users' && (
-              <motion.div
-                layoutId="bottom-nav-active"
-                className="absolute -bottom-1 w-2 h-2 bg-indigo-600 rounded-full"
+                className="absolute -bottom-1 w-1.5 h-1.5 bg-amber-400 rounded-full"
               />
             )}
           </motion.button>

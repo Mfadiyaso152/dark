@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, formatDisplayName } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import {
   X,
   LogOut,
-  BookOpen
+  User as UserIcon
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -17,6 +18,7 @@ export const AuthModal: React.FC = () => {
     authError,
     isTeacherOrSupervisor
   } = useAuth();
+  const { language, t } = useLanguage();
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -32,38 +34,41 @@ export const AuthModal: React.FC = () => {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm font-['Tajawal',sans-serif]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md font-['IBM_Plex_Sans_Arabic',sans-serif]">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 text-right overflow-hidden relative"
+          className="bg-white rounded-3xl shadow-2xl border border-slate-200/90 max-w-md w-full p-5 sm:p-6 text-right overflow-hidden relative"
+          dir={language === 'ar' ? 'rtl' : 'ltr'}
         >
           {/* Close button */}
           <button
+            type="button"
             onClick={() => setIsAuthModalOpen(false)}
-            className="absolute top-4 left-4 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+            className="absolute top-4 left-4 p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-800 transition cursor-pointer"
+            title={t('close', 'إغلاق')}
           >
             <X className="w-5 h-5" />
           </button>
 
           {/* Header */}
           <div className="text-center mb-5 pt-1">
-            <div className="w-14 h-14 bg-[#1E293B] text-white rounded-2xl flex items-center justify-center mx-auto mb-2.5 shadow-md">
-              <BookOpen className="w-7 h-7 text-blue-400" />
+            <div className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center mx-auto mb-2.5 shadow-sm border border-slate-800">
+              <UserIcon className="w-6 h-6 text-sky-400" />
             </div>
-            <h2 className="text-xl font-black text-[#1E293B]">
-              {user ? 'بيانات الحساب' : 'تسجيل الدخول بواسطة Google'}
+            <h2 className="text-base sm:text-lg font-black font-['Alexandria',sans-serif] text-slate-900">
+              {user ? t('account_details', 'بيانات الحساب الشخصي') : t('google_signin_title', 'تسجيل الدخول بواسطة Google')}
             </h2>
             {user && (
               <p className="text-xs text-slate-500 mt-0.5">
-                أهلاً بك، {displayName}
+                {language === 'ar' ? `أهلاً بك، ${displayName}` : `Welcome, ${displayName}`}
               </p>
             )}
           </div>
 
           {authError && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-2xl text-[11px] text-amber-800 leading-relaxed font-medium">
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200/80 rounded-2xl text-[11px] text-rose-900 leading-relaxed font-bold">
               {authError}
             </div>
           )}
@@ -71,37 +76,39 @@ export const AuthModal: React.FC = () => {
           {user ? (
             <div className="space-y-4">
               {/* Current User Card */}
-              <div className="p-4 rounded-2xl border bg-slate-50 border-slate-200 flex items-center gap-3.5">
+              <div className="p-3.5 rounded-2xl border bg-slate-50 border-slate-200 flex items-center gap-3">
                 <img
                   src={user.avatar}
                   alt={displayName}
-                  className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
+                  className="w-11 h-11 rounded-full object-cover border-2 border-white shadow-xs shrink-0"
                 />
 
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-extrabold text-[#1E293B] text-sm truncate">{displayName}</h3>
-                  <p className="text-xs text-slate-400 font-mono truncate">{user.email}</p>
+                  <h3 className="font-bold text-slate-900 text-xs sm:text-sm truncate font-['Alexandria',sans-serif]">{displayName}</h3>
+                  <p className="text-[11px] text-slate-500 font-mono truncate">{user.email}</p>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-1">
                 <button
+                  type="button"
                   onClick={() => {
                     logout();
                     setIsAuthModalOpen(false);
                   }}
-                  className="flex-1 py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer border border-rose-200/60"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>تسجيل الخروج</span>
+                  <span>{t('logout', 'تسجيل الخروج')}</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => setIsAuthModalOpen(false)}
-                  className="py-2.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                  className="py-2.5 px-5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer"
                 >
-                  إغلاق
+                  {t('close', 'إغلاق')}
                 </button>
               </div>
             </div>
@@ -109,9 +116,10 @@ export const AuthModal: React.FC = () => {
             <div className="space-y-3">
               {/* Real Google Login Button */}
               <button
+                type="button"
                 onClick={handleRealGoogleLogin}
                 disabled={isLoading}
-                className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-blue-500 text-slate-800 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2.5 transition shadow-xs cursor-pointer active:scale-95"
+                className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-400 text-slate-900 rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2.5 transition shadow-xs cursor-pointer active:scale-95"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path
@@ -131,7 +139,7 @@ export const AuthModal: React.FC = () => {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                   />
                 </svg>
-                <span>{isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول بحساب Google'}</span>
+                <span>{isLoading ? (language === 'ar' ? 'جاري تسجيل الدخول...' : 'Signing in...') : (language === 'ar' ? 'تسجيل الدخول بحساب Google' : 'Sign in with Google')}</span>
               </button>
             </div>
           )}
