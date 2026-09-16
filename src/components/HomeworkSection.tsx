@@ -223,8 +223,11 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   const subjectHomeworks = [...homeworks.filter((h) => h.subjectId === subject.id)]
     .filter((h) => {
       if (selectedClassFilter === 'all') return true;
-      if (!h.targetClasses || h.targetClasses.length === 0 || h.targetClasses.includes('all')) return true;
-      return h.targetClasses.includes(selectedClassFilter);
+      const tc = h.targetClasses;
+      if (!tc || tc.length === 0 || tc.includes('all')) return true;
+      if (tc.includes(selectedClassFilter)) return true;
+      if ((h as any).targetClass === selectedClassFilter || (h as any).classNumber === selectedClassFilter) return true;
+      return false;
     })
     .sort((a, b) => {
     const aSub = submissions.some(
@@ -1088,7 +1091,10 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                         )}
 
                         <button
-                          onClick={() => handleOpenEditModal(hw)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditModal(hw);
+                          }}
                           className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition cursor-pointer"
                           title="تعديل الواجب"
                         >

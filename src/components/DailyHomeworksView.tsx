@@ -159,6 +159,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   const [questionNumber, setQuestionNumber] = useState('');
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [externalUrl, setExternalUrl] = useState('');
   const [formTargetClasses, setFormTargetClasses] = useState<string[]>(['all']);
   const [formError, setFormError] = useState('');
 
@@ -244,10 +245,11 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
     if (selectedClassFilter !== 'all') {
       list = list.filter((h) => {
-        if (!h.targetClasses || h.targetClasses.length === 0 || h.targetClasses.includes('all')) {
-          return true;
-        }
-        return h.targetClasses.includes(selectedClassFilter);
+        const tc = h.targetClasses;
+        if (!tc || tc.length === 0 || tc.includes('all')) return true;
+        if (tc.includes(selectedClassFilter)) return true;
+        if ((h as any).targetClass === selectedClassFilter || (h as any).classNumber === selectedClassFilter) return true;
+        return false;
       });
     }
 
@@ -298,6 +300,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     setQuestionNumber('');
     setTitle('');
     setNotes('');
+    setExternalUrl('');
     setFormTargetClasses(['all']);
     setFormError('');
     setSolutionFileName('');
@@ -315,6 +318,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     setQuestionNumber(hw.questionNumber);
     setTitle(hw.title || '');
     setNotes(hw.notes || '');
+    setExternalUrl(hw.externalUrl || '');
     setFormTargetClasses(hw.targetClasses && hw.targetClasses.length > 0 ? hw.targetClasses : ['all']);
     setFormError('');
     if (hw.solutionFile) {
@@ -452,6 +456,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
           questionNumber: questionNumber.trim(),
           title: title.trim() || undefined,
           notes: notes.trim() || undefined,
+          externalUrl: externalUrl.trim() || undefined,
           targetClasses: formTargetClasses.length === 0 ? ['all'] : formTargetClasses,
           solutionFile
         });
@@ -464,6 +469,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         questionNumber: questionNumber.trim(),
         title: title.trim() || undefined,
         notes: notes.trim() || undefined,
+        externalUrl: externalUrl.trim() || undefined,
         supervisorName,
         targetClasses: formTargetClasses.length === 0 ? ['all'] : formTargetClasses,
         solutionFile
@@ -705,7 +711,10 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
                 <button
                   type="button"
-                  onClick={() => handleOpenEditModal(hw)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenEditModal(hw);
+                  }}
                   className="p-2 text-slate-500 hover:text-slate-900 hover:bg-white rounded-xl transition cursor-pointer"
                   title="تعديل الواجب"
                 >
@@ -989,6 +998,21 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                   هذا الواجب منتهي ولم يعد متاحاً للتسليم.
                 </span>
                 <p className="text-xs text-rose-700">تواصل مع معلّم المادة إذا كنت بحاجة لإعادة فتح التسليم.</p>
+              </div>
+            ) : hw.externalUrl ? (
+              <div className="p-6 bg-sky-50/80 border border-sky-200/90 rounded-2xl text-center space-y-3">
+                <p className="text-xs sm:text-sm text-sky-900 font-bold">
+                  هذا الواجب يتطلب التسليم عبر منصة خارجية. اضغط على الزر أدناه للانتقال لصفحة التسليم:
+                </p>
+                <a
+                  href={hw.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-3 px-6 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-bold inline-flex items-center gap-2 cursor-pointer shadow-xs transition"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>التسليم عبر رابط خارجي</span>
+                </a>
               </div>
             ) : (
               <div className="p-6 bg-slate-50 border border-slate-200/90 rounded-2xl text-center space-y-3">
@@ -1440,6 +1464,19 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="تعليمات حل الواجب..."
                     className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    رابط التسليم الخارجي (اختياري - يمنع التسليم داخل الموقع)
+                  </label>
+                  <input
+                    type="url"
+                    value={externalUrl}
+                    onChange={(e) => setExternalUrl(e.target.value)}
+                    placeholder="https://forms.google.com/..."
+                    className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dir-ltr text-left"
                   />
                 </div>
 

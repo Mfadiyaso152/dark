@@ -83,15 +83,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
-  // Helper to determine if a user is purely a student
+  // Helper to determine if a user should be displayed in the Students & Users list
   const isStudentUser = (u: User): boolean => {
-    const emailLower = (u.email || '').toLowerCase().trim();
-    if (u.isSuperAdmin || emailLower === SUPER_ADMIN_EMAIL.toLowerCase() || emailLower === 'mfb.15.f@gmail.com') {
-      return false;
-    }
-    if (u.isAssistantAdmin || u.role === 'supervisor' || (u.jobTitle && (u.jobTitle.includes('مشرف') || u.jobTitle.includes('إدارة')))) {
-      return false;
-    }
+    // Only filter out pure teachers/instructors so supervisors, assistants, admins & students all show up
     if (u.role === 'teacher') {
       return false;
     }
@@ -101,8 +95,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         u.jobTitle.includes('معلم') ||
         u.jobTitle.includes('أستاذ') ||
         u.jobTitle.includes('مرشد') ||
-        u.jobTitle.includes('المرشد') ||
-        (u.jobTitle !== 'طالب' && u.jobTitle !== ''))
+        u.jobTitle.includes('المرشد')) &&
+      !u.jobTitle.includes('مشرف') &&
+      !u.jobTitle.includes('مساعد') &&
+      !u.isAssistantAdmin &&
+      !u.isSuperAdmin &&
+      u.role !== 'supervisor'
     ) {
       return false;
     }
@@ -674,9 +672,26 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       </div>
 
                       <div className="min-w-0">
-                        <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-snug truncate group-hover:text-sky-600 transition-colors">
-                          {u.name}
-                        </h3>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-snug truncate group-hover:text-sky-600 transition-colors">
+                            {u.name}
+                          </h3>
+                          {u.isSuperAdmin && (
+                            <span className="text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-full shrink-0">
+                              مشرف عام
+                            </span>
+                          )}
+                          {!u.isSuperAdmin && u.isAssistantAdmin && (
+                            <span className="text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                              مساعد إداري
+                            </span>
+                          )}
+                          {!u.isSuperAdmin && !u.isAssistantAdmin && u.role === 'supervisor' && (
+                            <span className="text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200 px-2 py-0.5 rounded-full shrink-0">
+                              مشرف
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
