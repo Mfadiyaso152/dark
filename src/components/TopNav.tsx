@@ -38,12 +38,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   };
 
   const handleQuduratClick = () => {
-    if (!user) {
-      showNavToast(t('login_required_qudurat', 'يجب تسجيل الدخول أولاً للوصول للقدرات 🔒'));
-      setIsAuthModalOpen(true);
-      return;
-    }
-    showNavToast(t('qudurat_soon', 'قسم القدرات قريباً ⏳'));
+    onTabChange('qudurat');
   };
 
   // Determine user roles
@@ -165,10 +160,21 @@ export const TopNav: React.FC<TopNavProps> = ({
               onClick={handleQuduratClick}
               title={t('qudurat', 'القدرات')}
               aria-label={t('qudurat', 'القدرات')}
-              className="relative px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none text-slate-600 hover:text-slate-900 hover:bg-white/60"
+              className={`relative px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
+                activeTab === 'qudurat'
+                  ? 'text-white shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+              }`}
             >
-              <Sparkles className="w-4 h-4 text-amber-500" />
-              <span className="hidden sm:inline">{t('qudurat', 'القدرات')}</span>
+              {activeTab === 'qudurat' && (
+                <motion.div
+                  layoutId="top-nav-active-pill"
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                  className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
+                />
+              )}
+              <Sparkles className="w-4 h-4 text-indigo-600 relative z-10" />
+              <span className="hidden sm:inline relative z-10">{t('qudurat', 'القدرات')}</span>
             </button>
 
             {/* 4. Students (Teachers/Supervisors only) */}

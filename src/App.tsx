@@ -1248,26 +1248,8 @@ export default function App() {
                   }}
                 />
               ) : activeTab === 'qudurat' ? (
-                /* TAB: Qudurat (القدرات - يتطلب تسجيل دخول وقريباً) */
-                !user ? (
-                  <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-2xs text-center space-y-4 max-w-md mx-auto my-6">
-                    <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-100">
-                      <Sparkles className="w-8 h-8" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="text-base sm:text-lg font-black text-slate-900">تسجيل الدخول مطلوب</h3>
-                      <p className="text-xs text-slate-500">يجب تسجيل الدخول بحساب Google للوصول إلى قسم القدرات.</p>
-                    </div>
-                    <button
-                      onClick={() => setIsAuthModalOpen(true)}
-                      className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-                    >
-                      <span>تسجيل الدخول بواسطة Google</span>
-                    </button>
-                  </div>
-                ) : (
-                  <QuduratView />
-                )
+                /* TAB: Qudurat (القدرات) */
+                <QuduratView />
               ) : activeTab === 'homeworks' ? (
                 /* TAB: Daily Homeworks (الواجبات المدرسية اليومية - يتطلب تسجيل دخول) */
                 !user ? (

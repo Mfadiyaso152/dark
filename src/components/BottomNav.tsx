@@ -34,12 +34,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   };
 
   const handleQuduratClick = () => {
-    if (!user) {
-      showNavToast('يجب تسجيل الدخول أولاً للوصول للقدرات 🔒');
-      setIsAuthModalOpen(true);
-      return;
-    }
-    showNavToast('قسم القدرات قريباً ⏳');
+    onTabChange('qudurat');
   };
 
   // 1. Super Admin (المشرف الأساسي)
@@ -132,22 +127,26 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           )}
         </motion.button>
 
-        {/* 3. Qudurat (القدرات - إشعار قريباً) */}
+        {/* 3. Qudurat */}
         <motion.button
           whileHover={{ scale: 1.08 }}
           whileTap={{ scale: 0.92 }}
           onClick={handleQuduratClick}
           type="button"
-          title="القدرات (قريباً)"
+          title="القدرات"
           aria-label="القدرات"
-          className="relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition flex items-center justify-center cursor-pointer select-none text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF]"
+          className={`relative p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition flex items-center justify-center cursor-pointer select-none ${
+            activeTab === 'qudurat'
+              ? 'bg-indigo-100 text-indigo-900 shadow-xs'
+              : 'text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F3EF]'
+          }`}
         >
           <div className="relative">
-            <Sparkles className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-amber-600" />
-            <span className="absolute -top-1.5 -right-2 bg-amber-500 text-white text-[7px] font-black px-1 rounded-full leading-tight shadow-xs">
-              قريباً
-            </span>
+            <Sparkles className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-indigo-600" />
           </div>
+          {activeTab === 'qudurat' && (
+            <div className="absolute -bottom-1 w-1.5 h-1.5 bg-indigo-600 rounded-full" />
+          )}
         </motion.button>
 
         {/* 4. Students (الطلاب) - ONLY FOR TEACHERS (المعلمين فقط) */}

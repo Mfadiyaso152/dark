@@ -188,6 +188,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   const [activeHomeworkForSubmission, setActiveHomeworkForSubmission] = useState<Homework | null>(null);
   const [studentNotes, setStudentNotes] = useState('');
   const [studentAttachedFiles, setStudentAttachedFiles] = useState<AttachedFile[]>([]);
+  const [isAttachMenuOpen, setIsAttachMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
@@ -1642,48 +1643,80 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                     </div>
 
                     {/* Action buttons to add files */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className="flex flex-col items-center justify-center gap-1 py-3 px-2 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-2xl cursor-pointer transition text-center group">
-                        <Camera className="w-5 h-5 text-slate-700 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-bold text-slate-700">
-                          التقاط بالكاميرا
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleStudentFilesSelect}
-                          className="hidden"
-                        />
-                      </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsAttachMenuOpen(!isAttachMenuOpen)}
+                        className="w-full py-3.5 px-4 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+                      >
+                        <Paperclip className="w-4 h-4" />
+                        <span>إرفاق ملف</span>
+                        <ChevronDown className={`w-4 h-4 transition-transform ${isAttachMenuOpen ? 'rotate-180' : ''}`} />
+                      </button>
 
-                      <label className="flex flex-col items-center justify-center gap-1 py-3 px-2 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-2xl cursor-pointer transition text-center group">
-                        <ImageIcon className="w-5 h-5 text-slate-700 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-bold text-slate-700">
-                          تحديد صور متعددة
-                        </span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          onChange={handleStudentFilesSelect}
-                          className="hidden"
-                        />
-                      </label>
+                      {isAttachMenuOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-sky-200 shadow-xl p-2.5 z-20 space-y-1.5 text-right">
+                          <label className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-sky-50 cursor-pointer transition text-xs font-bold text-slate-800">
+                            <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                              <Camera className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold">التقاط بالكاميرا</p>
+                              <p className="text-[10px] text-slate-400">تصوير الدفتر مباشرة</p>
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              onChange={(e) => {
+                                handleStudentFilesSelect(e);
+                                setIsAttachMenuOpen(false);
+                              }}
+                              className="hidden"
+                            />
+                          </label>
 
-                      <label className="flex flex-col items-center justify-center gap-1 py-3 px-2 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-2xl cursor-pointer transition text-center group">
-                        <FileText className="w-5 h-5 text-slate-700 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-bold text-slate-700">
-                          تحديد ملفات PDF
-                        </span>
-                        <input
-                          type="file"
-                          accept="application/pdf,.pdf"
-                          multiple
-                          onChange={handleStudentFilesSelect}
-                          className="hidden"
-                        />
-                      </label>
+                          <label className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-indigo-50 cursor-pointer transition text-xs font-bold text-slate-800">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                              <ImageIcon className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold">صور من الاستوديو</p>
+                              <p className="text-[10px] text-slate-400">تحديد صور متعددة من الجهاز</p>
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(e) => {
+                                handleStudentFilesSelect(e);
+                                setIsAttachMenuOpen(false);
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+
+                          <label className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-100 cursor-pointer transition text-xs font-bold text-slate-800">
+                            <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-bold">ملفات PDF</p>
+                              <p className="text-[10px] text-slate-400">اختيار ملف أو عدة ملفات PDF</p>
+                            </div>
+                            <input
+                              type="file"
+                              accept="application/pdf,.pdf"
+                              multiple
+                              onChange={(e) => {
+                                handleStudentFilesSelect(e);
+                                setIsAttachMenuOpen(false);
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
                     </div>
 
                     {/* Selected files preview list */}

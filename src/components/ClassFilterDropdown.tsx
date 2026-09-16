@@ -28,42 +28,38 @@ export const ClassFilterDropdown: React.FC<ClassFilterDropdownProps> = ({
     '1/7': isRTL ? 'فصل ١/٧' : 'Class 1/7'
   };
 
-  const activeLabel = classDisplayLabels[selectedClass] || t('all_classes', 'جميع الفصول');
-
   return (
     <div className={`relative inline-block ${className}`}>
-      {/* Visual Button */}
-      <div
-        className={`px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl border transition-all flex items-center gap-2 shadow-2xs font-bold text-xs sm:text-sm select-none pointer-events-none ${
-          selectedClass !== 'all'
-            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-            : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50'
-        }`}
-      >
-        <Filter className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-sky-400' : 'text-slate-400'}`} />
-        <span>{activeLabel}</span>
-        <ChevronDown
-          className={`w-3.5 h-3.5 ${
-            selectedClass !== 'all' ? 'text-slate-300' : 'text-slate-400'
+      <div className="relative flex items-center">
+        <select
+          value={selectedClass}
+          onChange={(e) => onSelectClass(e.target.value)}
+          className={`appearance-none px-3.5 py-2.5 sm:px-4 sm:py-3 pr-9 pl-8 rounded-2xl border transition-all font-bold text-xs sm:text-sm cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+            selectedClass !== 'all'
+              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+              : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50'
           }`}
-        />
-      </div>
-
-      {/* Native Select Overlay for iPhone / Device Picker */}
-      <select
-        value={selectedClass}
-        onChange={(e) => onSelectClass(e.target.value)}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 text-base"
-        title={t('choose_class', 'اختر الفصل')}
-        aria-label={t('choose_class', 'اختر الفصل')}
-      >
-        <option value="all">{t('all_classes', 'جميع الفصول')}</option>
-        {AVAILABLE_CLASSES.map((cls) => (
-          <option key={cls} value={cls}>
-            {classDisplayLabels[cls] || `فصل ${cls}`}
+          title={t('choose_class', 'اختر الفصل')}
+          aria-label={t('choose_class', 'اختر الفصل')}
+        >
+          <option value="all" className="bg-white text-slate-900 font-bold py-2">
+            {t('all_classes', 'جميع الفصول')}
           </option>
-        ))}
-      </select>
+          {AVAILABLE_CLASSES.map((cls) => (
+            <option key={cls} value={cls} className="bg-white text-slate-900 font-bold py-2">
+              {classDisplayLabels[cls] || `فصل ${cls}`}
+            </option>
+          ))}
+        </select>
+
+        {/* Icons inside the select button */}
+        <div className={`absolute ${isRTL ? 'right-3' : 'left-3'} pointer-events-none flex items-center`}>
+          <Filter className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-sky-400' : 'text-slate-400'}`} />
+        </div>
+        <div className={`absolute ${isRTL ? 'left-3' : 'right-3'} pointer-events-none flex items-center`}>
+          <ChevronDown className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-slate-300' : 'text-slate-400'}`} />
+        </div>
+      </div>
     </div>
   );
 };

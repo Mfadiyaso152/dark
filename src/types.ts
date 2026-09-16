@@ -207,6 +207,7 @@ export interface Homework {
   isClosed?: boolean; // إنهاء الواجب بعد انتهاء مدة التسليم
   closedAt?: string;
   targetClasses?: string[];
+  externalUrl?: string; // رابط التسليم الخارجي
 }
 
 export function isHomeworkDeadlinePassed(dueDate?: string): boolean {
