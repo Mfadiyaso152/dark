@@ -31,7 +31,10 @@ import {
   PlusCircle,
   Lock,
   ArrowRight,
-  ChevronLeft
+  ChevronLeft,
+  ExternalLink,
+  Building2,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -160,6 +163,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
+  const [isExternalSubmission, setIsExternalSubmission] = useState(false);
   const [formTargetClasses, setFormTargetClasses] = useState<string[]>(['all']);
   const [formError, setFormError] = useState('');
 
@@ -217,7 +221,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   };
 
   // Dedicated Homework Detail View State
-  const [selectedHomeworkForDetail, setSelectedHomeworkForDetail] = useState<Homework | null>(null);
+  const [selectedHomeworkId, setSelectedHomeworkId] = useState<string | null>(null);
 
   // PDF download loading state
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
@@ -301,6 +305,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     setTitle('');
     setNotes('');
     setExternalUrl('');
+    setIsExternalSubmission(false);
     setFormTargetClasses(['all']);
     setFormError('');
     setSolutionFileName('');
@@ -319,6 +324,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     setTitle(hw.title || '');
     setNotes(hw.notes || '');
     setExternalUrl(hw.externalUrl || '');
+    setIsExternalSubmission(!!hw.isExternalSubmission || !!hw.externalUrl);
     setFormTargetClasses(hw.targetClasses && hw.targetClasses.length > 0 ? hw.targetClasses : ['all']);
     setFormError('');
     if (hw.solutionFile) {
@@ -456,7 +462,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
           questionNumber: questionNumber.trim(),
           title: title.trim() || undefined,
           notes: notes.trim() || undefined,
-          externalUrl: externalUrl.trim() || undefined,
+          isExternalSubmission,
+          externalUrl: isExternalSubmission ? (externalUrl.trim() || undefined) : undefined,
           targetClasses: formTargetClasses.length === 0 ? ['all'] : formTargetClasses,
           solutionFile
         });
@@ -469,7 +476,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         questionNumber: questionNumber.trim(),
         title: title.trim() || undefined,
         notes: notes.trim() || undefined,
-        externalUrl: externalUrl.trim() || undefined,
+        isExternalSubmission,
+        externalUrl: isExternalSubmission ? (externalUrl.trim() || undefined) : undefined,
         supervisorName,
         targetClasses: formTargetClasses.length === 0 ? ['all'] : formTargetClasses,
         solutionFile
@@ -498,6 +506,10 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     }
     if (hw.isClosed) {
       alert('هذا الواجب منتهي وقد انتهت فترة تسليم الحلول.');
+      return;
+    }
+    if (hw.isExternalSubmission) {
+      alert('هذا الواجب للاطلاع فقط، والتسليم يتم يدوياً لمعلم المادة داخل المدرسة.');
       return;
     }
     setActiveHomeworkForSubmission(hw);
@@ -603,40 +615,46 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     return sortedAndFilteredHomeworks.filter((h) => !!h.isClosed);
   }, [sortedAndFilteredHomeworks]);
 
-  // If a specific homework is selected, show its full dedicated details page
-  if (selectedHomeworkForDetail) {
-    const hw = selectedHomeworkForDetail;
-    const subject = allSubjects.find((s) => s.id === hw.subjectId);
-    const studentSub = submissions.find(
-      (s) =>
-        s.homeworkId === hw.id &&
-        ((user?.email && s.studentEmail.toLowerCase() === user.email.toLowerCase()) ||
-          (user?.id && s.studentId === user.id))
-    );
-    const hasStudentSubmission = !!studentSub;
-    const canManageThis = canManageSubject(hw.subjectId);
-    const isClosed = !!hw.isClosed;
-    const deadlinePassed = isHomeworkDeadlinePassed(hw.dueDate);
-    const studentFiles = studentSub ? getSubmissionFiles(studentSub) : [];
-    const hwSubmissions = submissions.filter((s) => s.homeworkId === hw.id);
+  const hw = useMemo(() => {
+    if (!selectedHomeworkId) return null;
+    return homeworks.find((h) => h.id === selectedHomeworkId) || null;
+  }, [homeworks, selectedHomeworkId]);
 
-    return (
-      <div className="space-y-4 md:space-y-6 text-right font-['IBM_Plex_Sans_Arabic',sans-serif]">
-        {/* Top Back Button */}
-        <div className="flex items-center justify-between gap-3">
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setSelectedHomeworkForDetail(null)}
-            className="py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-2xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shadow-2xs cursor-pointer active:scale-95"
-          >
-            <ArrowRight className="w-4 h-4 text-sky-600 transition group-hover:-translate-x-0.5" />
-            <span>رجوع لقائمة الواجبات</span>
-          </motion.button>
+  const subject = hw ? allSubjects.find((s) => s.id === hw.subjectId) : null;
+  const studentSub = hw
+    ? submissions.find(
+        (s) =>
+          s.homeworkId === hw.id &&
+          ((user?.email && s.studentEmail.toLowerCase() === user.email.toLowerCase()) ||
+            (user?.id && s.studentId === user.id))
+      )
+    : null;
+  const hasStudentSubmission = !!studentSub;
+  const canManageThis = hw ? canManageSubject(hw.subjectId) : false;
+  const isClosed = !!hw?.isClosed;
+  const deadlinePassed = hw ? isHomeworkDeadlinePassed(hw.dueDate) : false;
+  const studentFiles = studentSub ? getSubmissionFiles(studentSub) : [];
+  const hwSubmissions = hw ? submissions.filter((s) => s.homeworkId === hw.id) : [];
 
-          <span className="text-xs sm:text-sm font-bold text-slate-500">
-            {subject?.name || 'مقرر دراسي'}
-          </span>
-        </div>
+  return (
+    <div className="space-y-4 md:space-y-6 text-right font-['IBM_Plex_Sans_Arabic',sans-serif]">
+      {selectedHomeworkId && hw ? (
+        <div className="space-y-4 md:space-y-6">
+              {/* Top Back Button */}
+              <div className="flex items-center justify-between gap-3">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setSelectedHomeworkId(null)}
+                  className="py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 rounded-2xl text-xs sm:text-sm font-bold transition flex items-center gap-2 shadow-2xs cursor-pointer active:scale-95"
+                >
+                  <ArrowRight className="w-4 h-4 text-sky-600 transition group-hover:-translate-x-0.5" />
+                  <span>رجوع لقائمة الواجبات</span>
+                </motion.button>
+
+                <span className="text-xs sm:text-sm font-bold text-slate-500">
+                  {subject?.name || 'مقرر دراسي'}
+                </span>
+              </div>
 
         {/* Homework Header Card */}
         <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-2xs space-y-4 relative overflow-hidden">
@@ -729,7 +747,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                       onClick={() => {
                         onDeleteHomework(hw.id);
                         setConfirmDeleteHwId(null);
-                        setSelectedHomeworkForDetail(null);
+                        setSelectedHomeworkId(null);
                       }}
                       className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition cursor-pointer"
                     >
@@ -999,20 +1017,30 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                 </span>
                 <p className="text-xs text-rose-700">تواصل مع معلّم المادة إذا كنت بحاجة لإعادة فتح التسليم.</p>
               </div>
-            ) : hw.externalUrl ? (
-              <div className="p-6 bg-sky-50/80 border border-sky-200/90 rounded-2xl text-center space-y-3">
-                <p className="text-xs sm:text-sm text-sky-900 font-bold">
-                  هذا الواجب يتطلب التسليم عبر منصة خارجية. اضغط على الزر أدناه للانتقال لصفحة التسليم:
-                </p>
-                <a
-                  href={hw.externalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-3 px-6 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white rounded-2xl text-xs sm:text-sm font-bold inline-flex items-center gap-2 cursor-pointer shadow-xs transition"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>التسليم عبر رابط خارجي</span>
-                </a>
+            ) : (hw.isExternalSubmission || hw.externalUrl) ? (
+              <div className="p-6 bg-purple-50/80 border border-purple-200/90 rounded-2xl text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mx-auto border border-purple-200/60">
+                  <Building2 className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs sm:text-sm text-purple-950 font-bold">
+                    تسليم الواجب يدوياً داخل المدرسة
+                  </p>
+                  <p className="text-xs text-purple-800/80 max-w-md mx-auto leading-relaxed">
+                    هذا الواجب للاطلاع فقط ومتابعة التعليمات، والتسليم يتم يدوياً لمعلم المادة داخل المدرسة (لا يتطلب تسليماً عبر الموقع).
+                  </p>
+                </div>
+                {hw.externalUrl && (
+                  <a
+                    href={hw.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-2.5 px-5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-bold inline-flex items-center gap-2 cursor-pointer shadow-xs transition mt-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    <span>فتح رابط التسليم الخارجي</span>
+                  </a>
+                )}
               </div>
             ) : (
               <div className="p-6 bg-slate-50 border border-slate-200/90 rounded-2xl text-center space-y-3">
@@ -1142,22 +1170,9 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
             )}
           </div>
         )}
-
-        {/* Universal Full-Screen File Preview Modal */}
-        <FilePreviewModal
-          isOpen={previewModalConfig.isOpen}
-          onClose={() => setPreviewModalConfig((prev) => ({ ...prev, isOpen: false }))}
-          files={previewModalConfig.files}
-          initialIndex={previewModalConfig.initialIndex}
-          studentName={previewModalConfig.studentName}
-          title={previewModalConfig.title}
-        />
       </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 md:space-y-6 text-right font-['IBM_Plex_Sans_Arabic',sans-serif]">
+    ) : (
+      <div className="space-y-4 md:space-y-6">
       {/* Top Action Bar (Add Homework button if teacher/admin) */}
       {canUserAddAnyHomework && (
         <div className="flex justify-end">
@@ -1227,15 +1242,24 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                       whileHover={{ y: -2, scale: 1.01 }}
                       whileTap={{ scale: 0.98 }}
                       transition={{ type: 'spring', stiffness: 450, damping: 25 }}
-                      onClick={() => setSelectedHomeworkForDetail(hw)}
+                      onClick={() => setSelectedHomeworkId(hw.id)}
                       className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs hover:border-sky-300 transition-all cursor-pointer flex flex-col justify-between space-y-3 group"
                     >
-                      {/* Subject Name Tag */}
+                      {/* Subject Name Tag & Badge */}
                       <div className="flex items-center justify-between gap-2">
-                        <span className="px-2.5 py-1 rounded-lg bg-slate-100 group-hover:bg-sky-50 text-slate-700 group-hover:text-sky-700 border border-slate-200/80 group-hover:border-sky-200 text-xs font-bold flex items-center gap-1.5 transition-colors">
-                          <span>{subject?.emoji || '📖'}</span>
-                          <span>{subject?.name || 'مقرر دراسي'}</span>
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 group-hover:bg-sky-50 text-slate-700 group-hover:text-sky-700 border border-slate-200/80 group-hover:border-sky-200 text-xs font-bold flex items-center gap-1.5 transition-colors">
+                            <span>{subject?.emoji || '📖'}</span>
+                            <span>{subject?.name || 'مقرر دراسي'}</span>
+                          </span>
+
+                          {(hw.isExternalSubmission || !!hw.externalUrl) && (
+                            <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200/80 text-[10px] font-bold flex items-center gap-1">
+                              <Building2 className="w-3 h-3 text-purple-600" />
+                              <span>تسليم بالمدرسة</span>
+                            </span>
+                          )}
+                        </div>
 
                         <ChevronLeft className="w-4 h-4 text-slate-400 transition group-hover:-translate-x-1 group-hover:text-slate-900" />
                       </div>
@@ -1276,7 +1300,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                           alert('هذا الواجب منتهي ولا يمكن للطلاب الدخول إليه.');
                           return;
                         }
-                        setSelectedHomeworkForDetail(hw);
+                        setSelectedHomeworkId(hw.id);
                       }}
                       className={`rounded-2xl p-4 sm:p-5 border shadow-2xs transition-all flex flex-col justify-between space-y-3 select-none ${
                         isPrivileged
@@ -1311,6 +1335,8 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
           )}
         </div>
       )}
+      </div>
+    )}
 
       {/* Add / Edit Homework Modal */}
       <AnimatePresence>
@@ -1467,17 +1493,45 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    رابط التسليم الخارجي (اختياري - يمنع التسليم داخل الموقع)
-                  </label>
-                  <input
-                    type="url"
-                    value={externalUrl}
-                    onChange={(e) => setExternalUrl(e.target.value)}
-                    placeholder="https://forms.google.com/..."
-                    className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-slate-900 dir-ltr text-left"
-                  />
+                {/* External / In-School Submission Toggle Checkbox */}
+                <div className="space-y-2 pt-1">
+                  <div
+                    onClick={() => setIsExternalSubmission(!isExternalSubmission)}
+                    className={`p-3.5 rounded-2xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                      isExternalSubmission
+                        ? 'bg-purple-50/90 border-purple-300 text-purple-950 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100/80'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2 font-bold text-xs sm:text-sm">
+                        <Building2 className="w-4.5 h-4.5 text-purple-600 shrink-0" />
+                        <span>التسليم الخارجي (تسليم يدوي داخل المدرسة)</span>
+                      </div>
+                    </div>
+                    <div
+                      className={`w-6 h-6 rounded-lg border flex items-center justify-center shrink-0 transition ${
+                        isExternalSubmission ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-slate-300'
+                      }`}
+                    >
+                      {isExternalSubmission && <Check className="w-4 h-4 stroke-[3]" />}
+                    </div>
+                  </div>
+
+                  {isExternalSubmission && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="pt-1">
+                      <label className="block text-xs font-bold text-slate-700 mb-1">
+                        رابط تسليم خارجي إضافي <span className="text-slate-400 font-normal">(اختياري - مثل منصة خارجية أو Google Form)</span>
+                      </label>
+                      <input
+                        type="url"
+                        value={externalUrl}
+                        onChange={(e) => setExternalUrl(e.target.value)}
+                        placeholder="https://forms.google.com/..."
+                        className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 dir-ltr text-left"
+                      />
+                    </motion.div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

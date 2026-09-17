@@ -208,6 +208,7 @@ export interface Homework {
   closedAt?: string;
   targetClasses?: string[];
   externalUrl?: string; // رابط التسليم الخارجي
+  isExternalSubmission?: boolean; // تسليم يدوي / خارج الموقع (داخل المدرسة)
 }
 
 export function isHomeworkDeadlinePassed(dueDate?: string): boolean {
