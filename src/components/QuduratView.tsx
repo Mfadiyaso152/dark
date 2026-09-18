@@ -1,35 +1,10 @@
-import React, { useState } from 'react';
-import { BookOpen, ExternalLink, Lock, Clock, Sparkles } from 'lucide-react';
+import React from 'react';
+import { BookOpen, ExternalLink, Sparkles, LogIn } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export const QuduratView: React.FC = () => {
-  const [showSoonToast, setShowSoonToast] = useState(false);
-
-  const handleEnterQuduratSoon = () => {
-    setShowSoonToast(true);
-    setTimeout(() => setShowSoonToast(false), 3500);
-  };
-
   return (
     <div className="max-w-3xl mx-auto text-right font-['Tajawal',sans-serif] py-8 px-3 space-y-6">
-      {/* Toast Alert */}
-      {showSoonToast && (
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0 }}
-          className="bg-indigo-600 text-white p-4 rounded-2xl shadow-lg flex items-center justify-between text-xs sm:text-sm font-bold"
-        >
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 animate-spin" />
-            <span>قسم القدرات قريباً - يفتح رسمياً بتاريخ 12/2/2027</span>
-          </div>
-          <button onClick={() => setShowSoonToast(false)} className="text-white hover:bg-indigo-700 p-1 rounded-lg">
-            ✕
-          </button>
-        </motion.div>
-      )}
-
       {/* Main Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.97 }}
@@ -44,19 +19,18 @@ export const QuduratView: React.FC = () => {
             <span>منصة اختبارات القدرات العامة</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-            قسم القدرات (قريباً) ⏳
+            قسم القدرات
           </h2>
         </div>
 
-        {/* Enter Qudurat Button (Coming Soon with date) */}
+        {/* Enter Qudurat Button */}
         <div className="text-center">
           <button
             type="button"
-            onClick={handleEnterQuduratSoon}
             className="py-3.5 px-8 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-black text-sm sm:text-base inline-flex items-center gap-2.5 shadow-md transition cursor-pointer"
           >
-            <Lock className="w-5 h-5" />
-            <span>الدخول إلى قسم القدرات (قريباً - يفتح بتاريخ 12/2/2027)</span>
+            <LogIn className="w-5 h-5" />
+            <span>الدخول إلى قسم القدرات</span>
           </button>
         </div>
 
@@ -71,7 +45,7 @@ export const QuduratView: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-lg sm:text-xl font-black text-slate-900">
-                  كتاب المعاصر للقدرات (الكمي واللفظي)
+                  كتاب المعاصر 11
                 </h3>
               </div>
             </div>

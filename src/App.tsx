@@ -146,8 +146,54 @@ export default function App() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.banners && Array.isArray(data.banners)) {
-          setBanners(data.banners);
-          safeSetItem('thanaweya_banners_v1', JSON.stringify(data.banners));
+          // Retrieve local deleted banner IDs to filter out deleted ones
+          let deletedBannerIds = new Set<string>();
+          try {
+            const savedDeleted = safeGetItem('thanaweya_deleted_banner_ids');
+            if (savedDeleted) {
+              const parsed = JSON.parse(savedDeleted);
+              if (Array.isArray(parsed)) parsed.forEach((id) => deletedBannerIds.add(id));
+            }
+          } catch (e) {
+            console.warn(e);
+          }
+
+          // Retrieve local storage banners to preserve user active/inactive toggles
+          let localBanners: BannerItem[] = [];
+          try {
+            const savedLocal = safeGetItem('thanaweya_banners_v1');
+            if (savedLocal) {
+              const parsed = JSON.parse(savedLocal);
+              if (Array.isArray(parsed)) localBanners = parsed;
+            }
+          } catch (e) {
+            console.warn(e);
+          }
+
+          const localMap = new Map(localBanners.map((b) => [b.id, b]));
+
+          const mergedBanners: BannerItem[] = [];
+
+          data.banners.forEach((remoteB: BannerItem) => {
+            if (deletedBannerIds.has(remoteB.id)) return;
+
+            const localB = localMap.get(remoteB.id);
+            if (localB && localB.isActive !== undefined) {
+              mergedBanners.push({ ...remoteB, isActive: localB.isActive });
+            } else {
+              mergedBanners.push(remoteB);
+            }
+          });
+
+          // Also include any locally added banners not on server yet
+          localBanners.forEach((localB) => {
+            if (!deletedBannerIds.has(localB.id) && !mergedBanners.some((b) => b.id === localB.id)) {
+              mergedBanners.push(localB);
+            }
+          });
+
+          setBanners(mergedBanners);
+          safeSetItem('thanaweya_banners_v1', JSON.stringify(mergedBanners));
         }
         if (data.settings) {
           setBannerSettings(data.settings);
@@ -164,9 +210,27 @@ export default function App() {
   const handleSaveBanners = async (newBanners: BannerItem[]) => {
     setBanners(newBanners);
     safeSetItem('thanaweya_banners_v1', JSON.stringify(newBanners));
+
+    // Calculate deleted banners compared to INITIAL_BANNERS or previous state
+    try {
+      const currentIds = new Set(newBanners.map((b) => b.id));
+      const savedDeletedStr = safeGetItem('thanaweya_deleted_banner_ids') || '[]';
+      const deletedSet = new Set<string>(JSON.parse(savedDeletedStr));
+
+      INITIAL_BANNERS.forEach((initB) => {
+        if (!currentIds.has(initB.id)) {
+          deletedSet.add(initB.id);
+        }
+      });
+
+      safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(deletedSet)));
+    } catch (e) {
+      console.warn(e);
+    }
+
     try {
       const docRef = doc(db, 'app_settings', 'banners');
-      await setDoc(docRef, { banners: newBanners, settings: bannerSettings }, { merge: true });
+      await setDoc(docRef, { banners: newBanners, settings: bannerSettings, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
       console.warn('Failed to save banners to Firestore:', err);
     }

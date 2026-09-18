@@ -106,7 +106,29 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           contentUrl = (await downloadFileFromCloud(currentFile.fileId, undefined, currentFile.name)) || undefined;
         }
 
-        // 3. Fallback: check sibling files if single submission had multiple parts
+        // 3. Fallback: search using candidate IDs (including studentName, title, file index)
+        if (!contentUrl) {
+          const candidateKeys = [
+            currentFile.fileId,
+            currentFile.name,
+            studentName ? `sub-sol-${studentName}` : undefined,
+            title ? `hw-sol-${title}` : undefined,
+          ].filter(Boolean) as string[];
+
+          for (const key of candidateKeys) {
+            try {
+              const found = (await getLargeFile(key)) || (await downloadFileFromCloud(key, undefined, currentFile.name));
+              if (found) {
+                contentUrl = found;
+                break;
+              }
+            } catch {
+              // ignore
+            }
+          }
+        }
+
+        // 4. Fallback: check sibling files if single submission had multiple parts
         if (!contentUrl && files.length > 1) {
           for (const f of files) {
             if (f.fileId && f.fileId !== currentFile.fileId) {
@@ -117,11 +139,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               }
             }
           }
-        }
-
-        // 4. Fallback by name
-        if (!contentUrl && currentFile.name) {
-          contentUrl = (await downloadFileFromCloud(currentFile.name, undefined, currentFile.name)) || undefined;
         }
 
         if (!active) return;

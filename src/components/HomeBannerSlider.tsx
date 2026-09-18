@@ -90,7 +90,7 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
 
   const currentBanner = activeBanners[currentIndex] || activeBanners[0];
 
-  const variants = {
+  const variants: any = {
     enter: (dir: number) => ({
       x: dir > 0 ? '100%' : '-100%',
       opacity: 0,

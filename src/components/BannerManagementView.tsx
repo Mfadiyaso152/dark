@@ -162,9 +162,6 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
           </div>
           <div>
             <h2 className="text-lg sm:text-xl font-black text-white">إدارة الإعلانات والبنايات (Banners)</h2>
-            <p className="text-xs text-sky-200/80 mt-1">
-              التحكم في صور الواجهة الرئيسية، التفعيل والإلغاء اللحظي، وتحديد العناوين والروابط المرفقة
-            </p>
           </div>
         </div>
 

@@ -578,33 +578,6 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       {/* TAB 1: Statistics & Analytics */}
       {activeTab === 'stats' && (
         <div className="space-y-3">
-          {/* Banner Management Special Card */}
-          <div
-            onClick={() => setActiveTab('banners')}
-            className="bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 text-white p-4 rounded-2xl shadow-sm border border-sky-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:opacity-95 transition"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-300 flex items-center justify-center border border-sky-400/30 shrink-0">
-                <ImageIcon className="w-5 h-5" />
-              </div>
-              <div className="space-y-0.5">
-                <h3 className="font-black text-sm text-white">إدارة الإعلانات والبنايات (Banners)</h3>
-                <p className="text-xs text-sky-200/80">
-                  إضافة صور الواجهة الرئيسية، تفعيلها أو إيقافها، تحديد النصوص، وإرفاق رابط مباشر للمستخدم.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveTab('banners');
-              }}
-              className="py-2 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer shadow-xs border border-sky-400/30"
-            >
-              إدارة الإعلانات الآن
-            </button>
-          </div>
-
           {/* Main Key Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">

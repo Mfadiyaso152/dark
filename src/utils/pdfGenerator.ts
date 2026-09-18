@@ -48,6 +48,28 @@ export function normalizeFileDataUrl(rawInput: string, fileName: string = ''): s
 }
 
 /**
+ * Synchronous DataURL to Blob converter for immediate click-event downloads.
+ * Guarantees user-gesture activation context is preserved.
+ */
+export function dataUrlToBlobSync(dataUrl: string, fallbackMime: string = 'application/pdf'): Blob {
+  const normalized = normalizeFileDataUrl(dataUrl);
+  const commaIndex = normalized.indexOf(',');
+  const header = commaIndex > 0 ? normalized.slice(0, commaIndex) : '';
+  const rawBase64 = commaIndex > 0 ? normalized.slice(commaIndex + 1) : normalized;
+  const mimeMatch = header.match(/:(.*?);/);
+  const mime = (mimeMatch ? mimeMatch[1] : fallbackMime) || fallbackMime;
+
+  const cleanBase64 = rawBase64.replace(/\s+/g, '');
+  const binaryString = atob(cleanBase64);
+  const length = binaryString.length;
+  const bytes = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mime });
+}
+
+/**
  * Ultra-fast DataURL to Blob converter using browser's native C++ engine (fetch API).
  * 10x-50x faster than legacy JavaScript loops and never blocks the UI thread.
  */
@@ -66,21 +88,7 @@ export async function dataUrlToBlobFast(dataUrl: string, fallbackMime: string = 
     }
   }
 
-  // High performance manual fallback (direct Uint8Array without giant intermediate Array allocation)
-  const commaIndex = normalized.indexOf(',');
-  const header = commaIndex > 0 ? normalized.slice(0, commaIndex) : '';
-  const rawBase64 = commaIndex > 0 ? normalized.slice(commaIndex + 1) : normalized;
-  const mimeMatch = header.match(/:(.*?);/);
-  const mime = (mimeMatch ? mimeMatch[1] : fallbackMime) || fallbackMime;
-
-  const cleanBase64 = rawBase64.replace(/\s+/g, '');
-  const binaryString = atob(cleanBase64);
-  const length = binaryString.length;
-  const bytes = new Uint8Array(length);
-  for (let i = 0; i < length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mime });
+  return dataUrlToBlobSync(normalized, fallbackMime);
 }
 
 /**
@@ -108,7 +116,7 @@ export async function createSafeBlobUrl(
     };
   }
 
-  const blob = await dataUrlToBlobFast(normalized, fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
+  const blob = dataUrlToBlobSync(normalized, fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream');
   const blobUrl = URL.createObjectURL(blob);
   return {
     blobUrl,
@@ -119,47 +127,25 @@ export async function createSafeBlobUrl(
 
 /**
  * Universal fast file download trigger.
- * Handles base64 data URIs, raw base64, Blob objects, and remote URLs seamlessly.
+ * Synchronously triggers file downloads inside the user-activation click handler.
  */
 export function triggerFileDownload(blobOrDataUrl: Blob | string, fileName: string): boolean {
   try {
     const hasExtension = /\.(pdf|png|jpe?g|webp)$/i.test(fileName);
     const cleanName = hasExtension ? fileName : `${fileName}.pdf`;
 
+    let blobUrl = '';
+    let shouldRevoke = false;
+
     if (blobOrDataUrl instanceof Blob) {
-      const blobUrl = URL.createObjectURL(blobOrDataUrl);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = cleanName;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      setTimeout(() => {
-        if (document.body.contains(link)) document.body.removeChild(link);
-        URL.revokeObjectURL(blobUrl);
-      }, 30000);
-      return true;
-    }
+      blobUrl = URL.createObjectURL(blobOrDataUrl);
+      shouldRevoke = true;
+    } else if (typeof blobOrDataUrl === 'string') {
+      const normalized = normalizeFileDataUrl(blobOrDataUrl, fileName);
 
-    const normalized = normalizeFileDataUrl(blobOrDataUrl, fileName);
-
-    // Fast async blob extraction
-    dataUrlToBlobFast(normalized, cleanName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream')
-      .then((blob) => {
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = cleanName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (document.body.contains(link)) document.body.removeChild(link);
-          URL.revokeObjectURL(blobUrl);
-        }, 30000);
-      })
-      .catch((err) => {
-        console.warn('[FastDownload] Falling back to direct link:', err);
+      if (normalized.startsWith('blob:')) {
+        blobUrl = normalized;
+      } else if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
         const link = document.createElement('a');
         link.href = normalized;
         link.download = cleanName;
@@ -170,8 +156,37 @@ export function triggerFileDownload(blobOrDataUrl: Blob | string, fileName: stri
         link.click();
         setTimeout(() => {
           if (document.body.contains(link)) document.body.removeChild(link);
-        }, 10000);
-      });
+        }, 5000);
+        return true;
+      } else {
+        const mime = cleanName.toLowerCase().endsWith('.pdf')
+          ? 'application/pdf'
+          : /\.(jpe?g|png|webp)$/i.test(cleanName)
+          ? `image/${cleanName.split('.').pop()?.toLowerCase() || 'jpeg'}`
+          : 'application/octet-stream';
+        const blob = dataUrlToBlobSync(normalized, mime);
+        blobUrl = URL.createObjectURL(blob);
+        shouldRevoke = true;
+      }
+    }
+
+    if (!blobUrl) return false;
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = cleanName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      if (shouldRevoke && blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    }, 15000);
 
     return true;
   } catch (err) {
