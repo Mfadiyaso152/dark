@@ -17,7 +17,9 @@ import {
   Link as LinkIcon,
   Upload,
   Check,
-  Pencil
+  Pencil,
+  Cloud,
+  Loader2
 } from 'lucide-react';
 import { BannerItem, BannerSettings } from '../types';
 
@@ -26,13 +28,62 @@ interface BannerManagementViewProps {
   settings: BannerSettings;
   onSaveBanners: (newBanners: BannerItem[]) => void;
   onSaveSettings: (newSettings: BannerSettings) => void;
+  onToggleBannerActive?: (bannerId: string, isActive: boolean) => Promise<void> | void;
+  onDeleteBanner?: (bannerId: string) => Promise<void> | void;
+  onAddBanner?: (newBanner: BannerItem) => Promise<void> | void;
+  onUpdateBanner?: (updatedBanner: BannerItem) => Promise<void> | void;
 }
+
+// Compress and optimize banner images so they stay crisp, load fast, and never exceed Firestore document limits
+const optimizeBannerImage = (file: File, maxDim: number): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(reader.result as string);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        let dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        if (dataUrl.length > 500 * 1024) {
+          dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+        }
+        resolve(dataUrl);
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+};
 
 export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   banners,
   settings,
   onSaveBanners,
-  onSaveSettings
+  onSaveSettings,
+  onToggleBannerActive,
+  onDeleteBanner,
+  onAddBanner,
+  onUpdateBanner
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'banners' | 'settings' | 'sizes'>('banners');
 
@@ -47,6 +98,8 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const [isActive, setIsActive] = useState(true);
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state for editing existing banner texts & link
   const [editingBanner, setEditingBanner] = useState<BannerItem | null>(null);
@@ -60,7 +113,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
 
   const showTempSuccess = (msg: string) => {
     setSuccessMessage(msg);
-    setTimeout(() => setSuccessMessage(''), 3000);
+    setTimeout(() => setSuccessMessage(''), 3500);
   };
 
   const handleStartEdit = (banner: BannerItem) => {
@@ -70,28 +123,38 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
     setEditLinkUrl(banner.linkUrl || '');
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingBanner) return;
 
-    const updated = banners.map((b) =>
-      b.id === editingBanner.id
-        ? {
-            ...b,
-            title: editTitle.trim() || undefined,
-            description: editDescription.trim() || undefined,
-            linkUrl: editLinkUrl.trim() || undefined
-          }
-        : b
-    );
+    try {
+      setIsSubmitting(true);
+      const updatedBanner: BannerItem = {
+        ...editingBanner,
+        title: editTitle.trim() || undefined,
+        description: editDescription.trim() || undefined,
+        linkUrl: editLinkUrl.trim() || undefined
+      };
 
-    onSaveBanners(updated);
-    setEditingBanner(null);
-    showTempSuccess('تم حفظ تعديلات الإعلان بنجاح!');
+      if (onUpdateBanner) {
+        await onUpdateBanner(updatedBanner);
+      } else {
+        const updated = banners.map((b) => (b.id === editingBanner.id ? updatedBanner : b));
+        onSaveBanners(updated);
+      }
+
+      setEditingBanner(null);
+      showTempSuccess('تم حفظ تعديلات الإعلان ومزامنتها سحابياً لجميع المستخدمين لحظياً!');
+    } catch (err) {
+      console.error(err);
+      showTempSuccess('تعذر حفظ التعديل سحابياً');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Handle Image File Upload for individual device sizes
-  const handleDeviceFileUpload = (
+  // Handle Image File Upload for individual device sizes with Canvas optimization
+  const handleDeviceFileUpload = async (
     device: 'mobile' | 'tablet' | 'desktop',
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -103,24 +166,28 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      setFormError('حجم الصورة كبير جداً. يفضل اختيار صورة أقل من 8 ميجابايت.');
+    if (file.size > 15 * 1024 * 1024) {
+      setFormError('حجم الصورة كبير جداً. يفضل اختيار صورة أقل من 15 ميجابايت.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        if (device === 'mobile') setMobileImageUrl(reader.result);
-        if (device === 'tablet') setTabletImageUrl(reader.result);
-        if (device === 'desktop') setDesktopImageUrl(reader.result);
-        setFormError('');
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      setIsProcessingImage(true);
+      const maxDim = device === 'mobile' ? 800 : device === 'tablet' ? 1200 : 1600;
+      const optimized = await optimizeBannerImage(file, maxDim);
+      if (device === 'mobile') setMobileImageUrl(optimized);
+      if (device === 'tablet') setTabletImageUrl(optimized);
+      if (device === 'desktop') setDesktopImageUrl(optimized);
+      setFormError('');
+    } catch (err) {
+      console.error('Image compression error:', err);
+      setFormError('تعذر معالجة الصورة، يرجى اختيار صورة أخرى');
+    } finally {
+      setIsProcessingImage(false);
+    }
   };
 
-  const handleAddBanner = (e: React.FormEvent) => {
+  const handleAddBanner = async (e: React.FormEvent) => {
     e.preventDefault();
     const mainUrl = mobileImageUrl || tabletImageUrl || desktopImageUrl;
     if (!mainUrl) {
@@ -128,52 +195,74 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
       return;
     }
 
-    const newBanner: BannerItem = {
-      id: `banner-${Date.now()}`,
-      imageUrl: mainUrl,
-      mobileImageUrl: mobileImageUrl.trim() || undefined,
-      tabletImageUrl: tabletImageUrl.trim() || undefined,
-      desktopImageUrl: desktopImageUrl.trim() || undefined,
-      title: title.trim() || undefined,
-      description: description.trim() || undefined,
-      linkUrl: linkUrl.trim() || undefined,
-      isActive,
-      createdAt: new Date().toISOString(),
-      order: banners.length + 1
-    };
+    try {
+      setIsSubmitting(true);
+      const newBanner: BannerItem = {
+        id: `banner-${Date.now()}`,
+        imageUrl: mainUrl,
+        mobileImageUrl: mobileImageUrl.trim() || undefined,
+        tabletImageUrl: tabletImageUrl.trim() || undefined,
+        desktopImageUrl: desktopImageUrl.trim() || undefined,
+        title: title.trim() || undefined,
+        description: description.trim() || undefined,
+        linkUrl: linkUrl.trim() || undefined,
+        isActive,
+        createdAt: new Date().toISOString(),
+        order: banners.length + 1
+      };
 
-    const updated = [newBanner, ...banners];
-    onSaveBanners(updated);
+      if (onAddBanner) {
+        await onAddBanner(newBanner);
+      } else {
+        const updated = [newBanner, ...banners];
+        onSaveBanners(updated);
+      }
 
-    // Reset Form & Show Instant Feedback
-    setMobileImageUrl('');
-    setTabletImageUrl('');
-    setDesktopImageUrl('');
-    setTitle('');
-    setDescription('');
-    setLinkUrl('');
-    setIsActive(true);
-    setFormError('');
-    setIsAdding(false);
-    showTempSuccess('تمت إضافة الإعلان بنجاح وتحديثه لحظياً!');
-  };
-
-  // Toggle banner active state (تفعيل / إلغاء تفعيل) - Instant Real-time
-  const handleToggleBannerActive = (bannerId: string) => {
-    const updated = banners.map((b) => (b.id === bannerId ? { ...b, isActive: !b.isActive } : b));
-    onSaveBanners(updated);
-    const target = updated.find((b) => b.id === bannerId);
-    if (target) {
-      showTempSuccess(target.isActive !== false ? 'تم تفعيل الإعلان بنجاح!' : 'تم تعطيل الإعلان.');
+      // Reset Form & Show Instant Feedback
+      setMobileImageUrl('');
+      setTabletImageUrl('');
+      setDesktopImageUrl('');
+      setTitle('');
+      setDescription('');
+      setLinkUrl('');
+      setIsActive(true);
+      setFormError('');
+      setIsAdding(false);
+      showTempSuccess('تمت إضافة الإعلان بنجاح ومزامنته سحابياً لجميع المستخدمين لحظياً!');
+    } catch (err) {
+      console.error(err);
+      setFormError('حدث خطأ أثناء حفظ الإعلان سحابياً');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  // Delete banner - Instant Real-time
-  const handleDeleteBanner = (bannerId: string) => {
-    if (window.confirm('هل أنت تأكد من حذف هذا الإعلان نهائياً؟')) {
-      const updated = banners.filter((b) => b.id !== bannerId);
+  // Toggle banner active state (تفعيل / إلغاء تفعيل) - Instant Real-time Cloud Sync
+  const handleToggleBannerActive = async (bannerId: string) => {
+    const target = banners.find((b) => b.id === bannerId);
+    if (!target) return;
+    const newActiveState = target.isActive === false;
+
+    if (onToggleBannerActive) {
+      await onToggleBannerActive(bannerId, newActiveState);
+    } else {
+      const updated = banners.map((b) => (b.id === bannerId ? { ...b, isActive: newActiveState } : b));
       onSaveBanners(updated);
-      showTempSuccess('تم حذف الإعلان بنجاح.');
+    }
+
+    showTempSuccess(newActiveState ? 'تم تفعيل الإعلان وسينتقل فوراً للشاشة الرئيسية لجميع الطلاب!' : 'تم تعطيل الإعلان وإخفاؤه عن جميع الطلاب لحظياً!');
+  };
+
+  // Delete banner - Instant Real-time Cloud Deletion
+  const handleDeleteBanner = async (bannerId: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا الإعلان نهائياً من السحابة لجميع المستخدمين؟')) {
+      if (onDeleteBanner) {
+        await onDeleteBanner(bannerId);
+      } else {
+        const updated = banners.filter((b) => b.id !== bannerId);
+        onSaveBanners(updated);
+      }
+      showTempSuccess('تم حذف الإعلان نهائياً من السحابة لجميع المستخدمين.');
     }
   };
 
@@ -183,7 +272,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
       autoPlay,
       intervalSeconds
     });
-    showTempSuccess('تم حفظ إعدادات السرعة والحركة بنجاح!');
+    showTempSuccess('تم حفظ إعدادات السرعة والحركة سحابياً بنجاح!');
   };
 
   return (
@@ -199,10 +288,17 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-white/10 p-1.5 rounded-2xl border border-white/15 backdrop-blur-md self-start sm:self-auto">
-          <span className="text-xs font-bold text-white px-3">
-            الإجمالي: <span className="text-sky-300 font-black">{banners.length}</span> | المُفعل: <span className="text-emerald-400 font-black">{banners.filter((b) => b.isActive !== false).length}</span>
-          </span>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-2xl text-xs font-bold shadow-xs">
+            <Cloud className="w-4 h-4 text-emerald-400 animate-pulse" />
+            <span>مزامنة سحابية لحظية ☁️</span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-white/10 p-1.5 rounded-2xl border border-white/15 backdrop-blur-md self-start sm:self-auto">
+            <span className="text-xs font-bold text-white px-3">
+              الإجمالي: <span className="text-sky-300 font-black">{banners.length}</span> | المُفعل: <span className="text-emerald-400 font-black">{banners.filter((b) => b.isActive !== false).length}</span>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -509,9 +605,17 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                     </button>
                     <button
                       type="submit"
-                      className="py-2.5 px-6 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                      disabled={isSubmitting || isProcessingImage}
+                      className="py-2.5 px-6 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-2"
                     >
-                      حفظ وإضافة الإعلان
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>جاري النشر سحابياً...</span>
+                        </>
+                      ) : (
+                        <span>حفظ ونشر الإعلان سحابياً</span>
+                      )}
                     </button>
                   </div>
                 </motion.form>
@@ -844,9 +948,17 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
               <div className="flex items-center gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold text-xs sm:text-sm transition shadow-xs cursor-pointer"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs sm:text-sm transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
                 >
-                  حفظ التعديلات
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري الحفظ سحابياً...</span>
+                    </>
+                  ) : (
+                    <span>حفظ التعديلات سحابياً</span>
+                  )}
                 </button>
                 <button
                   type="button"

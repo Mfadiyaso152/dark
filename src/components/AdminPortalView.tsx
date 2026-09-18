@@ -44,6 +44,10 @@ interface AdminPortalViewProps {
   bannerSettings?: BannerSettings;
   onSaveBanners?: (newBanners: BannerItem[]) => void;
   onSaveBannerSettings?: (newSettings: BannerSettings) => void;
+  onToggleBannerActive?: (bannerId: string, isActive: boolean) => Promise<void> | void;
+  onDeleteBanner?: (bannerId: string) => Promise<void> | void;
+  onAddBanner?: (newBanner: BannerItem) => Promise<void> | void;
+  onUpdateBanner?: (updatedBanner: BannerItem) => Promise<void> | void;
   onNavigateHome: () => void;
   onSelectLesson?: (lesson: Lesson) => void;
 }
@@ -60,6 +64,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   bannerSettings = { autoPlay: true, intervalSeconds: 5 },
   onSaveBanners = () => {},
   onSaveBannerSettings = () => {},
+  onToggleBannerActive,
+  onDeleteBanner,
+  onAddBanner,
+  onUpdateBanner,
   onNavigateHome
 }) => {
   const {
@@ -1004,6 +1012,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
           settings={bannerSettings}
           onSaveBanners={onSaveBanners}
           onSaveSettings={onSaveBannerSettings}
+          onToggleBannerActive={onToggleBannerActive}
+          onDeleteBanner={onDeleteBanner}
+          onAddBanner={onAddBanner}
+          onUpdateBanner={onUpdateBanner}
         />
       )}
 
