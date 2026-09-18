@@ -36,7 +36,8 @@ import {
   safeGetItem,
   sanitizeLessonsForStorage,
   sanitizeBookletsForStorage,
-  sanitizeExistingLocalStorage
+  sanitizeExistingLocalStorage,
+  sanitizeForFirestore
 } from './utils/storage';
 import { storeLargeFile, deleteLargeFile } from './utils/fileStorage';
 import { uploadFileToCloud, deleteFileFromCloud } from './utils/cloudStorage';
@@ -143,13 +144,13 @@ export default function App() {
   useEffect(() => {
     const bannersCol = collection(db, 'banners');
     const unsubscribeBanners = onSnapshot(bannersCol, (snapshot) => {
-      const cloudBanners: BannerItem[] = [];
-      const deletedIds = new Set<string>();
+      const cloudBannersMap = new Map<string, BannerItem>();
+      const cloudDeletedIds = new Set<string>();
 
       try {
         const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_banner_ids') || '[]');
         if (Array.isArray(storedDeleted)) {
-          storedDeleted.forEach((id) => deletedIds.add(id));
+          storedDeleted.forEach((id) => cloudDeletedIds.add(id));
         }
       } catch (e) {
         console.warn(e);
@@ -159,12 +160,12 @@ export default function App() {
         const data = docSnap.data();
         const bId = data.id || docSnap.id;
         if (data.isDeleted) {
-          deletedIds.add(bId);
+          cloudDeletedIds.add(bId);
         } else if (bId) {
           const initialMatch = (INITIAL_BANNERS as BannerItem[]).find((ib) => ib.id === bId);
           const effectiveImageUrl = data.imageUrl || initialMatch?.imageUrl || '';
           if (effectiveImageUrl) {
-            cloudBanners.push({
+            cloudBannersMap.set(bId, {
               id: bId,
               imageUrl: effectiveImageUrl,
               mobileImageUrl: data.mobileImageUrl || initialMatch?.mobileImageUrl || undefined,
@@ -183,27 +184,25 @@ export default function App() {
 
       // Save merged deleted IDs permanently so deleted banners NEVER return
       try {
-        safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(deletedIds)));
+        safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(cloudDeletedIds)));
       } catch (e) {
         console.warn(e);
       }
 
-      setBanners((prev) => {
+      setBanners(() => {
         const map = new Map<string, BannerItem>();
 
         // 1. Initial default banners (if not deleted and not in cloud yet)
         INITIAL_BANNERS.forEach((b) => {
-          if (!deletedIds.has(b.id)) {
+          if (!cloudDeletedIds.has(b.id) && !cloudBannersMap.has(b.id)) {
             map.set(b.id, b);
           }
         });
 
         // 2. Cloud banners ALWAYS take absolute priority (status, texts, order, etc.)
-        cloudBanners.forEach((cb) => {
-          if (!deletedIds.has(cb.id)) {
-            map.set(cb.id, cb);
-          } else {
-            map.delete(cb.id);
+        cloudBannersMap.forEach((cb, id) => {
+          if (!cloudDeletedIds.has(id)) {
+            map.set(id, cb);
           }
         });
 
@@ -243,20 +242,20 @@ export default function App() {
     );
 
     // 2. Find full banner details
-    const existing = banners.find((b) => b.id === bannerId) || INITIAL_BANNERS.find((b) => b.id === bannerId);
+    const existing = banners.find((b) => b.id === bannerId) || (INITIAL_BANNERS as BannerItem[]).find((b) => b.id === bannerId);
 
     // 3. Instant Cloud Sync (Real-time to all devices via Firestore)
     try {
-      const bannerPayload = {
+      const bannerPayload = sanitizeForFirestore({
         ...(existing || {}),
         id: bannerId,
         isActive: isActive,
         isDeleted: false,
         updatedAt: new Date().toISOString()
-      };
+      });
       await setDoc(doc(db, 'banners', bannerId), bannerPayload, { merge: true });
     } catch (err) {
-      console.warn('Failed to update banner active status in Firestore:', err);
+      console.error('Failed to update banner active status in Firestore:', err);
     }
   };
 
@@ -274,27 +273,49 @@ export default function App() {
     }
 
     try {
-      await setDoc(doc(db, 'banners', bannerId), {
+      const payload = sanitizeForFirestore({
         id: bannerId,
         isDeleted: true,
+        isActive: false,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
-      await deleteDoc(doc(db, 'banners', bannerId)).catch(() => {});
+      });
+      await setDoc(doc(db, 'banners', bannerId), payload, { merge: true });
     } catch (err) {
-      console.warn('Failed to delete banner from Firestore:', err);
+      console.error('Failed to delete banner from Firestore:', err);
     }
   };
 
   // Dedicated real-time cloud add (إضافة إعلان جديد يظهر لكل المستخدمين فوراً)
   const handleAddBanner = async (newBanner: BannerItem) => {
-    setBanners((prev) => [newBanner, ...prev.filter((b) => b.id !== newBanner.id)]);
+    const bannerWithId: BannerItem = {
+      ...newBanner,
+      id: newBanner.id || `banner-${Date.now()}`,
+      isActive: newBanner.isActive !== false,
+      createdAt: newBanner.createdAt || new Date().toISOString(),
+      order: newBanner.order ?? (banners.length + 1)
+    };
+
+    setBanners((prev) => [bannerWithId, ...prev.filter((b) => b.id !== bannerWithId.id)]);
+
+    // If previously deleted, remove from deleted list
+    try {
+      const savedDeletedStr = safeGetItem('thanaweya_deleted_banner_ids') || '[]';
+      const deletedSet = new Set<string>(JSON.parse(savedDeletedStr));
+      if (deletedSet.has(bannerWithId.id)) {
+        deletedSet.delete(bannerWithId.id);
+        safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(deletedSet)));
+      }
+    } catch (e) {
+      console.warn(e);
+    }
 
     try {
-      await setDoc(doc(db, 'banners', newBanner.id), {
-        ...newBanner,
+      const payload = sanitizeForFirestore({
+        ...bannerWithId,
         isDeleted: false,
         updatedAt: new Date().toISOString()
       });
+      await setDoc(doc(db, 'banners', bannerWithId.id), payload);
     } catch (err) {
       console.error('Failed to add banner to Firestore:', err);
     }
@@ -307,10 +328,12 @@ export default function App() {
     );
 
     try {
-      await setDoc(doc(db, 'banners', updatedBanner.id), {
+      const payload = sanitizeForFirestore({
         ...updatedBanner,
+        isDeleted: false,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      });
+      await setDoc(doc(db, 'banners', updatedBanner.id), payload, { merge: true });
     } catch (err) {
       console.error('Failed to update banner in Firestore:', err);
     }
@@ -335,13 +358,14 @@ export default function App() {
       const prev = previousMap.get(b.id);
       if (!prev || JSON.stringify(prev) !== JSON.stringify(b)) {
         try {
-          await setDoc(doc(db, 'banners', b.id), {
+          const payload = sanitizeForFirestore({
             ...b,
             isDeleted: false,
             updatedAt: new Date().toISOString()
-          }, { merge: true });
+          });
+          await setDoc(doc(db, 'banners', b.id), payload, { merge: true });
         } catch (err) {
-          console.warn('Failed to sync banner to Firestore:', err);
+          console.error('Failed to sync banner to Firestore:', err);
         }
       }
     }
@@ -352,9 +376,13 @@ export default function App() {
     safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(newSettings));
     try {
       const docRef = doc(db, 'app_settings', 'banners');
-      await setDoc(docRef, { settings: newSettings, updatedAt: new Date().toISOString() }, { merge: true });
+      const payload = sanitizeForFirestore({
+        settings: newSettings,
+        updatedAt: new Date().toISOString()
+      });
+      await setDoc(docRef, payload, { merge: true });
     } catch (err) {
-      console.warn('Failed to save banner settings to Firestore:', err);
+      console.error('Failed to save banner settings to Firestore:', err);
     }
   };
 

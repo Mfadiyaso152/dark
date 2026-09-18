@@ -125,3 +125,24 @@ export function sanitizeExistingLocalStorage(): void {
     console.warn('[Storage] Hygiene check error:', e);
   }
 }
+
+/**
+ * Recursively cleans an object so that all undefined values are stripped out,
+ * ensuring Firestore setDoc / updateDoc operations never fail with "Unsupported field value: undefined".
+ */
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  if (!obj || typeof obj !== 'object') return obj;
+  const result: Record<string, any> = {};
+
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (val !== undefined) {
+      if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+        result[key] = sanitizeForFirestore(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Plus,
   Trash2,
@@ -19,7 +19,8 @@ import {
   Check,
   Pencil,
   Cloud,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 import { BannerItem, BannerSettings } from '../types';
 
@@ -106,6 +107,10 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editLinkUrl, setEditLinkUrl] = useState('');
+
+  // Confirmation state for deleting a banner
+  const [bannerToDelete, setBannerToDelete] = useState<BannerItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Settings state
   const [autoPlay, setAutoPlay] = useState(settings?.autoPlay !== false);
@@ -253,16 +258,28 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
     showTempSuccess(newActiveState ? 'تم تفعيل الإعلان وسينتقل فوراً للشاشة الرئيسية لجميع الطلاب!' : 'تم تعطيل الإعلان وإخفاؤه عن جميع الطلاب لحظياً!');
   };
 
-  // Delete banner - Instant Real-time Cloud Deletion
-  const handleDeleteBanner = async (bannerId: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذا الإعلان نهائياً من السحابة لجميع المستخدمين؟')) {
+  // Delete banner - Built-in in-app confirmation modal (works 100% reliably in any browser / iframe)
+  const handlePromptDelete = (banner: BannerItem) => {
+    setBannerToDelete(banner);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!bannerToDelete) return;
+    try {
+      setIsDeleting(true);
       if (onDeleteBanner) {
-        await onDeleteBanner(bannerId);
+        await onDeleteBanner(bannerToDelete.id);
       } else {
-        const updated = banners.filter((b) => b.id !== bannerId);
+        const updated = banners.filter((b) => b.id !== bannerToDelete.id);
         onSaveBanners(updated);
       }
       showTempSuccess('تم حذف الإعلان نهائياً من السحابة لجميع المستخدمين.');
+      setBannerToDelete(null);
+    } catch (err) {
+      console.error(err);
+      showTempSuccess('حدث خطأ أثناء الحذف من السحابة');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -722,9 +739,9 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
 
                         {/* Delete Button */}
                         <button
-                          onClick={() => handleDeleteBanner(banner.id)}
+                          onClick={() => handlePromptDelete(banner)}
                           className="w-9 h-9 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center transition cursor-pointer"
-                          title="حذف الإعلان نهائياً"
+                          title="حذف الإعلان نهائياً من السحابة"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -972,6 +989,67 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
           </motion.div>
         </div>
       )}
+
+      {/* DELETE BANNER CONFIRMATION MODAL */}
+      <AnimatePresence>
+        {bannerToDelete && (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-right space-y-4 font-['IBM_Plex_Sans_Arabic',sans-serif]"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center mx-auto mb-2">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+
+              <div className="text-center space-y-1.5">
+                <h3 className="font-black text-slate-900 text-lg">تأكيد حذف الإعلان سحابياً</h3>
+                <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+                  هل أنت متأكد من حذف هذا الإعلان نهائياً من السحابة؟ سيختفي الإعلان فوراً من الواجهة الرئيسية لجميع الطلاب وعلى جميع الأجهزة.
+                </p>
+              </div>
+
+              {/* Banner thumbnail preview */}
+              <div className="relative w-full h-24 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200">
+                <img src={bannerToDelete.imageUrl} alt="الإعلان المراد حذفه" className="w-full h-full object-cover opacity-80" />
+                {bannerToDelete.title && (
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-2.5 text-xs text-white font-bold">
+                    {bannerToDelete.title}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDelete}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs sm:text-sm transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري الحذف من السحابة...</span>
+                    </>
+                  ) : (
+                    <span>تأكيد الحذف النهائي 🗑️</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setBannerToDelete(null)}
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
+                >
+                  تراجع
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
