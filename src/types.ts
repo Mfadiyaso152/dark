@@ -193,6 +193,25 @@ export interface SubjectBooklet {
   targetClasses?: string[];
 }
 
+export interface BannerItem {
+  id: string;
+  imageUrl: string;
+  mobileImageUrl?: string;
+  tabletImageUrl?: string;
+  desktopImageUrl?: string;
+  title?: string;
+  description?: string;
+  linkUrl?: string;
+  isActive: boolean;
+  createdAt: string;
+  order?: number;
+}
+
+export interface BannerSettings {
+  autoPlay: boolean;
+  intervalSeconds: number; // مدة الحركة بالثواني (مثلاً 5 ثواني)
+}
+
 export interface Homework {
   id: string;
   subjectId: string;

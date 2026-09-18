@@ -15,7 +15,8 @@ import {
   ClipboardList,
   CheckCircle2,
   Sparkles,
-  Info
+  Info,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Subject } from '../types';
 import { useSubjectControls } from '../context/SubjectControlsContext';
@@ -24,11 +25,12 @@ import { SubjectIcon } from './SubjectIcon';
 
 interface SupervisorSettingsDrawerProps {
   subjects: Subject[];
+  onOpenBannersManagement?: () => void;
 }
 
 type DrawerScreen = 'menus' | 'partSelect' | 'subjectsList' | 'subjectDetail';
 
-export const SupervisorSettingsDrawer: React.FC<SupervisorSettingsDrawerProps> = ({ subjects }) => {
+export const SupervisorSettingsDrawer: React.FC<SupervisorSettingsDrawerProps> = ({ subjects, onOpenBannersManagement }) => {
   const {
     isSettingsOpen,
     closeSettings,
@@ -222,6 +224,32 @@ export const SupervisorSettingsDrawer: React.FC<SupervisorSettingsDrawerProps> =
                       </div>
                     </div>
                     <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-blue-600 group-hover:-translate-x-1 transition" />
+                  </div>
+
+                  {/* Menu 2: الإعلانات والبنايات */}
+                  <div
+                    onClick={() => {
+                      closeSettings();
+                      if (onOpenBannersManagement) {
+                        onOpenBannersManagement();
+                      }
+                    }}
+                    className="bg-white hover:bg-sky-50/50 border-2 border-slate-200 hover:border-sky-500 rounded-2xl p-4 transition-all cursor-pointer group flex items-center justify-between shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center font-bold text-lg group-hover:scale-105 transition">
+                        <ImageIcon className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-900 group-hover:text-sky-600 text-base transition">
+                          إدارة الإعلانات والبنايات
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          إضافة صور الواجهة، التفعيل/الإلغاء، ومقاسات الأجهزة
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronLeft className="w-5 h-5 text-slate-400 group-hover:text-sky-600 group-hover:-translate-x-1 transition" />
                   </div>
 
                   {/* Info Card */}

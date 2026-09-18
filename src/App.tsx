@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile } from './types';
-import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS } from './data/initialData';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings } from './types';
+import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNERS, INITIAL_BANNER_SETTINGS } from './data/initialData';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
 import { LessonCard } from './components/LessonCard';
@@ -19,6 +19,7 @@ import { TopNav, TabType } from './components/TopNav';
 import { SupervisorSettingsDrawer } from './components/SupervisorSettingsDrawer';
 import { FullNameRequiredModal } from './components/FullNameRequiredModal';
 import { NotFoundView } from './components/NotFoundView';
+import { HomeBannerSlider } from './components/HomeBannerSlider';
 import {
   parsePathname,
   buildUrl,
@@ -102,6 +103,85 @@ export default function App() {
     }
     return INITIAL_BOOKLETS.filter((b) => !deletedIds.has(b.id));
   });
+
+  // Banners & Announcement Settings (صور الإعلانات والبنايات)
+  const [banners, setBanners] = useState<BannerItem[]>(() => {
+    try {
+      const saved = safeGetItem('thanaweya_banners_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+    return INITIAL_BANNERS;
+  });
+
+  const [bannerSettings, setBannerSettings] = useState<BannerSettings>(() => {
+    try {
+      const saved = safeGetItem('thanaweya_banner_settings_v1');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+    return INITIAL_BANNER_SETTINGS;
+  });
+
+  // Sync banners & settings to localStorage
+  useEffect(() => {
+    safeSetItem('thanaweya_banners_v1', JSON.stringify(banners));
+  }, [banners]);
+
+  useEffect(() => {
+    safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(bannerSettings));
+  }, [bannerSettings]);
+
+  // Real-time Firestore sync for Banners
+  useEffect(() => {
+    const docRef = doc(db, 'app_settings', 'banners');
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.banners && Array.isArray(data.banners)) {
+          setBanners(data.banners);
+          safeSetItem('thanaweya_banners_v1', JSON.stringify(data.banners));
+        }
+        if (data.settings) {
+          setBannerSettings(data.settings);
+          safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(data.settings));
+        }
+      }
+    }, (err) => {
+      console.warn('Firestore banners snapshot note:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const handleSaveBanners = async (newBanners: BannerItem[]) => {
+    setBanners(newBanners);
+    safeSetItem('thanaweya_banners_v1', JSON.stringify(newBanners));
+    try {
+      const docRef = doc(db, 'app_settings', 'banners');
+      await setDoc(docRef, { banners: newBanners, settings: bannerSettings }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to save banners to Firestore:', err);
+    }
+  };
+
+  const handleSaveBannerSettings = async (newSettings: BannerSettings) => {
+    setBannerSettings(newSettings);
+    safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(newSettings));
+    try {
+      const docRef = doc(db, 'app_settings', 'banners');
+      await setDoc(docRef, { banners, settings: newSettings }, { merge: true });
+    } catch (err) {
+      console.warn('Failed to save banner settings to Firestore:', err);
+    }
+  };
 
   // Sync booklets safely to localStorage (stripping heavy base64 to protect quota)
   useEffect(() => {
@@ -1299,6 +1379,10 @@ export default function App() {
                   booklets={booklets}
                   homeworks={homeworks}
                   submissions={submissions}
+                  banners={banners}
+                  bannerSettings={bannerSettings}
+                  onSaveBanners={handleSaveBanners}
+                  onSaveBannerSettings={handleSaveBannerSettings}
                   onNavigateHome={() => {
                     setActiveTab('home');
                     setSelectedSubject(null);
@@ -1343,6 +1427,12 @@ export default function App() {
                   ) : (
                     /* All Subjects Grid */
                     <div className="space-y-4 md:space-y-6">
+                      {/* Home Banner Slider - مربع بحواف ناعمة جداً للإعلانات والبنايات قبل المواد */}
+                      <HomeBannerSlider
+                        banners={banners}
+                        settings={bannerSettings}
+                      />
+
                       {/* Search Bar */}
                       <div className="relative">
                         <input
@@ -1425,7 +1515,13 @@ export default function App() {
         <NotificationsModal />
 
         {/* Supervisor Platform Controls Drawer */}
-        <SupervisorSettingsDrawer subjects={subjects} />
+        <SupervisorSettingsDrawer
+          subjects={subjects}
+          onOpenBannersManagement={() => {
+            setActiveTab('admin');
+            syncBrowserUrl('/admin');
+          }}
+        />
       </div>
     </div>
   );

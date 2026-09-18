@@ -1376,3 +1376,42 @@ export const INITIAL_LESSONS: Lesson[] = [
 ];
 
 export const INITIAL_BOOKLETS: SubjectBooklet[] = [];
+
+export const INITIAL_BANNERS = [
+  {
+    id: 'banner-1',
+    imageUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=1600&q=80',
+    title: 'أهلاً بكم في منصة زاد التعليمية 🎓',
+    description: 'وجهتك الأولى لمتابعة الدروس، الملخصات، والواجبات المدرسية بكل سهولة وتفاعل',
+    linkUrl: '',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    order: 1
+  },
+  {
+    id: 'banner-2',
+    imageUrl: 'https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=1600&q=80',
+    title: 'استعد للقدرات والتحصيلي 🚀',
+    description: 'تدريبات مكثفة واختبارات تجريبية تفاعلية للرفع من مستوى استعدادتك وتفوقك',
+    linkUrl: '',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    order: 2
+  },
+  {
+    id: 'banner-3',
+    imageUrl: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=1600&q=80',
+    title: 'متابعة الواجبات المدرسية اليومية 📝',
+    description: 'استعرض المطلوب وسلّم حلولك أولاً بأول وتابع ملحوظات معلميك مباشرة',
+    linkUrl: '',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    order: 3
+  }
+];
+
+export const INITIAL_BANNER_SETTINGS = {
+  autoPlay: true,
+  intervalSeconds: 5
+};
+

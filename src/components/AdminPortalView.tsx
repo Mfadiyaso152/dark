@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth, SUPER_ADMIN_EMAIL, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
-import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, USER_JOB_OPTIONS, User } from '../types';
+import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, USER_JOB_OPTIONS, User, BannerItem, BannerSettings } from '../types';
+import { BannerManagementView } from './BannerManagementView';
 import { formatGregorianDate } from '../utils/dateFormatter';
 import {
   Lock,
@@ -26,7 +27,8 @@ import {
   BarChart3,
   Layers,
   Clock,
-  Home
+  Home,
+  Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -38,11 +40,15 @@ interface AdminPortalViewProps {
   booklets: SubjectBooklet[];
   homeworks: Homework[];
   submissions: HomeworkSubmission[];
+  banners?: BannerItem[];
+  bannerSettings?: BannerSettings;
+  onSaveBanners?: (newBanners: BannerItem[]) => void;
+  onSaveBannerSettings?: (newSettings: BannerSettings) => void;
   onNavigateHome: () => void;
   onSelectLesson?: (lesson: Lesson) => void;
 }
 
-type AdminTab = 'stats' | 'users' | 'activity';
+type AdminTab = 'stats' | 'users' | 'activity' | 'banners';
 
 export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   subjects,
@@ -50,6 +56,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   booklets,
   homeworks,
   submissions,
+  banners = [],
+  bannerSettings = { autoPlay: true, intervalSeconds: 5 },
+  onSaveBanners = () => {},
+  onSaveBannerSettings = () => {},
   onNavigateHome
 }) => {
   const {
@@ -481,6 +491,20 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
             <Users className="w-4 h-4" />
           </button>
 
+          {/* Banner Management Tab (Icon only as requested) */}
+          <button
+            onClick={() => setActiveTab('banners')}
+            aria-label="إدارة الإعلانات والبنايات"
+            title="إدارة الإعلانات والبنايات"
+            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
+              activeTab === 'banners'
+                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <ImageIcon className="w-4 h-4" />
+          </button>
+
           <button
             onClick={() => setActiveTab('activity')}
             aria-label={`سجل التسليمات (${submissions.length})`}
@@ -497,6 +521,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
         {/* Quick Action Buttons */}
         <div className="flex items-center gap-1.5 mr-auto">
+
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
@@ -553,6 +578,33 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       {/* TAB 1: Statistics & Analytics */}
       {activeTab === 'stats' && (
         <div className="space-y-3">
+          {/* Banner Management Special Card */}
+          <div
+            onClick={() => setActiveTab('banners')}
+            className="bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 text-white p-4 rounded-2xl shadow-sm border border-sky-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:opacity-95 transition"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-sky-500/20 text-sky-300 flex items-center justify-center border border-sky-400/30 shrink-0">
+                <ImageIcon className="w-5 h-5" />
+              </div>
+              <div className="space-y-0.5">
+                <h3 className="font-black text-sm text-white">إدارة الإعلانات والبنايات (Banners)</h3>
+                <p className="text-xs text-sky-200/80">
+                  إضافة صور الواجهة الرئيسية، تفعيلها أو إيقافها، تحديد النصوص، وإرفاق رابط مباشر للمستخدم.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveTab('banners');
+              }}
+              className="py-2 px-4 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded-xl text-xs transition shrink-0 cursor-pointer shadow-xs border border-sky-400/30"
+            >
+              إدارة الإعلانات الآن
+            </button>
+          </div>
+
           {/* Main Key Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
@@ -970,6 +1022,16 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 4: Banner Management Full Page View */}
+      {activeTab === 'banners' && (
+        <BannerManagementView
+          banners={banners}
+          settings={bannerSettings}
+          onSaveBanners={onSaveBanners}
+          onSaveSettings={onSaveBannerSettings}
+        />
       )}
 
       {/* Edit User Full Triple Name Modal */}
