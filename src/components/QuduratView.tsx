@@ -1,8 +1,14 @@
-import React from 'react';
-import { BookOpen, ExternalLink, Sparkles, LogIn } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState } from 'react';
+import { BookOpen, ExternalLink, Sparkles, LogIn, Clock } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export const QuduratView: React.FC = () => {
+  const [showSoonNotice, setShowSoonNotice] = useState(false);
+
+  const handleEnterQudurat = () => {
+    setShowSoonNotice(true);
+  };
+
   return (
     <div className="max-w-3xl mx-auto text-right font-['Tajawal',sans-serif] py-8 px-3 space-y-6">
       {/* Main Card */}
@@ -23,15 +29,30 @@ export const QuduratView: React.FC = () => {
           </h2>
         </div>
 
-        {/* Enter Qudurat Button */}
-        <div className="text-center">
+        {/* Enter Qudurat Button & Notice */}
+        <div className="text-center space-y-4">
           <button
             type="button"
+            onClick={handleEnterQudurat}
             className="py-3.5 px-8 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-black text-sm sm:text-base inline-flex items-center gap-2.5 shadow-md transition cursor-pointer"
           >
             <LogIn className="w-5 h-5" />
             <span>الدخول إلى قسم القدرات</span>
           </button>
+
+          <AnimatePresence>
+            {showSoonNotice && (
+              <motion.div
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                className="max-w-md mx-auto p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-900 text-center font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-sm"
+              >
+                <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+                <span>قريباً التفعيل</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <hr className="border-slate-100 my-4" />
