@@ -157,22 +157,27 @@ export default function App() {
 
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        const bId = data.id || docSnap.id;
         if (data.isDeleted) {
-          deletedIds.add(data.id || docSnap.id);
-        } else if (data.id && data.imageUrl) {
-          cloudBanners.push({
-            id: data.id,
-            imageUrl: data.imageUrl,
-            mobileImageUrl: data.mobileImageUrl || undefined,
-            tabletImageUrl: data.tabletImageUrl || undefined,
-            desktopImageUrl: data.desktopImageUrl || undefined,
-            title: data.title || undefined,
-            description: data.description || undefined,
-            linkUrl: data.linkUrl || undefined,
-            isActive: data.isActive !== false,
-            createdAt: data.createdAt || new Date().toISOString(),
-            order: data.order ?? 0
-          });
+          deletedIds.add(bId);
+        } else if (bId) {
+          const initialMatch = (INITIAL_BANNERS as BannerItem[]).find((ib) => ib.id === bId);
+          const effectiveImageUrl = data.imageUrl || initialMatch?.imageUrl || '';
+          if (effectiveImageUrl) {
+            cloudBanners.push({
+              id: bId,
+              imageUrl: effectiveImageUrl,
+              mobileImageUrl: data.mobileImageUrl || initialMatch?.mobileImageUrl || undefined,
+              tabletImageUrl: data.tabletImageUrl || initialMatch?.tabletImageUrl || undefined,
+              desktopImageUrl: data.desktopImageUrl || initialMatch?.desktopImageUrl || undefined,
+              title: data.title !== undefined ? data.title : initialMatch?.title,
+              description: data.description !== undefined ? data.description : initialMatch?.description,
+              linkUrl: data.linkUrl !== undefined ? data.linkUrl : initialMatch?.linkUrl,
+              isActive: data.isActive === false ? false : true,
+              createdAt: data.createdAt || initialMatch?.createdAt || new Date().toISOString(),
+              order: data.order ?? initialMatch?.order ?? 0
+            });
+          }
         }
       });
 
@@ -210,7 +215,7 @@ export default function App() {
       console.warn('Firestore banners collection snapshot error:', err);
     });
 
-    // Also listen to app_settings/banners for slider settings & backwards-compatible migration
+    // Also listen to app_settings/banners for slider settings
     const docRef = doc(db, 'app_settings', 'banners');
     const unsubscribeSettings = onSnapshot(docRef, (docSnap) => {
       if (docSnap.exists()) {
@@ -218,22 +223,6 @@ export default function App() {
         if (data.settings) {
           setBannerSettings(data.settings);
           safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(data.settings));
-        }
-        // If legacy banners exist in app_settings/banners, migrate them to the banners collection
-        if (data.banners && Array.isArray(data.banners) && data.banners.length > 0) {
-          data.banners.forEach(async (b: BannerItem) => {
-            if (b.id && b.imageUrl) {
-              try {
-                await setDoc(doc(db, 'banners', b.id), {
-                  ...b,
-                  isDeleted: false,
-                  updatedAt: new Date().toISOString()
-                }, { merge: true });
-              } catch {
-                // ignore
-              }
-            }
-          });
         }
       }
     }, (err) => {
@@ -248,16 +237,24 @@ export default function App() {
 
   // Dedicated real-time cloud toggle (تفعيل / إيقاف فوري يظهر لكل المستخدمين بنفس اللحظة)
   const handleToggleBannerActive = async (bannerId: string, isActive: boolean) => {
+    // 1. Instant optimistic local state update
     setBanners((prev) =>
       prev.map((b) => (b.id === bannerId ? { ...b, isActive } : b))
     );
 
+    // 2. Find full banner details
+    const existing = banners.find((b) => b.id === bannerId) || INITIAL_BANNERS.find((b) => b.id === bannerId);
+
+    // 3. Instant Cloud Sync (Real-time to all devices via Firestore)
     try {
-      await setDoc(doc(db, 'banners', bannerId), {
+      const bannerPayload = {
+        ...(existing || {}),
         id: bannerId,
-        isActive,
+        isActive: isActive,
+        isDeleted: false,
         updatedAt: new Date().toISOString()
-      }, { merge: true });
+      };
+      await setDoc(doc(db, 'banners', bannerId), bannerPayload, { merge: true });
     } catch (err) {
       console.warn('Failed to update banner active status in Firestore:', err);
     }
