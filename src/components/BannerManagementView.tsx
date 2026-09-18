@@ -16,7 +16,8 @@ import {
   Sparkles,
   Link as LinkIcon,
   Upload,
-  Check
+  Check,
+  Pencil
 } from 'lucide-react';
 import { BannerItem, BannerSettings } from '../types';
 
@@ -47,6 +48,12 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Form state for editing existing banner texts & link
+  const [editingBanner, setEditingBanner] = useState<BannerItem | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editLinkUrl, setEditLinkUrl] = useState('');
+
   // Settings state
   const [autoPlay, setAutoPlay] = useState(settings?.autoPlay !== false);
   const [intervalSeconds, setIntervalSeconds] = useState(settings?.intervalSeconds || 5);
@@ -54,6 +61,33 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const showTempSuccess = (msg: string) => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  const handleStartEdit = (banner: BannerItem) => {
+    setEditingBanner(banner);
+    setEditTitle(banner.title || '');
+    setEditDescription(banner.description || '');
+    setEditLinkUrl(banner.linkUrl || '');
+  };
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBanner) return;
+
+    const updated = banners.map((b) =>
+      b.id === editingBanner.id
+        ? {
+            ...b,
+            title: editTitle.trim() || undefined,
+            description: editDescription.trim() || undefined,
+            linkUrl: editLinkUrl.trim() || undefined
+          }
+        : b
+    );
+
+    onSaveBanners(updated);
+    setEditingBanner(null);
+    showTempSuccess('تم حفظ تعديلات الإعلان بنجاح!');
   };
 
   // Handle Image File Upload for individual device sizes
@@ -552,7 +586,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                         {/* TOGGLE ACTIVE / INACTIVE BUTTON (تفعيل / إلغاء تفعيل) */}
                         <button
                           onClick={() => handleToggleBannerActive(banner.id)}
-                          className={`py-2 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                             banner.isActive !== false
                               ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
                               : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
@@ -570,6 +604,16 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                               <span>تفعيل</span>
                             </>
                           )}
+                        </button>
+
+                        {/* EDIT BUTTON (تعديل النصوص والروابط) */}
+                        <button
+                          onClick={() => handleStartEdit(banner)}
+                          className="py-2 px-3.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border border-sky-200/80"
+                          title="تعديل النصوص والروابط"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-sky-600" />
+                          <span>تعديل</span>
                         </button>
 
                         {/* Delete Button */}
@@ -724,6 +768,98 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* EDIT BANNER TEXTS & LINK MODAL */}
+      {editingBanner && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 text-right space-y-5 font-['Tajawal',sans-serif]"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-black text-slate-900 text-base sm:text-lg flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-sky-600" />
+                <span>تعديل نصوص ورابط الإعلان</span>
+              </h3>
+              <button
+                onClick={() => setEditingBanner(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 font-bold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Banner Image Preview */}
+            <div className="relative w-full h-24 rounded-2xl overflow-hidden bg-slate-900 border border-slate-200">
+              <img src={editingBanner.imageUrl} alt="الإعلان" className="w-full h-full object-cover" />
+            </div>
+
+            {/* Notice about image editing */}
+            <div className="bg-amber-50 border border-amber-200/90 p-3 rounded-2xl flex items-start gap-2.5 text-xs text-amber-900">
+              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                <strong>تنبيه:</strong> يمكنك تغيير العنوان، الوصف، والرابط فقط. لتغيير صورة الإعلان، يجب عليك حذف الإعلان الحالي وإعادة إضافته بالصورة الجديدة.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              {/* Title */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">العنوان الرئيسي للإعلان (اختياري)</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="مثال: خصم 50% على اشتراك المعاصر"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:bg-white transition outline-none"
+                />
+              </div>
+
+              {/* Description */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">الوصف أو النص الفرعي (اختياري)</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="مثال: احصل على العرض لفترة محدودة"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:bg-white transition outline-none"
+                />
+              </div>
+
+              {/* Link URL */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 block">رابط الإعلان (اختياري)</label>
+                <input
+                  type="url"
+                  value={editLinkUrl}
+                  onChange={(e) => setEditLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  dir="ltr"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-sky-500 focus:bg-white transition outline-none text-left"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl font-bold text-xs sm:text-sm transition shadow-xs cursor-pointer"
+                >
+                  حفظ التعديلات
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingBanner(null)}
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
