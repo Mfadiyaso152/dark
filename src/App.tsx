@@ -143,7 +143,29 @@ export default function App() {
   // Real-time Firestore sync for Banners across all users (instant cloud sync)
   useEffect(() => {
     const bannersCol = collection(db, 'banners');
-    const unsubscribeBanners = onSnapshot(bannersCol, (snapshot) => {
+    let isSeeding = false;
+
+    const unsubscribeBanners = onSnapshot(bannersCol, async (snapshot) => {
+      // Auto-seed initial banners to Firestore if the collection is completely empty
+      if (snapshot.empty && !isSeeding) {
+        isSeeding = true;
+        try {
+          for (const b of INITIAL_BANNERS) {
+            const payload = sanitizeForFirestore({
+              ...b,
+              isDeleted: false,
+              updatedAt: new Date().toISOString()
+            });
+            await setDoc(doc(db, 'banners', b.id), payload, { merge: true });
+          }
+        } catch (seedErr) {
+          console.warn('Error seeding initial banners to Firestore:', seedErr);
+        } finally {
+          isSeeding = false;
+        }
+        return;
+      }
+
       const cloudBannersMap = new Map<string, BannerItem>();
       const cloudDeletedIds = new Set<string>();
 
@@ -182,7 +204,7 @@ export default function App() {
         }
       });
 
-      // Save merged deleted IDs permanently so deleted banners NEVER return
+      // Save merged deleted IDs permanently so deleted banners NEVER return on any device
       try {
         safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(cloudDeletedIds)));
       } catch (e) {
@@ -192,19 +214,21 @@ export default function App() {
       setBanners(() => {
         const map = new Map<string, BannerItem>();
 
-        // 1. Initial default banners (if not deleted and not in cloud yet)
-        INITIAL_BANNERS.forEach((b) => {
-          if (!cloudDeletedIds.has(b.id) && !cloudBannersMap.has(b.id)) {
-            map.set(b.id, b);
-          }
-        });
-
-        // 2. Cloud banners ALWAYS take absolute priority (status, texts, order, etc.)
-        cloudBannersMap.forEach((cb, id) => {
-          if (!cloudDeletedIds.has(id)) {
-            map.set(id, cb);
-          }
-        });
+        if (snapshot.empty) {
+          // Fallback only if cloud snapshot was empty
+          INITIAL_BANNERS.forEach((b) => {
+            if (!cloudDeletedIds.has(b.id)) {
+              map.set(b.id, b);
+            }
+          });
+        } else {
+          // Cloud Source of Truth: Only show non-deleted cloud banners
+          cloudBannersMap.forEach((cb, id) => {
+            if (!cloudDeletedIds.has(id)) {
+              map.set(id, cb);
+            }
+          });
+        }
 
         const merged = Array.from(map.values()).sort((a, b) => (a.order || 0) - (b.order || 0));
         safeSetItem('thanaweya_banners_v1', JSON.stringify(merged));
