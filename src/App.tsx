@@ -161,9 +161,9 @@ export default function App() {
             mobileImageUrl: data.mobileImageUrl || undefined,
             tabletImageUrl: data.tabletImageUrl || undefined,
             desktopImageUrl: data.desktopImageUrl || undefined,
-            title: data.title || undefined,
-            description: data.description || undefined,
-            linkUrl: data.linkUrl || undefined,
+            title: data.title !== undefined ? String(data.title) : '',
+            description: data.description !== undefined ? String(data.description) : '',
+            linkUrl: data.linkUrl !== undefined ? String(data.linkUrl) : '',
             isActive: data.isActive === true || (data.isActive !== false && data.isActive !== undefined),
             createdAt: data.createdAt || new Date().toISOString(),
             order: typeof data.order === 'number' ? data.order : 0
@@ -289,13 +289,16 @@ export default function App() {
 
   // Dedicated real-time cloud update (تعديل النصوص والروابط سحابياً فوراً)
   const handleUpdateBanner = async (updatedBanner: BannerItem) => {
-    const updated = banners.map((b) => (b.id === updatedBanner.id ? updatedBanner : b));
+    const updated = banners.map((b) => (b.id === updatedBanner.id ? { ...b, ...updatedBanner } : b));
     setBanners(updated);
     safeSetItem('thanaweya_banners_v1', JSON.stringify(updated));
 
     try {
       const payload = sanitizeForFirestore({
         ...updatedBanner,
+        title: updatedBanner.title !== undefined ? updatedBanner.title : '',
+        description: updatedBanner.description !== undefined ? updatedBanner.description : '',
+        linkUrl: updatedBanner.linkUrl !== undefined ? updatedBanner.linkUrl : '',
         isDeleted: false,
         updatedAt: new Date().toISOString()
       });
@@ -323,6 +326,9 @@ export default function App() {
       try {
         const payload = sanitizeForFirestore({
           ...b,
+          title: b.title !== undefined ? String(b.title).trim() : '',
+          description: b.description !== undefined ? String(b.description).trim() : '',
+          linkUrl: b.linkUrl !== undefined ? String(b.linkUrl).trim() : '',
           isDeleted: false,
           updatedAt: new Date().toISOString()
         });

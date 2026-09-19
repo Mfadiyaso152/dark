@@ -57,8 +57,9 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
 
   // Handle banner slide click to navigate to linkUrl if provided
   const handleBannerClick = (banner: BannerItem) => {
-    if (banner.linkUrl) {
-      window.open(banner.linkUrl, '_blank', 'noopener,noreferrer');
+    const link = banner.linkUrl?.trim();
+    if (link) {
+      window.open(link, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -68,6 +69,10 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
   }
 
   const currentBanner = activeBanners[currentIndex] || activeBanners[0];
+  const hasTitle = Boolean(currentBanner.title?.trim());
+  const hasDescription = Boolean(currentBanner.description?.trim());
+  const hasLink = Boolean(currentBanner.linkUrl?.trim());
+  const hasAnyTextOrLink = hasTitle || hasDescription || hasLink;
 
   const variants: any = {
     enter: (dir: number) => ({
@@ -116,7 +121,7 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
             style={{ willChange: 'transform, opacity', backfaceVisibility: 'hidden' }}
             onClick={() => handleBannerClick(currentBanner)}
             className={`absolute inset-0 w-full h-full ${
-              currentBanner.linkUrl ? 'cursor-pointer' : ''
+              hasLink ? 'cursor-pointer' : ''
             }`}
           >
             {/* Responsive Background Image (Device Specific) */}
@@ -132,31 +137,35 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
               )}
               <img
                 src={currentBanner.imageUrl || currentBanner.desktopImageUrl || currentBanner.tabletImageUrl || currentBanner.mobileImageUrl}
-                alt={currentBanner.title || 'إعلان منصة زاد'}
+                alt={hasTitle ? currentBanner.title!.trim() : 'إعلان منصة زاد'}
                 className="w-full h-full object-cover object-center"
                 loading="eager"
               />
             </picture>
 
-            {/* Gradient Overlays for optimal readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-transparent pointer-events-none" />
-            <div className="absolute inset-0 bg-gradient-to-r from-slate-950/50 via-transparent to-transparent pointer-events-none" />
+            {/* Gradient Overlays for optimal readability when text exists */}
+            {hasAnyTextOrLink && (
+              <>
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/40 to-transparent pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/50 via-transparent to-transparent pointer-events-none" />
+              </>
+            )}
 
             {/* Banner Text / Content */}
-            {(currentBanner.title || currentBanner.description || currentBanner.linkUrl) && (
+            {hasAnyTextOrLink && (
               <div className="absolute bottom-0 right-0 left-0 p-5 sm:p-7 md:p-8 z-10 text-right space-y-1.5 md:space-y-2 text-white">
-                {currentBanner.title && (
+                {hasTitle && (
                   <h3 className="text-base sm:text-xl md:text-2xl font-black text-white drop-shadow-md leading-tight max-w-2xl">
-                    {currentBanner.title}
+                    {currentBanner.title!.trim()}
                   </h3>
                 )}
-                {currentBanner.description && (
+                {hasDescription && (
                   <p className="text-xs sm:text-sm text-slate-200/90 font-medium line-clamp-2 max-w-xl leading-relaxed">
-                    {currentBanner.description}
+                    {currentBanner.description!.trim()}
                   </p>
                 )}
 
-                {currentBanner.linkUrl && (
+                {hasLink && (
                   <div className="pt-1.5">
                     <span
                       className="inline-flex items-center gap-1.5 py-1.5 px-3.5 bg-sky-600/90 hover:bg-sky-500 text-white border border-sky-400/30 rounded-xl text-xs font-bold backdrop-blur-md transition shadow-sm"

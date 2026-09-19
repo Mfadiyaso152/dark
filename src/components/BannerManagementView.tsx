@@ -88,7 +88,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   onAddBanner,
   onUpdateBanner
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'banners' | 'settings' | 'sizes'>('banners');
+  const [activeSubTab, setActiveSubTab] = useState<'banners' | 'settings'>('banners');
 
   // Form state for adding a new banner with 3 device options
   const [isAdding, setIsAdding] = useState(false);
@@ -139,9 +139,9 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
       setIsSubmitting(true);
       const updatedBanner: BannerItem = {
         ...editingBanner,
-        title: editTitle.trim() || undefined,
-        description: editDescription.trim() || undefined,
-        linkUrl: editLinkUrl.trim() || undefined
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        linkUrl: editLinkUrl.trim()
       };
 
       if (onUpdateBanner) {
@@ -152,7 +152,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
       }
 
       setEditingBanner(null);
-      showTempSuccess('تم حفظ تعديلات الإعلان ومزامنتها سحابياً لجميع المستخدمين لحظياً!');
+      showTempSuccess('تم حفظ وتحديث الإعلان بنجاح ومزامنته سحابياً ولحظياً!');
     } catch (err) {
       console.error(err);
       showTempSuccess('تعذر حفظ التعديل سحابياً');
@@ -380,18 +380,6 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
           >
             <Clock className="w-4 h-4" />
             <span>إعدادات السرعة والحركة</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('sizes')}
-            className={`py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'sizes'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'bg-white text-slate-700 border border-slate-200/80 hover:bg-slate-100'
-            }`}
-          >
-            <Info className="w-4 h-4" />
-            <span>دليل المقاسات الموصى بها</span>
           </button>
         </div>
 
@@ -709,7 +697,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                         <div className="space-y-1 text-right flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="text-sm font-bold text-slate-900 truncate">
-                              {banner.title || 'إعلان بدون عنوان'}
+                              {banner.title?.trim() || 'إعلان بدون عنوان'}
                             </h4>
 
                             {banner.isActive !== false ? (
@@ -725,14 +713,14 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                             )}
                           </div>
 
-                          {banner.description && (
-                            <p className="text-xs text-slate-500 truncate">{banner.description}</p>
+                          {banner.description?.trim() && (
+                            <p className="text-xs text-slate-500 truncate">{banner.description.trim()}</p>
                           )}
 
-                          {banner.linkUrl && (
+                          {banner.linkUrl?.trim() && (
                             <div className="flex items-center gap-1 text-xs text-sky-600 font-medium truncate dir-ltr text-right">
                               <LinkIcon className="w-3.5 h-3.5 shrink-0" />
-                              <span className="truncate">{banner.linkUrl}</span>
+                              <span className="truncate">{banner.linkUrl.trim()}</span>
                             </div>
                           )}
                         </div>
@@ -851,75 +839,6 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                     حفظ إعدادات الحركة
                   </button>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: RECOMMENDED DIMENSIONS GUIDE */}
-          {activeSubTab === 'sizes' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-purple-50/80 border border-purple-200/90 rounded-2xl space-y-2">
-                <div className="flex items-center gap-2 font-black text-purple-950 text-sm">
-                  <Sparkles className="w-4.5 h-4.5 text-purple-600" />
-                  <span>المقاسات المطلوبة الموصى بها لتصميم الإعلانات</span>
-                </div>
-                <p className="text-xs text-purple-800/90 leading-relaxed">
-                  لضمان ظهور الإعلانات بصورة احترافية وواضحة جداً دون تقطيع عبر كافة الأجهزة، يُفضل مراعاة المقاسات التالية:
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Mobile Size */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3 text-right">
-                  <div className="flex items-center gap-2.5 text-slate-900 font-bold text-xs sm:text-sm">
-                    <div className="w-8 h-8 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center border border-sky-100">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <span>شاشات الجوال (Mobile)</span>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    <div className="text-lg font-black text-sky-700 dir-ltr text-right">800 × 400 px</div>
-                    <div className="text-[11px] text-slate-500">نسبة العرض للارتفاع: 2 : 1</div>
-                  </div>
-                </div>
-
-                {/* Tablet / iPad Size */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3 text-right">
-                  <div className="flex items-center gap-2.5 text-slate-900 font-bold text-xs sm:text-sm">
-                    <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
-                      <Tablet className="w-4 h-4" />
-                    </div>
-                    <span>شاشات الأيباد والتابلت</span>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    <div className="text-lg font-black text-purple-700 dir-ltr text-right">1200 × 500 px</div>
-                    <div className="text-[11px] text-slate-500">نسبة العرض للارتفاع: 12 : 5</div>
-                  </div>
-                </div>
-
-                {/* Desktop Size */}
-                <div className="p-4 bg-white rounded-2xl border border-slate-200/90 shadow-2xs space-y-3 text-right">
-                  <div className="flex items-center gap-2.5 text-slate-900 font-bold text-xs sm:text-sm">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-                      <Monitor className="w-4 h-4" />
-                    </div>
-                    <span>شاشات الكمبيوتر (Desktop)</span>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    <div className="text-lg font-black text-emerald-700 dir-ltr text-right">1600 × 600 px</div>
-                    <div className="text-[11px] text-slate-500">نسبة العرض للارتفاع: 8 : 3</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-1.5 text-xs text-slate-600">
-                <span className="font-bold text-slate-900 block">💡 نصيحة هامة للتصميم:</span>
-                <p className="leading-relaxed text-[11px]">
-                  ضع النصوص المهمة في منتصف الصورة (Safe Area) حتى تظهر بوضوح تام عبر مختلف مقاسات الأجهزة والهواتف الذكية.
-                </p>
               </div>
             </div>
           )}
