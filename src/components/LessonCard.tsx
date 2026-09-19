@@ -12,6 +12,7 @@ import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
 import { motion } from 'motion/react';
 import confetti from 'canvas-confetti';
+import { triggerHaptic } from '../utils/haptics';
 
 interface LessonCardProps {
   lesson: Lesson;
@@ -83,6 +84,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
 
   const handleComplete = (e: React.MouseEvent) => {
     e.stopPropagation();
+    triggerHaptic(isCompleted ? 'light' : 'success');
     onToggleComplete(lesson.id);
     if (!isCompleted) {
       confetti({
@@ -99,7 +101,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.985 }}
+      whileTap={{ scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 450, damping: 30 }}
       onClick={handleCardClick}
       className={`group cursor-pointer rounded-2xl md:rounded-3xl p-4 sm:p-5 transition-all duration-300 border text-right relative overflow-hidden bg-white ${

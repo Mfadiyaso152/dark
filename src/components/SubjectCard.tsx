@@ -4,6 +4,7 @@ import { SubjectIcon } from './SubjectIcon';
 import { Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useSubjectControls } from '../context/SubjectControlsContext';
+import { triggerHaptic } from '../utils/haptics';
 
 interface SubjectCardProps {
   subject: Subject;
@@ -47,10 +48,12 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
     if (isComingSoon) {
       e.preventDefault();
       e.stopPropagation();
+      triggerHaptic('warning');
       setShowSoonNotice(true);
       setTimeout(() => setShowSoonNotice(false), 2000);
       return;
     }
+    triggerHaptic('medium');
     if (onSelect) {
       onSelect(subject);
     } else if (onSelectSubject) {
@@ -60,13 +63,13 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
 
   return (
     <motion.div
-      whileHover={isComingSoon ? {} : { y: -2, scale: 1.01 }}
-      whileTap={isComingSoon ? {} : { scale: 0.98 }}
+      whileHover={isComingSoon ? {} : { y: -3, scale: 1.015 }}
+      whileTap={isComingSoon ? {} : { scale: 0.96 }}
       transition={{ type: 'spring', stiffness: 450, damping: 25 }}
       onClick={handleCardClick}
       role={isComingSoon ? 'status' : 'button'}
       aria-disabled={isComingSoon}
-      className={`group w-full h-[82px] sm:h-[90px] md:h-[96px] rounded-2xl md:rounded-3xl p-3.5 sm:p-4.5 transition-all duration-300 border flex items-center justify-between gap-3 text-right relative overflow-hidden select-none bg-white/95 backdrop-blur-xs shadow-[0_2px_12px_-3px_rgba(15,23,42,0.04)] hover:shadow-[0_10px_24px_-6px_rgba(15,23,42,0.08)] ${
+      className={`group w-full h-[84px] sm:h-[92px] md:h-[98px] rounded-2xl md:rounded-3xl p-3.5 sm:p-4.5 transition-all duration-300 border flex items-center justify-between gap-3 text-right relative overflow-hidden select-none bg-white/95 backdrop-blur-xs shadow-[0_2px_12px_-3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_28px_-6px_rgba(15,23,42,0.1)] active:shadow-xs ${
         isComingSoon
           ? 'cursor-not-allowed opacity-65 border-slate-200 bg-slate-50/80'
           : 'border-slate-200/90 hover:border-slate-300 hover:bg-white cursor-pointer'

@@ -1,4 +1,4 @@
-import { Subject, Lesson, SubjectBooklet } from '../types';
+import { Subject, Lesson, SubjectBooklet, BannerItem } from '../types';
 
 export const INITIAL_SUBJECTS: Subject[] = [
   // ==================== الفصل الدراسي الأول (Semester 1) ====================
@@ -1377,7 +1377,20 @@ export const INITIAL_LESSONS: Lesson[] = [
 
 export const INITIAL_BOOKLETS: SubjectBooklet[] = [];
 
-export const INITIAL_BANNERS: any[] = [];
+export const INITIAL_BANNERS: BannerItem[] = [
+  {
+    id: 'default-banner-zad-1',
+    imageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1200&auto=format&fit=crop',
+    desktopImageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1200&auto=format&fit=crop',
+    tabletImageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=800&auto=format&fit=crop',
+    mobileImageUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=600&auto=format&fit=crop',
+    title: 'منصة زاد التعليمية - مسارات المرحلة الثانوية',
+    description: 'شروحات وافية، مذكرات شاملة، وملخصات بصيغة PDF و PNG لكافة المواد الدراسية',
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    order: 0
+  }
+];
 
 export const INITIAL_BANNER_SETTINGS = {
   autoPlay: true,

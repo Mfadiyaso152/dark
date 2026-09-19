@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
 import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings, formatFileSize, getLatestUniqueSubmissions, getSubmissionFiles } from './types';
-import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNER_SETTINGS } from './data/initialData';
+import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNER_SETTINGS, INITIAL_BANNERS } from './data/initialData';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
 import { LessonCard } from './components/LessonCard';
@@ -39,8 +39,9 @@ import {
   sanitizeExistingLocalStorage,
   sanitizeForFirestore
 } from './utils/storage';
-import { storeLargeFile, deleteLargeFile } from './utils/fileStorage';
+import { storeLargeFile, deleteLargeFile, getLargeFile } from './utils/fileStorage';
 import { uploadFileToCloud, deleteFileFromCloud } from './utils/cloudStorage';
+import { triggerHaptic } from './utils/haptics';
 
 export default function App() {
   const { user, isSuperAdmin, isAssistantAdmin, canAddContent, canManageSubject, setIsAuthModalOpen, registeredUsers } = useAuth();
@@ -111,12 +112,12 @@ export default function App() {
       const saved = safeGetItem('thanaweya_banners_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {
       console.warn(e);
     }
-    return [];
+    return INITIAL_BANNERS;
   });
 
   const [bannerSettings, setBannerSettings] = useState<BannerSettings>(() => {
@@ -133,9 +134,28 @@ export default function App() {
 
   const [adminInitialTab, setAdminInitialTab] = useState<'stats' | 'users' | 'activity' | 'banners'>('stats');
 
-  // Sync banners & settings to localStorage
+  // Instant recovery from IndexedDB on startup (guarantees banners load instantly even if localStorage is empty or cleared)
+  useEffect(() => {
+    getLargeFile('cached_banners_v1').then((cachedStr) => {
+      if (cachedStr) {
+        try {
+          const parsed = JSON.parse(cachedStr);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setBanners(parsed);
+          }
+        } catch (e) {
+          console.warn('[Banner Cache] Parse error:', e);
+        }
+      }
+    });
+  }, []);
+
+  // Sync banners & settings to localStorage & IndexedDB
   useEffect(() => {
     safeSetItem('thanaweya_banners_v1', JSON.stringify(banners));
+    if (banners.length > 0) {
+      storeLargeFile('cached_banners_v1', JSON.stringify(banners)).catch(() => {});
+    }
   }, [banners]);
 
   useEffect(() => {
@@ -144,8 +164,59 @@ export default function App() {
 
   // Real-time Firestore sync for Banners across all users (instant cloud sync on all devices)
   useEffect(() => {
-    // 1. Single authoritative listener for banners collection (Desktop + Mobile + All devices)
     const bannersCol = collection(db, 'banners');
+    const settingsDoc = doc(db, 'app_settings', 'banners');
+
+    const processBannerList = (items: BannerItem[]) => {
+      const valid = items.filter((b) => !b.isDeleted && (b.imageUrl || b.desktopImageUrl || b.tabletImageUrl || b.mobileImageUrl));
+      valid.sort((a, b) => (a.order || 0) - (b.order || 0));
+      if (valid.length > 0) {
+        setBanners(valid);
+        safeSetItem('thanaweya_banners_v1', JSON.stringify(valid));
+        storeLargeFile('cached_banners_v1', JSON.stringify(valid)).catch(() => {});
+      }
+    };
+
+    // 1. Immediate fast-path getDocs & getDoc fetch (0 delay, bypasses WebSocket initial handshake latency)
+    getDocs(bannersCol).then((snapshot) => {
+      const docsList: BannerItem[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const bId = data.id || docSnap.id;
+        if (!data.isDeleted && bId && (data.imageUrl || data.desktopImageUrl || data.mobileImageUrl || data.tabletImageUrl)) {
+          docsList.push({
+            id: bId,
+            imageUrl: data.imageUrl || data.desktopImageUrl || data.mobileImageUrl || data.tabletImageUrl || '',
+            mobileImageUrl: data.mobileImageUrl || undefined,
+            tabletImageUrl: data.tabletImageUrl || undefined,
+            desktopImageUrl: data.desktopImageUrl || undefined,
+            title: data.title !== undefined ? String(data.title) : '',
+            description: data.description !== undefined ? String(data.description) : '',
+            linkUrl: data.linkUrl !== undefined ? String(data.linkUrl) : '',
+            isActive: data.isActive === true || (data.isActive !== false && data.isActive !== undefined),
+            createdAt: data.createdAt || new Date().toISOString(),
+            order: typeof data.order === 'number' ? data.order : 0
+          });
+        }
+      });
+      if (docsList.length > 0) {
+        processBannerList(docsList);
+      } else {
+        // Check settings doc fallback
+        getDoc(settingsDoc).then((sDoc) => {
+          if (sDoc.exists()) {
+            const data = sDoc.data();
+            if (Array.isArray(data.banners) && data.banners.length > 0) {
+              processBannerList(data.banners);
+            }
+          }
+        }).catch(() => {});
+      }
+    }).catch((err) => {
+      console.warn('Fast-path banners fetch note:', err);
+    });
+
+    // 2. Real-time authoritative listener for banners collection (Desktop + Mobile + All devices)
     const unsubscribeBanners = onSnapshot(bannersCol, (snapshot) => {
       const validBanners: BannerItem[] = [];
       snapshot.forEach((docSnap) => {
@@ -171,21 +242,23 @@ export default function App() {
         }
       });
 
-      validBanners.sort((a, b) => (a.order || 0) - (b.order || 0));
-      setBanners(validBanners);
-      safeSetItem('thanaweya_banners_v1', JSON.stringify(validBanners));
+      if (validBanners.length > 0) {
+        processBannerList(validBanners);
+      }
     }, (err) => {
       console.warn('Firestore banners collection snapshot error:', err);
     });
 
-    // 2. Separate listener for banner settings (autoPlay, intervalSeconds)
-    const settingsDoc = doc(db, 'app_settings', 'banners');
+    // 3. Separate listener for banner settings (autoPlay, intervalSeconds) and fallback banners
     const unsubscribeSettings = onSnapshot(settingsDoc, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.settings) {
           setBannerSettings(data.settings);
           safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(data.settings));
+        }
+        if (Array.isArray(data.banners) && data.banners.length > 0) {
+          processBannerList(data.banners);
         }
       }
     }, (err) => {

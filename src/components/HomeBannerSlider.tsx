@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, ExternalLink, Sparkles } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { BannerItem, BannerSettings } from '../types';
 
 interface HomeBannerSliderProps {
@@ -22,6 +22,19 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
   const intervalSeconds = Math.max(1, settings?.intervalSeconds || 5);
   const autoPlay = settings?.autoPlay !== false;
 
+  // Preload all banner images immediately for 0ms delay image switching
+  useEffect(() => {
+    activeBanners.forEach((b) => {
+      const urls = [b.imageUrl, b.desktopImageUrl, b.tabletImageUrl, b.mobileImageUrl].filter(Boolean);
+      urls.forEach((url) => {
+        if (url) {
+          const img = new Image();
+          img.src = url;
+        }
+      });
+    });
+  }, [activeBanners]);
+
   // Ensure index stays in range if activeBanners length changes
   useEffect(() => {
     if (currentIndex >= activeBanners.length && activeBanners.length > 0) {
@@ -41,18 +54,25 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
     return () => clearInterval(timer);
   }, [autoPlay, isPaused, activeBanners.length, intervalSeconds]);
 
-  const handleNext = (e?: React.MouseEvent) => {
+  const handleNext = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (activeBanners.length <= 1) return;
     setDirection(1);
     setCurrentIndex((prev) => (prev + 1) % activeBanners.length);
-  };
+  }, [activeBanners.length]);
 
-  const handlePrev = (e?: React.MouseEvent) => {
+  const handlePrev = useCallback((e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (activeBanners.length <= 1) return;
     setDirection(-1);
     setCurrentIndex((prev) => (prev - 1 + activeBanners.length) % activeBanners.length);
+  }, [activeBanners.length]);
+
+  const handleSelectIndex = (idx: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (idx === currentIndex) return;
+    setDirection(idx > currentIndex ? 1 : -1);
+    setCurrentIndex(idx);
   };
 
   // Handle banner slide click to navigate to linkUrl if provided
@@ -63,7 +83,7 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
     }
   };
 
-  // If no active banners, do not display the banner slider at all
+  // If no active banners, do not display
   if (activeBanners.length === 0) {
     return null;
   }
@@ -155,7 +175,7 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
             {hasAnyTextOrLink && (
               <div className="absolute bottom-0 right-0 left-0 p-5 sm:p-7 md:p-8 z-10 text-right space-y-1.5 md:space-y-2 text-white">
                 {hasTitle && (
-                  <h3 className="text-base sm:text-xl md:text-2xl font-black text-white drop-shadow-md leading-tight max-w-2xl">
+                  <h3 className="text-base sm:text-xl md:text-2xl font-black text-white drop-shadow-md leading-tight max-w-2xl font-['Alexandria',sans-serif]">
                     {currentBanner.title!.trim()}
                   </h3>
                 )}
@@ -183,4 +203,3 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
     </div>
   );
 };
-

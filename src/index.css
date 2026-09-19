@@ -11,6 +11,7 @@
 * {
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* IE and Edge */
+  -webkit-tap-highlight-color: transparent; /* Smooth native mobile touch feel */
 }
 
 *::-webkit-scrollbar {
@@ -20,9 +21,11 @@
 html {
   scroll-behavior: smooth;
   font-family: 'IBM Plex Sans Arabic', 'Tajawal', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Fresh, Modern, Luminous Ambient Canvas */
+/* Mobile & Touch Responsive Enhancements */
 body {
   background-color: #F8FAFC;
   color: #0F172A;
@@ -34,6 +37,7 @@ body {
     radial-gradient(circle at 20% 90%, rgba(168, 85, 247, 0.05) 0px, transparent 50%);
   background-attachment: fixed;
   font-feature-settings: "ss01", "cv01";
+  overscroll-behavior-y: contain;
 }
 
 /* Sculpted Conical Beveled Glass Navigation Bar */
@@ -80,5 +84,3 @@ body {
 .font-display {
   font-family: 'Alexandria', 'IBM Plex Sans Arabic', sans-serif;
 }
-
-

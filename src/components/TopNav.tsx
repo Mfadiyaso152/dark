@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Home, Sparkles, GraduationCap, ClipboardCheck, Bell, LogIn, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { triggerHaptic } from '../utils/haptics';
 
 export type TabType = 'home' | 'homeworks' | 'qudurat' | 'students' | 'admin';
 
@@ -16,29 +17,26 @@ export const TopNav: React.FC<TopNavProps> = ({
   activeTab,
   onTabChange
 }) => {
-  const { user, isSuperAdmin, isAssistantAdmin, canAddContent, setIsAuthModalOpen } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, setIsAuthModalOpen } = useAuth();
   const { openNotificationsModal, unreadCount } = useNotifications();
-  const { language, toggleLanguage, t } = useLanguage();
+  const { t } = useLanguage();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastActiveRef = useRef<TabType>(activeTab);
+  const longPressTimerRef = useRef<any>(null);
+  const isHoldingRef = useRef(false);
+
+  useEffect(() => {
+    lastActiveRef.current = activeTab;
+  }, [activeTab]);
 
   const showNavToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
     }, 2600);
-  };
-
-  const handleHomeworksClick = () => {
-    if (!user) {
-      showNavToast(t('login_required_homeworks', 'يجب تسجيل الدخول أولاً للوصول للواجبات 🔒'));
-      setIsAuthModalOpen(true);
-      return;
-    }
-    onTabChange('homeworks');
-  };
-
-  const handleQuduratClick = () => {
-    onTabChange('qudurat');
   };
 
   // Determine user roles
@@ -64,6 +62,99 @@ export const TopNav: React.FC<TopNavProps> = ({
 
   const showStudents = Boolean(isTeacher || isSupervisorUser);
 
+  const handleTabSelect = (tab: TabType) => {
+    if (tab === 'homeworks' && !user) {
+      triggerHaptic('warning');
+      showNavToast(t('login_required_homeworks', 'يجب تسجيل الدخول أولاً للوصول للواجبات 🔒'));
+      setIsAuthModalOpen(true);
+      return;
+    }
+    if (tab === lastActiveRef.current) return;
+    lastActiveRef.current = tab;
+    triggerHaptic('selection');
+    onTabChange(tab);
+  };
+
+  const handleHomeworksClick = () => {
+    if (!user) {
+      triggerHaptic('warning');
+      showNavToast(t('login_required_homeworks', 'يجب تسجيل الدخول أولاً للوصول للواجبات 🔒'));
+      setIsAuthModalOpen(true);
+      return;
+    }
+    handleTabSelect('homeworks');
+  };
+
+  // Advanced Touch & Drag Scrubbing across Tabs
+  const getTabFromCoordinates = (clientX: number, clientY: number): TabType | null => {
+    // 1. First check direct element hit
+    const elements = document.elementsFromPoint ? document.elementsFromPoint(clientX, clientY) : [];
+    for (const el of elements) {
+      const tabBtn = el.closest('[data-nav-tab]') as HTMLElement | null;
+      if (tabBtn) {
+        return tabBtn.getAttribute('data-nav-tab') as TabType;
+      }
+    }
+
+    // 2. Fallback: Horizontal closest-distance interpolation within container
+    if (containerRef.current) {
+      const buttons = Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-nav-tab]'));
+      if (buttons.length === 0) return null;
+
+      let closestTab: TabType | null = null;
+      let minDistance = Infinity;
+
+      buttons.forEach((btn) => {
+        const rect = btn.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const dist = Math.abs(clientX - centerX);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestTab = btn.getAttribute('data-nav-tab') as TabType;
+        }
+      });
+
+      return closestTab;
+    }
+
+    return null;
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    isHoldingRef.current = true;
+    const { clientX, clientY } = e;
+
+    // Start long-press gesture detection
+    longPressTimerRef.current = setTimeout(() => {
+      if (isHoldingRef.current) {
+        setIsScrubbing(true);
+        triggerHaptic('medium');
+      }
+    }, 180);
+
+    const targetTab = getTabFromCoordinates(clientX, clientY);
+    if (targetTab) {
+      handleTabSelect(targetTab);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isHoldingRef.current) return;
+    setIsScrubbing(true);
+    const targetTab = getTabFromCoordinates(e.clientX, e.clientY);
+    if (targetTab && targetTab !== lastActiveRef.current) {
+      handleTabSelect(targetTab);
+    }
+  };
+
+  const handlePointerUp = () => {
+    isHoldingRef.current = false;
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+    setIsScrubbing(false);
+  };
+
   return (
     <>
       {/* Toast Notification */}
@@ -84,7 +175,7 @@ export const TopNav: React.FC<TopNavProps> = ({
       {/* Floating Conical Beveled Glass Top Navigation Bar */}
       <header className="sticky top-2 sm:top-4 z-40 px-2 sm:px-4 max-w-5xl mx-auto w-full font-['IBM_Plex_Sans_Arabic',sans-serif]">
         <nav
-          className="glass-conic-bar relative w-full h-14 sm:h-16 px-3 sm:px-5 rounded-full flex items-center justify-between transition-all duration-300"
+          className="glass-conic-bar relative w-full h-15 sm:h-16 px-3 sm:px-5 rounded-full flex items-center justify-between transition-all duration-300"
           aria-label="التنقل الرئيسي"
         >
           {/* Glass Specular Reflection Highlight Line */}
@@ -100,7 +191,7 @@ export const TopNav: React.FC<TopNavProps> = ({
               title={t('notifications', 'الإشعارات')}
               aria-label={t('notifications', 'الإشعارات')}
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-4.5 h-4.5 sm:w-4 sm:h-4" />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -left-1 min-w-[17px] h-4 px-1 bg-rose-600 text-white text-[9px] font-black rounded-full flex items-center justify-center ring-2 ring-white shadow-xs">
                   {unreadCount > 9 ? '+9' : unreadCount}
@@ -109,17 +200,25 @@ export const TopNav: React.FC<TopNavProps> = ({
             </motion.button>
           </div>
 
-          {/* Center: Navigation Tabs */}
-          <div className="absolute left-1/2 -translate-x-1/2 flex items-center gap-0.5 sm:gap-1.5 p-1 rounded-full bg-slate-900/[0.03] border border-slate-900/[0.04]">
+          {/* Center: Navigation Tabs directly integrated in Top Nav with Long-Press & Drag Scrubbing */}
+          <div
+            ref={containerRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 touch-none select-none"
+          >
             {/* 1. Home */}
             <button
-              onClick={() => onTabChange('home')}
+              data-nav-tab="home"
+              onClick={() => handleTabSelect('home')}
               title={t('home', 'الرئيسية')}
               aria-label={t('home', 'الرئيسية')}
-              className={`relative px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
+              className={`relative p-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
                 activeTab === 'home'
                   ? 'text-white'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
               }`}
             >
               {activeTab === 'home' && (
@@ -129,19 +228,20 @@ export const TopNav: React.FC<TopNavProps> = ({
                   className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
                 />
               )}
-              <Home className="w-4 h-4 relative z-10" />
+              <Home className="w-6.5 h-6.5 sm:w-5 sm:h-5 relative z-10 shrink-0" />
               <span className="hidden sm:inline relative z-10">{t('home', 'الرئيسية')}</span>
             </button>
 
             {/* 2. Homeworks */}
             <button
+              data-nav-tab="homeworks"
               onClick={handleHomeworksClick}
               title={t('homeworks', 'الواجبات')}
               aria-label={t('homeworks', 'الواجبات')}
-              className={`relative px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
+              className={`relative p-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
                 activeTab === 'homeworks'
                   ? 'text-white'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
               }`}
             >
               {activeTab === 'homeworks' && (
@@ -151,19 +251,20 @@ export const TopNav: React.FC<TopNavProps> = ({
                   className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
                 />
               )}
-              <ClipboardCheck className="w-4 h-4 relative z-10" />
+              <ClipboardCheck className="w-6.5 h-6.5 sm:w-5 sm:h-5 relative z-10 shrink-0" />
               <span className="hidden sm:inline relative z-10">{t('homeworks', 'الواجبات')}</span>
             </button>
 
             {/* 3. Qudurat */}
             <button
-              onClick={handleQuduratClick}
+              data-nav-tab="qudurat"
+              onClick={() => handleTabSelect('qudurat')}
               title={t('qudurat', 'القدرات')}
               aria-label={t('qudurat', 'القدرات')}
-              className={`relative px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
+              className={`relative p-2 sm:px-3.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
                 activeTab === 'qudurat'
                   ? 'text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
               }`}
             >
               {activeTab === 'qudurat' && (
@@ -173,20 +274,21 @@ export const TopNav: React.FC<TopNavProps> = ({
                   className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
                 />
               )}
-              <Sparkles className="w-4 h-4 text-indigo-600 relative z-10" />
+              <Sparkles className="w-6.5 h-6.5 sm:w-5 sm:h-5 text-indigo-500 relative z-10 shrink-0" />
               <span className="hidden sm:inline relative z-10">{t('qudurat', 'القدرات')}</span>
             </button>
 
             {/* 4. Students (Teachers/Supervisors only) */}
             {showStudents && (
               <button
-                onClick={() => onTabChange('students')}
+                data-nav-tab="students"
+                onClick={() => handleTabSelect('students')}
                 title={t('students', 'الطلاب')}
                 aria-label={t('students', 'الطلاب')}
-                className={`relative px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
+                className={`relative p-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
                   activeTab === 'students'
                     ? 'text-white'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
                 }`}
               >
                 {activeTab === 'students' && (
@@ -196,7 +298,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                     className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
                   />
                 )}
-                <GraduationCap className="w-4 h-4 relative z-10" />
+                <GraduationCap className="w-6.5 h-6.5 sm:w-5 sm:h-5 relative z-10 shrink-0" />
                 <span className="hidden sm:inline relative z-10">{t('students', 'الطلاب')}</span>
               </button>
             )}
@@ -235,7 +337,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 className="px-2.5 sm:px-3.5 py-1.5 sm:py-1.8 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/20"
                 title={t('login', 'تسجيل الدخول')}
               >
-                <LogIn className="w-3.5 h-3.5 text-sky-400" />
+                <LogIn className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-400" />
                 <span className="hidden sm:inline">{t('login', 'دخول')}</span>
               </motion.button>
             )}
