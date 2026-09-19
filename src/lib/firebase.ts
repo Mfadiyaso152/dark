@@ -37,25 +37,16 @@ export const firebaseConfig = {
   measurementId: "G-ZW5RM8V9E7"
 };
 
-// Initialize Firebase with ignoreUndefinedProperties and robust offline caching
+// Initialize Firebase with ignoreUndefinedProperties
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = (() => {
   try {
     return initializeFirestore(app, {
-      ignoreUndefinedProperties: true,
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
+      ignoreUndefinedProperties: true
     });
-  } catch (e) {
-    try {
-      return initializeFirestore(app, {
-        ignoreUndefinedProperties: true
-      });
-    } catch (err) {
-      return getFirestore(app);
-    }
+  } catch (err) {
+    return getFirestore(app);
   }
 })();
 

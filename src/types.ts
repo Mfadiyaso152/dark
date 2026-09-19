@@ -205,6 +205,7 @@ export interface BannerItem {
   isActive: boolean;
   createdAt: string;
   order?: number;
+  isDeleted?: boolean;
 }
 
 export interface BannerSettings {

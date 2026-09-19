@@ -62,30 +62,9 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
     }
   };
 
-  // If no banners at all, show default aesthetic banner box
+  // If no active banners, do not display the banner slider at all
   if (activeBanners.length === 0) {
-    return (
-      <div className="relative w-full rounded-[2.2rem] md:rounded-[2.5rem] bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 text-white p-6 md:p-8 overflow-hidden shadow-md border border-slate-800/80 my-2">
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="space-y-2 text-center md:text-right">
-            <span className="inline-flex items-center gap-1.5 py-1 px-3 rounded-full bg-white/10 backdrop-blur-md text-sky-200 text-xs font-bold border border-white/10">
-              <Sparkles className="w-3.5 h-3.5" />
-              منصة زاد التعليمية
-            </span>
-            <h2 className="text-lg md:text-2xl font-black tracking-tight text-white">
-              مرحباً بكم في البوابة التعليمية الشاملة
-            </h2>
-            <p className="text-xs md:text-sm text-slate-300 max-w-xl">
-              تصفح المواد والدروس، وحل الواجبات المدرسية اليومية بكل يسر وسهولة.
-            </p>
-          </div>
-        </div>
-
-        {/* Decorative Circles */}
-        <div className="absolute -left-10 -bottom-10 w-48 h-48 bg-sky-500/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute -right-10 -top-10 w-48 h-48 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
-      </div>
-    );
+    return null;
   }
 
   const currentBanner = activeBanners[currentIndex] || activeBanners[0];

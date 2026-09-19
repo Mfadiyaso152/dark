@@ -31,6 +31,7 @@ interface BannerManagementViewProps {
   onSaveSettings: (newSettings: BannerSettings) => void;
   onToggleBannerActive?: (bannerId: string, isActive: boolean) => Promise<void> | void;
   onDeleteBanner?: (bannerId: string) => Promise<void> | void;
+  onDeleteAllBanners?: () => Promise<void> | void;
   onAddBanner?: (newBanner: BannerItem) => Promise<void> | void;
   onUpdateBanner?: (updatedBanner: BannerItem) => Promise<void> | void;
 }
@@ -83,6 +84,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   onSaveSettings,
   onToggleBannerActive,
   onDeleteBanner,
+  onDeleteAllBanners,
   onAddBanner,
   onUpdateBanner
 }) => {
@@ -108,8 +110,9 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const [editDescription, setEditDescription] = useState('');
   const [editLinkUrl, setEditLinkUrl] = useState('');
 
-  // Confirmation state for deleting a banner
+  // Confirmation state for deleting a banner or deleting all banners
   const [bannerToDelete, setBannerToDelete] = useState<BannerItem | null>(null);
+  const [isConfirmingDeleteAll, setIsConfirmingDeleteAll] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Settings state
@@ -283,6 +286,24 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
     }
   };
 
+  const handleConfirmDeleteAll = async () => {
+    try {
+      setIsDeleting(true);
+      if (onDeleteAllBanners) {
+        await onDeleteAllBanners();
+      } else {
+        onSaveBanners([]);
+      }
+      showTempSuccess('تم حذف جميع الإعلانات نهائياً من السحابة بنجاح ولجميع الأجهزة!');
+      setIsConfirmingDeleteAll(false);
+    } catch (err) {
+      console.error(err);
+      showTempSuccess('حدث خطأ أثناء حذف جميع الإعلانات من السحابة');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Save Settings
   const handleSaveSettings = () => {
     onSaveSettings({
@@ -384,15 +405,27 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                   تحديث الإعلانات لحظي فور التفعيل أو الإلغاء أو الإضافة
                 </span>
 
-                {!isAdding && (
-                  <button
-                    onClick={() => setIsAdding(true)}
-                    className="py-2.5 px-4 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>إضافة إعلان جديد</span>
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {banners.length > 0 && (
+                    <button
+                      onClick={() => setIsConfirmingDeleteAll(true)}
+                      className="py-2.5 px-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 active:scale-95 text-rose-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>حذف جميع الإعلانات ({banners.length})</span>
+                    </button>
+                  )}
+
+                  {!isAdding && (
+                    <button
+                      onClick={() => setIsAdding(true)}
+                      className="py-2.5 px-4 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>إضافة إعلان جديد</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* ADD NEW BANNER FORM */}
@@ -1041,6 +1074,57 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                   type="button"
                   disabled={isDeleting}
                   onClick={() => setBannerToDelete(null)}
+                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
+                >
+                  تراجع
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal: Confirm Delete ALL Banners */}
+        {isConfirmingDeleteAll && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-rose-100 space-y-4 text-center font-['IBM_Plex_Sans_Arabic',sans-serif]"
+              dir="rtl"
+            >
+              <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 shadow-inner">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-base font-black text-slate-900">حذف جميع الإعلانات نهائياً؟</h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  هل أنت متأكد من رغبتك في حذف جميع الإعلانات ({banners.length} إعلان) نهائياً من السحابة؟
+                  ستختفي الإعلانات فوراً من الواجهة الرئيسية لجميع الطلاب وعلى جميع الأجهزة.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleConfirmDeleteAll}
+                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs sm:text-sm transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>جاري حذف الكل سحابياً...</span>
+                    </>
+                  ) : (
+                    <span>تأكيد حذف جميع الإعلانات 🗑️</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setIsConfirmingDeleteAll(false)}
                   className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
                 >
                   تراجع

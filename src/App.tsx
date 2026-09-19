@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
 import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings } from './types';
-import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNERS, INITIAL_BANNER_SETTINGS } from './data/initialData';
+import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNER_SETTINGS } from './data/initialData';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
 import { LessonCard } from './components/LessonCard';
@@ -30,7 +30,7 @@ import {
 } from './utils/routes';
 import { useAuth, resolveStudentFullName } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, setDoc, getDoc, collection, onSnapshot, deleteDoc } from './lib/firebase';
+import { db, doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc } from './lib/firebase';
 import {
   safeSetItem,
   safeGetItem,
@@ -111,12 +111,12 @@ export default function App() {
       const saved = safeGetItem('thanaweya_banners_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch (e) {
       console.warn(e);
     }
-    return INITIAL_BANNERS;
+    return [];
   });
 
   const [bannerSettings, setBannerSettings] = useState<BannerSettings>(() => {
@@ -142,33 +142,49 @@ export default function App() {
 
   // Real-time Firestore sync for Banners across all users (instant cloud sync)
   useEffect(() => {
-    const bannersCol = collection(db, 'banners');
-    let isSeeding = false;
+    let masterLoaded = false;
 
-    const unsubscribeBanners = onSnapshot(bannersCol, async (snapshot) => {
-      // Auto-seed initial banners to Firestore if the collection is completely empty
-      if (snapshot.empty && !isSeeding) {
-        isSeeding = true;
-        try {
-          for (const b of INITIAL_BANNERS) {
-            const payload = sanitizeForFirestore({
-              ...b,
-              isDeleted: false,
-              updatedAt: new Date().toISOString()
-            });
-            await setDoc(doc(db, 'banners', b.id), payload, { merge: true });
-          }
-        } catch (seedErr) {
-          console.warn('Error seeding initial banners to Firestore:', seedErr);
-        } finally {
-          isSeeding = false;
+    // 1. Listen to app_settings/banners (instant authoritative master document sync)
+    const docRef = doc(db, 'app_settings', 'banners');
+    const unsubscribeSettings = onSnapshot(docRef, (docSnap) => {
+      masterLoaded = true;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.settings) {
+          setBannerSettings(data.settings);
+          safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(data.settings));
         }
+        if (Array.isArray(data.banners)) {
+          const cloudList = (data.banners as BannerItem[]).filter((b) => !b.isDeleted);
+          setBanners(cloudList);
+          safeSetItem('thanaweya_banners_v1', JSON.stringify(cloudList));
+        }
+      }
+    }, (err) => {
+      console.warn('Firestore banners settings snapshot note:', err);
+    });
+
+    // 2. Listen to banners collection as fallback
+    const bannersCol = collection(db, 'banners');
+    const unsubscribeBanners = onSnapshot(bannersCol, (snapshot) => {
+      if (masterLoaded) {
+        // Authoritative app_settings/banners is active
         return;
       }
 
-      const cloudBannersMap = new Map<string, BannerItem>();
-      const cloudDeletedIds = new Set<string>();
+      if (snapshot.empty) {
+        // Collection is empty: Set banners to empty array
+        setBanners((prev) => {
+          if (prev.length > 0) {
+            safeSetItem('thanaweya_banners_v1', JSON.stringify([]));
+            return [];
+          }
+          return prev;
+        });
+        return;
+      }
 
+      const cloudDeletedIds = new Set<string>();
       try {
         const storedDeleted = JSON.parse(safeGetItem('thanaweya_deleted_banner_ids') || '[]');
         if (Array.isArray(storedDeleted)) {
@@ -178,78 +194,40 @@ export default function App() {
         console.warn(e);
       }
 
+      const validBanners: BannerItem[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         const bId = data.id || docSnap.id;
         if (data.isDeleted) {
           cloudDeletedIds.add(bId);
-        } else if (bId) {
-          const initialMatch = (INITIAL_BANNERS as BannerItem[]).find((ib) => ib.id === bId);
-          const effectiveImageUrl = data.imageUrl || initialMatch?.imageUrl || '';
-          if (effectiveImageUrl) {
-            cloudBannersMap.set(bId, {
-              id: bId,
-              imageUrl: effectiveImageUrl,
-              mobileImageUrl: data.mobileImageUrl || initialMatch?.mobileImageUrl || undefined,
-              tabletImageUrl: data.tabletImageUrl || initialMatch?.tabletImageUrl || undefined,
-              desktopImageUrl: data.desktopImageUrl || initialMatch?.desktopImageUrl || undefined,
-              title: data.title !== undefined ? data.title : initialMatch?.title,
-              description: data.description !== undefined ? data.description : initialMatch?.description,
-              linkUrl: data.linkUrl !== undefined ? data.linkUrl : initialMatch?.linkUrl,
-              isActive: data.isActive === false ? false : true,
-              createdAt: data.createdAt || initialMatch?.createdAt || new Date().toISOString(),
-              order: data.order ?? initialMatch?.order ?? 0
-            });
-          }
+        } else if (bId && data.imageUrl && !cloudDeletedIds.has(bId)) {
+          validBanners.push({
+            id: bId,
+            imageUrl: data.imageUrl,
+            mobileImageUrl: data.mobileImageUrl || undefined,
+            tabletImageUrl: data.tabletImageUrl || undefined,
+            desktopImageUrl: data.desktopImageUrl || undefined,
+            title: data.title,
+            description: data.description,
+            linkUrl: data.linkUrl,
+            isActive: data.isActive !== false,
+            createdAt: data.createdAt || new Date().toISOString(),
+            order: data.order ?? 0
+          });
         }
       });
 
-      // Save merged deleted IDs permanently so deleted banners NEVER return on any device
       try {
         safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(cloudDeletedIds)));
       } catch (e) {
         console.warn(e);
       }
 
-      setBanners(() => {
-        const map = new Map<string, BannerItem>();
-
-        if (snapshot.empty) {
-          // Fallback only if cloud snapshot was empty
-          INITIAL_BANNERS.forEach((b) => {
-            if (!cloudDeletedIds.has(b.id)) {
-              map.set(b.id, b);
-            }
-          });
-        } else {
-          // Cloud Source of Truth: Only show non-deleted cloud banners
-          cloudBannersMap.forEach((cb, id) => {
-            if (!cloudDeletedIds.has(id)) {
-              map.set(id, cb);
-            }
-          });
-        }
-
-        const merged = Array.from(map.values()).sort((a, b) => (a.order || 0) - (b.order || 0));
-        safeSetItem('thanaweya_banners_v1', JSON.stringify(merged));
-        return merged;
-      });
+      validBanners.sort((a, b) => (a.order || 0) - (b.order || 0));
+      setBanners(validBanners);
+      safeSetItem('thanaweya_banners_v1', JSON.stringify(validBanners));
     }, (err) => {
       console.warn('Firestore banners collection snapshot error:', err);
-    });
-
-    // Also listen to app_settings/banners for slider settings
-    const docRef = doc(db, 'app_settings', 'banners');
-    const unsubscribeSettings = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.settings) {
-          setBannerSettings(data.settings);
-          safeSetItem('thanaweya_banner_settings_v1', JSON.stringify(data.settings));
-        }
-      }
-    }, (err) => {
-      console.warn('Firestore banners settings snapshot note:', err);
     });
 
     return () => {
@@ -261,14 +239,14 @@ export default function App() {
   // Dedicated real-time cloud toggle (تفعيل / إيقاف فوري يظهر لكل المستخدمين بنفس اللحظة)
   const handleToggleBannerActive = async (bannerId: string, isActive: boolean) => {
     // 1. Instant optimistic local state update
-    setBanners((prev) =>
-      prev.map((b) => (b.id === bannerId ? { ...b, isActive } : b))
-    );
+    const updated = banners.map((b) => (b.id === bannerId ? { ...b, isActive } : b));
+    setBanners(updated);
+    safeSetItem('thanaweya_banners_v1', JSON.stringify(updated));
 
-    // 2. Find full banner details
-    const existing = banners.find((b) => b.id === bannerId) || (INITIAL_BANNERS as BannerItem[]).find((b) => b.id === bannerId);
+    // 2. Find existing banner details
+    const existing = banners.find((b) => b.id === bannerId);
 
-    // 3. Instant Cloud Sync (Real-time to all devices via Firestore)
+    // 3. Instant Cloud Sync (collection doc + master app_settings/banners)
     try {
       const bannerPayload = sanitizeForFirestore({
         ...(existing || {}),
@@ -279,14 +257,27 @@ export default function App() {
       });
       await setDoc(doc(db, 'banners', bannerId), bannerPayload, { merge: true });
     } catch (err) {
-      console.error('Failed to update banner active status in Firestore:', err);
+      console.error('Failed to update banner active status in Firestore collection:', err);
+    }
+
+    try {
+      await setDoc(doc(db, 'app_settings', 'banners'), {
+        banners: sanitizeForFirestore(updated),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to sync banner toggle to app_settings/banners:', err);
     }
   };
 
   // Dedicated real-time cloud delete (حذف فوري من السحابة يختفي من كل الأجهزة فوراً)
   const handleDeleteBanner = async (bannerId: string) => {
-    setBanners((prev) => prev.filter((b) => b.id !== bannerId));
+    // 1. Instant local update
+    const remaining = banners.filter((b) => b.id !== bannerId);
+    setBanners(remaining);
+    safeSetItem('thanaweya_banners_v1', JSON.stringify(remaining));
 
+    // 2. Remember deleted ID locally
     try {
       const savedDeletedStr = safeGetItem('thanaweya_deleted_banner_ids') || '[]';
       const deletedSet = new Set<string>(JSON.parse(savedDeletedStr));
@@ -296,6 +287,7 @@ export default function App() {
       console.warn(e);
     }
 
+    // 3. Mark isDeleted in document and delete from collection
     try {
       const payload = sanitizeForFirestore({
         id: bannerId,
@@ -304,8 +296,69 @@ export default function App() {
         updatedAt: new Date().toISOString()
       });
       await setDoc(doc(db, 'banners', bannerId), payload, { merge: true });
+      await deleteDoc(doc(db, 'banners', bannerId)).catch(() => {});
     } catch (err) {
-      console.error('Failed to delete banner from Firestore:', err);
+      console.error('Failed to delete banner doc from Firestore:', err);
+    }
+
+    // 4. Update authoritative master record in app_settings/banners
+    try {
+      await setDoc(doc(db, 'app_settings', 'banners'), {
+        banners: sanitizeForFirestore(remaining),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to update app_settings/banners after deletion:', err);
+    }
+  };
+
+  // Dedicated delete ALL banners permanently from cloud across all devices
+  const handleDeleteAllBanners = async () => {
+    // 1. Instant local state wipe
+    const allIds = Array.from(new Set([...banners.map((b) => b.id), 'banner-1', 'banner-2', 'banner-3']));
+    setBanners([]);
+    safeSetItem('thanaweya_banners_v1', JSON.stringify([]));
+
+    // 2. Persist deleted IDs
+    try {
+      const savedDeletedStr = safeGetItem('thanaweya_deleted_banner_ids') || '[]';
+      const deletedSet = new Set<string>(JSON.parse(savedDeletedStr));
+      allIds.forEach((id) => deletedSet.add(id));
+      safeSetItem('thanaweya_deleted_banner_ids', JSON.stringify(Array.from(deletedSet)));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // 3. Update master app_settings/banners to empty array
+    try {
+      await setDoc(doc(db, 'app_settings', 'banners'), {
+        banners: [],
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to clear app_settings/banners:', err);
+    }
+
+    // 4. Delete every banner document from Firestore
+    try {
+      const snap = await getDocs(collection(db, 'banners')).catch(() => null);
+      if (snap) {
+        for (const d of snap.docs) {
+          allIds.push(d.id);
+          await deleteDoc(doc(db, 'banners', d.id)).catch(() => {});
+        }
+      }
+      for (const id of Array.from(new Set(allIds))) {
+        await setDoc(doc(db, 'banners', id), {
+          id,
+          isDeleted: true,
+          isActive: false,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(() => {});
+        await deleteDoc(doc(db, 'banners', id)).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed to wipe banner collection documents:', err);
     }
   };
 
@@ -319,9 +372,11 @@ export default function App() {
       order: newBanner.order ?? (banners.length + 1)
     };
 
-    setBanners((prev) => [bannerWithId, ...prev.filter((b) => b.id !== bannerWithId.id)]);
+    const updated = [bannerWithId, ...banners.filter((b) => b.id !== bannerWithId.id)];
+    setBanners(updated);
+    safeSetItem('thanaweya_banners_v1', JSON.stringify(updated));
 
-    // If previously deleted, remove from deleted list
+    // If previously deleted, un-flag from deleted list
     try {
       const savedDeletedStr = safeGetItem('thanaweya_deleted_banner_ids') || '[]';
       const deletedSet = new Set<string>(JSON.parse(savedDeletedStr));
@@ -341,15 +396,24 @@ export default function App() {
       });
       await setDoc(doc(db, 'banners', bannerWithId.id), payload);
     } catch (err) {
-      console.error('Failed to add banner to Firestore:', err);
+      console.error('Failed to add banner to Firestore collection:', err);
+    }
+
+    try {
+      await setDoc(doc(db, 'app_settings', 'banners'), {
+        banners: sanitizeForFirestore(updated),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to sync new banner to app_settings/banners:', err);
     }
   };
 
   // Dedicated real-time cloud update (تعديل النصوص والروابط سحابياً فوراً)
   const handleUpdateBanner = async (updatedBanner: BannerItem) => {
-    setBanners((prev) =>
-      prev.map((b) => (b.id === updatedBanner.id ? updatedBanner : b))
-    );
+    const updated = banners.map((b) => (b.id === updatedBanner.id ? updatedBanner : b));
+    setBanners(updated);
+    safeSetItem('thanaweya_banners_v1', JSON.stringify(updated));
 
     try {
       const payload = sanitizeForFirestore({
@@ -361,36 +425,51 @@ export default function App() {
     } catch (err) {
       console.error('Failed to update banner in Firestore:', err);
     }
+
+    try {
+      await setDoc(doc(db, 'app_settings', 'banners'), {
+        banners: sanitizeForFirestore(updated),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to sync updated banner to app_settings/banners:', err);
+    }
   };
 
   const handleSaveBanners = async (newBanners: BannerItem[]) => {
-    const previousMap = new Map(banners.map((b) => [b.id, b]));
     const currentMap = new Map(newBanners.map((b) => [b.id, b]));
 
     setBanners(newBanners);
     safeSetItem('thanaweya_banners_v1', JSON.stringify(newBanners));
 
-    // Detect deleted
+    // Update master cloud document
+    try {
+      await setDoc(doc(db, 'app_settings', 'banners'), {
+        banners: sanitizeForFirestore(newBanners),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error('Failed to save banners to app_settings/banners:', err);
+    }
+
+    // Detect deleted banners from collection
     for (const prevB of banners) {
       if (!currentMap.has(prevB.id)) {
         await handleDeleteBanner(prevB.id);
       }
     }
 
-    // Detect added or updated
+    // Upsert remaining/new banners in collection
     for (const b of newBanners) {
-      const prev = previousMap.get(b.id);
-      if (!prev || JSON.stringify(prev) !== JSON.stringify(b)) {
-        try {
-          const payload = sanitizeForFirestore({
-            ...b,
-            isDeleted: false,
-            updatedAt: new Date().toISOString()
-          });
-          await setDoc(doc(db, 'banners', b.id), payload, { merge: true });
-        } catch (err) {
-          console.error('Failed to sync banner to Firestore:', err);
-        }
+      try {
+        const payload = sanitizeForFirestore({
+          ...b,
+          isDeleted: false,
+          updatedAt: new Date().toISOString()
+        });
+        await setDoc(doc(db, 'banners', b.id), payload, { merge: true });
+      } catch (err) {
+        console.error('Failed to sync banner to Firestore:', err);
       }
     }
   };
@@ -1612,6 +1691,7 @@ export default function App() {
                   onSaveBannerSettings={handleSaveBannerSettings}
                   onToggleBannerActive={handleToggleBannerActive}
                   onDeleteBanner={handleDeleteBanner}
+                  onDeleteAllBanners={handleDeleteAllBanners}
                   onAddBanner={handleAddBanner}
                   onUpdateBanner={handleUpdateBanner}
                   onNavigateHome={() => {
