@@ -249,7 +249,8 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const handleToggleBannerActive = async (bannerId: string) => {
     const target = banners.find((b) => b.id === bannerId);
     if (!target) return;
-    const newActiveState = target.isActive === false;
+    const isCurrentlyActive = target.isActive !== false;
+    const newActiveState = !isCurrentlyActive;
 
     if (onToggleBannerActive) {
       await onToggleBannerActive(bannerId, newActiveState);
@@ -712,12 +713,14 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                             </h4>
 
                             {banner.isActive !== false ? (
-                              <span className="py-0.5 px-2 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-md text-[10px] font-bold shrink-0">
-                                مُفعّل ✓
+                              <span className="py-0.5 px-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200/90 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>مُفعّل ظاهراً للطلاب</span>
                               </span>
                             ) : (
-                              <span className="py-0.5 px-2 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-md text-[10px] font-bold shrink-0">
-                                غير معروض
+                              <span className="py-0.5 px-2.5 bg-rose-50 text-rose-700 border border-rose-200/90 rounded-md text-[10px] font-bold shrink-0 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                                <span>معطّل ومخفي عن الطلاب</span>
                               </span>
                             )}
                           </div>
@@ -740,22 +743,22 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                         {/* TOGGLE ACTIVE / INACTIVE BUTTON (تفعيل / إلغاء تفعيل) */}
                         <button
                           onClick={() => handleToggleBannerActive(banner.id)}
-                          className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          className={`py-2 px-3.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer border ${
                             banner.isActive !== false
-                              ? 'bg-emerald-100 hover:bg-emerald-200 text-emerald-800'
-                              : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+                              ? 'bg-emerald-50 hover:bg-rose-50 text-emerald-800 hover:text-rose-700 border-emerald-200 hover:border-rose-200'
+                              : 'bg-amber-50 hover:bg-emerald-50 text-amber-800 hover:text-emerald-800 border-amber-300 hover:border-emerald-300'
                           }`}
-                          title={banner.isActive !== false ? 'إلغاء التفعيل' : 'تفعيل الإعلان'}
+                          title={banner.isActive !== false ? 'تعطيل الإعلان وإخفاؤه عن الطلاب' : 'تفعيل الإعلان وإظهاره للطلاب'}
                         >
                           {banner.isActive !== false ? (
                             <>
                               <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                              <span>مُفعل</span>
+                              <span>مُفعل (اضغط للتعطيل)</span>
                             </>
                           ) : (
                             <>
-                              <XCircle className="w-4 h-4 text-slate-500" />
-                              <span>تفعيل</span>
+                              <XCircle className="w-4 h-4 text-rose-500" />
+                              <span>معطّل (اضغط للتفعيل)</span>
                             </>
                           )}
                         </button>

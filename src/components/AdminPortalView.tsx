@@ -51,6 +51,7 @@ interface AdminPortalViewProps {
   onUpdateBanner?: (updatedBanner: BannerItem) => Promise<void> | void;
   onNavigateHome: () => void;
   onSelectLesson?: (lesson: Lesson) => void;
+  initialTab?: AdminTab;
 }
 
 type AdminTab = 'stats' | 'users' | 'activity' | 'banners';
@@ -70,7 +71,8 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   onDeleteAllBanners,
   onAddBanner,
   onUpdateBanner,
-  onNavigateHome
+  onNavigateHome,
+  initialTab
 }) => {
   const {
     user,
@@ -100,7 +102,13 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   }, []);
 
   // 2. Active Tab in Admin Dashboard
-  const [activeTab, setActiveTab] = useState<AdminTab>('stats');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'stats');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // 3. User Management Filter & Search
   const [searchQuery, setSearchQuery] = useState('');

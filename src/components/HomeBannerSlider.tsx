@@ -12,8 +12,8 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
   banners,
   settings
 }) => {
-  // Only show active banners on the home view
-  const activeBanners = banners.filter((b) => b.isActive !== false);
+  // Only show active banners on the home view (never deleted and must not be deactivated)
+  const activeBanners = banners.filter((b) => b.isActive !== false && !b.isDeleted);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -134,9 +134,7 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
                 src={currentBanner.imageUrl || currentBanner.desktopImageUrl || currentBanner.tabletImageUrl || currentBanner.mobileImageUrl}
                 alt={currentBanner.title || 'إعلان منصة زاد'}
                 className="w-full h-full object-cover object-center"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
+                loading="eager"
               />
             </picture>
 
