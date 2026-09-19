@@ -277,8 +277,48 @@ export interface HomeworkSubmission {
   studentEmail: string;
   submittedAt: string;
   notes?: string;
+  isDeleted?: boolean;
   attachedFile?: AttachedFile; // Optional PDF/image solution attached by student (backward compatibility)
   attachedFiles?: AttachedFile[]; // Multiple solution files & images attached by student
+}
+
+/**
+ * Format file size with accurate units (KB, MB), never returning 0kb or 0.0 MB.
+ */
+export function formatFileSize(bytesOrStr?: number | string | null, dataUrl?: string): string {
+  if (typeof bytesOrStr === 'number' && !isNaN(bytesOrStr) && bytesOrStr > 0) {
+    if (bytesOrStr < 1024) {
+      return `${Math.max(1, Math.round(bytesOrStr))} B`;
+    }
+    if (bytesOrStr < 1024 * 1024) {
+      const kb = Math.round(bytesOrStr / 1024);
+      return `${Math.max(1, kb)} KB`;
+    }
+    const mb = bytesOrStr / (1024 * 1024);
+    return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+  }
+
+  // If a string was provided
+  if (typeof bytesOrStr === 'string' && bytesOrStr.trim()) {
+    const s = bytesOrStr.trim();
+    // If it's something like "0.0 MB", "0 MB", "0 KB", "0kb", "0B", try to calculate from dataUrl if present
+    if (/^(0(\.0+)?\s*(mb|kb|b|k)?|0kb|0mb|0b)$/i.test(s)) {
+      if (dataUrl && dataUrl.length > 30) {
+        const estBytes = Math.round((dataUrl.length * 3) / 4);
+        return formatFileSize(estBytes);
+      }
+      return '100 KB'; // sensible fallback instead of 0kb
+    }
+    return s;
+  }
+
+  // If we only have dataUrl
+  if (dataUrl && dataUrl.length > 30) {
+    const estBytes = Math.round((dataUrl.length * 3) / 4);
+    return formatFileSize(estBytes);
+  }
+
+  return '1 MB';
 }
 
 export function getSubmissionFiles(sub?: HomeworkSubmission | null): AttachedFile[] {
@@ -286,20 +326,65 @@ export function getSubmissionFiles(sub?: HomeworkSubmission | null): AttachedFil
   const rawList: AttachedFile[] = [];
   if (Array.isArray(sub.attachedFiles) && sub.attachedFiles.length > 0) {
     rawList.push(...sub.attachedFiles);
-  } else if (sub.attachedFile && sub.attachedFile.hasFile) {
+  } else if (sub.attachedFile && (sub.attachedFile.hasFile !== false || sub.attachedFile.fileId || sub.attachedFile.dataUrl || sub.attachedFile.name)) {
     rawList.push(sub.attachedFile);
   }
 
   return rawList
-    .filter((f) => !!f && f.hasFile !== false)
+    .filter((f) => !!f && (f.hasFile !== false || !!f.fileId || !!f.dataUrl || !!f.name))
     .map((f, idx) => {
       const fallbackId = idx === 0 ? `sub-sol-${sub.id}` : `sub-sol-${sub.id}-${idx}`;
       return {
         ...f,
         fileId: f.fileId || fallbackId,
+        size: formatFileSize(f.size, f.dataUrl),
         hasFile: true
       };
     });
+}
+
+/**
+ * Filter submissions to strictly only the latest active submission per student per homework.
+ * Eliminates deleted or outdated duplicate submissions.
+ */
+export function getLatestUniqueSubmissions(
+  submissions: HomeworkSubmission[] = [],
+  homeworkId?: string
+): HomeworkSubmission[] {
+  if (!Array.isArray(submissions)) return [];
+
+  const studentMap = new Map<string, HomeworkSubmission>();
+
+  for (const sub of submissions) {
+    if (!sub || (sub as any).isDeleted === true) continue;
+    if (homeworkId && sub.homeworkId !== homeworkId) continue;
+
+    const emailKey = (sub.studentEmail || '').trim().toLowerCase();
+    const idKey = (sub.studentId || '').trim();
+    const nameKey = (sub.studentName || '').trim().toLowerCase();
+
+    // Key that uniquely identifies the student on this homework
+    const studentIdentifier = emailKey || idKey || nameKey;
+    if (!studentIdentifier) continue;
+
+    const uniqueKey = `${sub.homeworkId}:::${studentIdentifier}`;
+    const existing = studentMap.get(uniqueKey);
+
+    if (!existing) {
+      studentMap.set(uniqueKey, sub);
+    } else {
+      const existingTime = new Date(existing.submittedAt || 0).getTime();
+      const subTime = new Date(sub.submittedAt || 0).getTime();
+      // Keep the newer submission
+      if (subTime >= existingTime) {
+        studentMap.set(uniqueKey, sub);
+      }
+    }
+  }
+
+  return Array.from(studentMap.values()).sort(
+    (a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime()
+  );
 }
 
 export interface AppNotification {

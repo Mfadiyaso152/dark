@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings } from './types';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings, formatFileSize, getLatestUniqueSubmissions, getSubmissionFiles } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNER_SETTINGS } from './data/initialData';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
@@ -571,43 +571,54 @@ export default function App() {
       const cloudSubs: HomeworkSubmission[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        if (data && data.id && data.homeworkId && (data.studentEmail || data.studentId)) {
+        if (data && data.id && data.homeworkId && (data.studentEmail || data.studentId || data.studentName)) {
+          if ((data as any).isDeleted === true) return;
           cloudSubs.push(data as HomeworkSubmission);
         }
       });
 
       setSubmissions((prev) => {
-        const map = new Map<string, HomeworkSubmission>();
-        prev.forEach((s) => map.set(s.id, s));
+        const prevMap = new Map<string, HomeworkSubmission>();
+        prev.forEach((s) => prevMap.set(s.id, s));
+
+        const updated: HomeworkSubmission[] = [];
         cloudSubs.forEach((cs) => {
-          const existing = map.get(cs.id);
+          const existing = prevMap.get(cs.id);
           if (existing) {
             // Preserve local dataUrls if cloud document does not have them
-            const mergedAttachedFile = existing.attachedFile?.dataUrl && !cs.attachedFile?.dataUrl
-              ? { ...cs.attachedFile, dataUrl: existing.attachedFile.dataUrl, fileId: cs.attachedFile?.fileId || existing.attachedFile.fileId }
-              : (cs.attachedFile || existing.attachedFile);
-
             const mergedAttachedFiles = (cs.attachedFiles || existing.attachedFiles || []).map((cf, idx) => {
               const existingF = existing.attachedFiles?.[idx];
-              if (existingF?.dataUrl && !cf.dataUrl) {
-                return { ...cf, dataUrl: existingF.dataUrl, fileId: cf.fileId || existingF.fileId };
-              }
-              return cf;
+              const effectiveDataUrl = cf.dataUrl || existingF?.dataUrl || undefined;
+              return {
+                ...cf,
+                dataUrl: effectiveDataUrl,
+                size: formatFileSize(cf.size, effectiveDataUrl)
+              };
             });
 
-            map.set(cs.id, {
+            updated.push({
               ...existing,
               ...cs,
-              attachedFile: mergedAttachedFile,
-              attachedFiles: mergedAttachedFiles.length > 0 ? mergedAttachedFiles : cs.attachedFiles
+              attachedFiles: mergedAttachedFiles.length > 0 ? mergedAttachedFiles : cs.attachedFiles,
+              attachedFile: mergedAttachedFiles[0] || cs.attachedFile || existing.attachedFile
             });
           } else {
-            map.set(cs.id, cs);
+            const formattedFiles = (cs.attachedFiles || (cs.attachedFile ? [cs.attachedFile] : [])).map((cf) => ({
+              ...cf,
+              size: formatFileSize(cf.size, cf.dataUrl)
+            }));
+            updated.push({
+              ...cs,
+              attachedFiles: formattedFiles.length > 0 ? formattedFiles : cs.attachedFiles,
+              attachedFile: formattedFiles[0] || cs.attachedFile
+            });
           }
         });
-        const merged = Array.from(map.values());
-        safeSetItem('thanaweya_homework_submissions_v1', JSON.stringify(merged));
-        return merged;
+
+        // Deduplicate submissions so only the latest active submission per student per homework is retained
+        const uniqueSubs = getLatestUniqueSubmissions(updated);
+        safeSetItem('thanaweya_homework_submissions_v1', JSON.stringify(uniqueSubs));
+        return uniqueSubs;
       });
     }, (err) => {
       console.warn('Firestore homework_submissions snapshot note:', err);
@@ -1255,14 +1266,15 @@ export default function App() {
       rawFiles.push(subData.attachedFile);
     }
 
-    // Prepare files with deterministic fileIds
+    // Prepare files with deterministic fileIds and accurate formatted sizes
     const cloudFiles: AttachedFile[] = rawFiles.map((f, idx) => {
       const defaultId = idx === 0 ? `sub-sol-${subId}` : `sub-sol-${subId}-${idx}`;
       const fileId = f.fileId || defaultId;
+      const accurateSize = formatFileSize(f.size, f.dataUrl);
       return {
         name: f.name || `حل_الواجب_${idx + 1}.pdf`,
         type: f.type || 'pdf',
-        size: f.size || '1 MB',
+        size: accurateSize,
         hasFile: true,
         fileId
       };
@@ -1294,15 +1306,27 @@ export default function App() {
       attachedFiles: localFiles
     };
 
+    const studentEmailLower = (subData.studentEmail || '').trim().toLowerCase();
+    const studentIdStr = (subData.studentId || '').trim();
+    const studentNameLower = studentFullName.trim().toLowerCase();
+
+    const isSameStudent = (s: HomeworkSubmission) => {
+      if (s.homeworkId !== subData.homeworkId) return false;
+      const sEmail = (s.studentEmail || '').trim().toLowerCase();
+      const sId = (s.studentId || '').trim();
+      const sName = (s.studentName || '').trim().toLowerCase();
+      return (
+        (!!studentEmailLower && sEmail === studentEmailLower) ||
+        (!!studentIdStr && sId === studentIdStr) ||
+        (!!studentNameLower && sName === studentNameLower)
+      );
+    };
+
+    const oldSubs = submissions.filter(isSameStudent);
+
     // Replace previous submission if exists or add new
     setSubmissions((prev) => {
-      const filtered = prev.filter(
-        (s) =>
-          !(
-            s.homeworkId === subData.homeworkId &&
-            s.studentEmail.toLowerCase() === subData.studentEmail.toLowerCase()
-          )
-      );
+      const filtered = prev.filter((s) => !isSameStudent(s));
       return [localSub, ...filtered];
     });
 
@@ -1310,6 +1334,21 @@ export default function App() {
     try {
       const sanitized = JSON.parse(JSON.stringify(cloudSub));
       await setDoc(doc(db, 'homework_submissions', subId), sanitized, { merge: true });
+
+      // Cleanly delete any previous submissions from this student for this homework in Firestore
+      for (const old of oldSubs) {
+        if (old.id && old.id !== subId) {
+          try {
+            await deleteDoc(doc(db, 'homework_submissions', old.id));
+            const oldFiles = getSubmissionFiles(old);
+            oldFiles.forEach((of) => {
+              if (of.fileId) deleteFileFromCloud(of.fileId).catch(() => {});
+            });
+          } catch (delErr) {
+            console.warn('Delete old sub note:', delErr);
+          }
+        }
+      }
     } catch (err) {
       console.warn('Firestore homework submission save error:', err);
     }
@@ -1339,25 +1378,20 @@ export default function App() {
     const target = submissions.find((s) => s.id === submissionId);
     setSubmissions((prev) => prev.filter((s) => s.id !== submissionId));
 
-    // 2. Cloud Firestore update
+    // 2. Cloud Firestore direct deletion (so teacher side removes it immediately)
     try {
-      await setDoc(
-        doc(db, 'homework_submissions', submissionId),
-        { id: submissionId, isDeleted: true, updatedAt: new Date().toISOString() },
-        { merge: true }
-      );
+      await deleteDoc(doc(db, 'homework_submissions', submissionId));
     } catch (err) {
       console.warn('Firestore homework submission delete error:', err);
     }
 
-    // 3. Clean up cloud chunks
+    // 3. Clean up cloud chunks and IndexedDB
     if (target) {
-      const allFiles = target.attachedFiles && target.attachedFiles.length > 0
-        ? target.attachedFiles
-        : target.attachedFile ? [target.attachedFile] : [];
+      const allFiles = getSubmissionFiles(target);
       allFiles.forEach((f) => {
         if (f.fileId) {
           deleteFileFromCloud(f.fileId).catch(() => {});
+          deleteLargeFile(f.fileId).catch(() => {});
         }
       });
     }

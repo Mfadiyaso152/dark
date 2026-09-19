@@ -65,6 +65,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return type === 'pdf' || name.endsWith('.pdf');
   }, [currentFile]);
 
+  const fileId = currentFile?.fileId || '';
+  const fileName = currentFile?.name || '';
+  const fileDataUrl = currentFile?.dataUrl || '';
+
   // Load and resolve blob URL for active file at lightning speed
   useEffect(() => {
     let active = true;
@@ -74,7 +78,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       return;
     }
 
-    const cacheKey = currentFile.fileId || currentFile.name || `idx-${currentIndex}`;
+    const cacheKey = fileId || fileName || `idx-${currentIndex}`;
     const cached = resolvedCache.current.get(cacheKey);
     if (cached) {
       setActiveBlobUrl(cached.blobUrl);
@@ -90,34 +94,38 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
     const loadContent = async () => {
       try {
-        let contentUrl = currentFile.dataUrl;
+        let contentUrl: string | undefined = fileDataUrl || undefined;
 
         // 1. Direct memory or local check for fileId
-        if (!contentUrl && currentFile.fileId) {
+        if (!contentUrl && fileId) {
           try {
-            contentUrl = (await getLargeFile(currentFile.fileId)) || undefined;
+            contentUrl = (await getLargeFile(fileId)) || undefined;
           } catch {
             // ignore
           }
         }
 
         // 2. High-speed cloud fetch
-        if (!contentUrl && currentFile.fileId) {
-          contentUrl = (await downloadFileFromCloud(currentFile.fileId, undefined, currentFile.name)) || undefined;
+        if (!contentUrl && fileId) {
+          try {
+            contentUrl = (await downloadFileFromCloud(fileId, undefined, fileName)) || undefined;
+          } catch {
+            // ignore
+          }
         }
 
         // 3. Fallback: search using candidate IDs (including studentName, title, file index)
         if (!contentUrl) {
           const candidateKeys = [
-            currentFile.fileId,
-            currentFile.name,
+            fileId,
+            fileName,
             studentName ? `sub-sol-${studentName}` : undefined,
             title ? `hw-sol-${title}` : undefined,
           ].filter(Boolean) as string[];
 
           for (const key of candidateKeys) {
             try {
-              const found = (await getLargeFile(key)) || (await downloadFileFromCloud(key, undefined, currentFile.name));
+              const found = (await getLargeFile(key)) || (await downloadFileFromCloud(key, undefined, fileName));
               if (found) {
                 contentUrl = found;
                 break;
@@ -129,13 +137,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         }
 
         // 4. Fallback: check sibling files if single submission had multiple parts
-        if (!contentUrl && files.length > 1) {
+        if (!contentUrl && files && files.length > 1) {
           for (const f of files) {
-            if (f.fileId && f.fileId !== currentFile.fileId) {
-              const fromSibling = await downloadFileFromCloud(f.fileId, undefined, currentFile.name);
-              if (fromSibling) {
-                contentUrl = fromSibling;
-                break;
+            if (f.fileId && f.fileId !== fileId) {
+              try {
+                const fromSibling = await downloadFileFromCloud(f.fileId, undefined, fileName);
+                if (fromSibling) {
+                  contentUrl = fromSibling;
+                  break;
+                }
+              } catch {
+                // ignore
               }
             }
           }
@@ -149,16 +161,16 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           return;
         }
 
-        // If it's an image data URL, display immediately
-        if (!isPdf && contentUrl.startsWith('data:image/')) {
+        // If it's an image data URL or direct image blob/http URL, display immediately
+        if (!isPdf && (contentUrl.startsWith('data:image/') || contentUrl.startsWith('blob:') || contentUrl.startsWith('http'))) {
           resolvedCache.current.set(cacheKey, { blobUrl: contentUrl, revoke: () => {} });
           setActiveBlobUrl(contentUrl);
           setIsLoading(false);
           return;
         }
 
-        const normalized = normalizeFileDataUrl(contentUrl, currentFile.name);
-        const { blobUrl, revoke } = await createSafeBlobUrl(normalized, currentFile.name);
+        const normalized = normalizeFileDataUrl(contentUrl, fileName);
+        const { blobUrl, revoke } = await createSafeBlobUrl(normalized, fileName);
 
         if (!active) {
           revoke();
@@ -181,7 +193,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     return () => {
       active = false;
     };
-  }, [isOpen, currentIndex, currentFile, reloadTrigger, isPdf, files]);
+  }, [isOpen, currentIndex, fileId, fileName, fileDataUrl, reloadTrigger, isPdf]);
 
   // Clean up cache when modal closes
   useEffect(() => {

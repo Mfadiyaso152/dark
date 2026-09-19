@@ -365,7 +365,7 @@ export async function downloadFileFromCloud(
 
   // Build intelligently ordered candidate fileIds:
   // Place the most probable ID first so direct gets succeed on attempt #1!
-  const rawClean = fileId.replace(/^(sub-sol-|hw-sol-|booklet-|lesson-file-)/, '');
+  const rawClean = fileId.replace(/^(sub-sol-|hw-sol-|booklet-|lesson-file-|sub-|hw-)/g, '');
   const primaryPrefixed = fileId.startsWith('sub-') && !fileId.startsWith('sub-sol-')
     ? `sub-sol-${fileId}`
     : fileId.startsWith('hw-') && !fileId.startsWith('hw-sol-')
@@ -375,10 +375,22 @@ export async function downloadFileFromCloud(
   const candidateIds: string[] = [
     primaryPrefixed,
     fileId,
+    `sub-sol-${fileId}`,
     `sub-sol-${rawClean}`,
+    `sub-${rawClean}`,
     `hw-sol-${rawClean}`,
     rawClean
   ].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx);
+
+  // If ID has multi-file suffix (e.g. -0, -1, -2), also generate dash-underscore variations
+  if (/-\d+$/.test(fileId)) {
+    const dashSuffix = fileId.match(/-(\d+)$/)?.[1];
+    if (dashSuffix) {
+      const baseWithoutIndex = fileId.replace(/-\d+$/, '');
+      candidateIds.push(`${baseWithoutIndex}_${dashSuffix}`);
+      candidateIds.push(`${baseWithoutIndex}-${dashSuffix}`);
+    }
+  }
 
   // 1. Check in-memory LRU cache (0ms)
   for (const cid of candidateIds) {
@@ -484,7 +496,48 @@ export async function downloadFileFromCloud(
     console.warn('[CloudStorage] Parallel probe note:', probeErr);
   }
 
-  // 4. Secondary search using fetchChunksForId (if legacy dash format or collection query needed)
+  // 4. Secondary search: Query file_chunks collection by fileId field for all candidate IDs
+  try {
+    const validCids = candidateIds.slice(0, 10);
+    if (validCids.length > 0) {
+      const q = query(collection(db, 'file_chunks'), where('fileId', 'in', validCids));
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) {
+        // Group by fileId
+        const chunksByFileId = new Map<string, Array<{ index: number; data: string }>>();
+        querySnap.forEach((docSnap) => {
+          const d = docSnap.data();
+          const fid = (d.fileId as string) || docSnap.id;
+          const chunkData = (d.data as string) || '';
+          const idx = typeof d.index === 'number' ? d.index : 0;
+          if (!chunksByFileId.has(fid)) {
+            chunksByFileId.set(fid, []);
+          }
+          chunksByFileId.get(fid)!.push({ index: idx, data: chunkData });
+        });
+
+        for (const cid of candidateIds) {
+          const group = chunksByFileId.get(cid);
+          if (group && group.length > 0) {
+            group.sort((a, b) => a.index - b.index);
+            const joined = group.map((c) => c.data).join('');
+            if (joined.length > 20) {
+              const normalized = normalizeFileDataUrl(joined, fileName);
+              setMemoryCache(fileId, normalized);
+              setMemoryCache(cid, normalized);
+              storeLargeFile(fileId, normalized);
+              if (onProgress) onProgress(100);
+              return normalized;
+            }
+          }
+        }
+      }
+    }
+  } catch (queryErr) {
+    console.warn('[CloudStorage] Query by fileId note:', queryErr);
+  }
+
+  // 5. Tertiary search using fetchChunksForId (if legacy dash format or collection query needed)
   for (const cid of candidateIds) {
     try {
       const rawData = await fetchChunksForId(cid, onProgress);

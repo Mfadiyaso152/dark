@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Subject, Homework, HomeworkSubmission, AttachedFile, getSubmissionFiles, isHomeworkDeadlinePassed, AVAILABLE_CLASSES } from '../types';
+import { Subject, Homework, HomeworkSubmission, AttachedFile, getSubmissionFiles, isHomeworkDeadlinePassed, AVAILABLE_CLASSES, formatFileSize, getLatestUniqueSubmissions } from '../types';
 import { useAuth, formatDisplayName, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import { ClassFilterDropdown } from './ClassFilterDropdown';
 import {
@@ -84,7 +84,7 @@ const processImageFile = (file: File): Promise<{ dataUrl: string; size: string; 
         if (!ctx) {
           resolve({
             dataUrl: reader.result as string,
-            size: (file.size / 1024 / 1024).toFixed(1) + ' MB',
+            size: formatFileSize(file.size),
             name: file.name
           });
           return;
@@ -92,10 +92,7 @@ const processImageFile = (file: File): Promise<{ dataUrl: string; size: string; 
         ctx.drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
         const byteLength = Math.round((dataUrl.length * 3) / 4);
-        const sizeStr =
-          byteLength > 1024 * 1024
-            ? (byteLength / 1024 / 1024).toFixed(1) + ' MB'
-            : Math.round(byteLength / 1024) + ' KB';
+        const sizeStr = formatFileSize(byteLength);
 
         const baseName = file.name.replace(/\.[^/.]+$/, '');
         resolve({
@@ -350,7 +347,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         alert('حجم الملف كبير جداً. الحد الأقصى 15 ميجابايت.');
         return;
       }
-      const sizeStr = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+      const sizeStr = formatFileSize(file.size);
       setSolutionFileName(file.name);
       setSolutionFileSize(sizeStr);
       setSolutionFileType('pdf');
@@ -388,15 +385,16 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
       }
 
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        const sizeStr = (file.size / 1024 / 1024).toFixed(1) + ' MB';
+        const sizeStr = formatFileSize(file.size);
         await new Promise<void>((resolve) => {
           const reader = new FileReader();
           reader.onload = () => {
+            const dataUrl = reader.result as string;
             newAttached.push({
               name: file.name,
               type: 'pdf',
-              size: sizeStr,
-              dataUrl: reader.result as string,
+              size: sizeStr || formatFileSize(undefined, dataUrl),
+              dataUrl,
               hasFile: true
             });
             resolve();
@@ -621,20 +619,29 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
   }, [homeworks, selectedHomeworkId]);
 
   const subject = hw ? allSubjects.find((s) => s.id === hw.subjectId) : null;
-  const studentSub = hw
-    ? submissions.find(
-        (s) =>
-          s.homeworkId === hw.id &&
-          ((user?.email && s.studentEmail.toLowerCase() === user.email.toLowerCase()) ||
-            (user?.id && s.studentId === user.id))
-      )
-    : null;
+  const studentSub = useMemo(() => {
+    if (!hw) return null;
+    const userSubs = (submissions || []).filter(
+      (s) =>
+        s.homeworkId === hw.id &&
+        !(s as any).isDeleted &&
+        ((user?.email && s.studentEmail.toLowerCase() === user.email.toLowerCase()) ||
+          (user?.id && s.studentId === user.id) ||
+          (user?.name && s.studentName.trim().toLowerCase() === user.name.trim().toLowerCase()))
+    );
+    if (userSubs.length === 0) return null;
+    return getLatestUniqueSubmissions(userSubs)[0] || null;
+  }, [hw, submissions, user]);
+
   const hasStudentSubmission = !!studentSub;
   const canManageThis = hw ? canManageSubject(hw.subjectId) : false;
   const isClosed = !!hw?.isClosed;
   const deadlinePassed = hw ? isHomeworkDeadlinePassed(hw.dueDate) : false;
   const studentFiles = studentSub ? getSubmissionFiles(studentSub) : [];
-  const hwSubmissions = hw ? submissions.filter((s) => s.homeworkId === hw.id) : [];
+  const hwSubmissions = useMemo(
+    () => (hw ? getLatestUniqueSubmissions(submissions || [], hw.id) : []),
+    [hw, submissions]
+  );
 
   return (
     <div className="space-y-4 md:space-y-6 text-right font-['IBM_Plex_Sans_Arabic',sans-serif]">
