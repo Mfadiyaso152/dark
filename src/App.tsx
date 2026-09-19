@@ -1081,6 +1081,8 @@ export default function App() {
       fileName: newBooklet.fileName || `${newBooklet.title}.pdf`,
       supervisorName: newBooklet.supervisorName || 'مشرف المادة',
       hasFile: hasFileData,
+      fileSize: newBooklet.fileSize,
+      targetClasses: newBooklet.targetClasses || ['all'],
       createdAt: new Date().toISOString().split('T')[0]
     };
 

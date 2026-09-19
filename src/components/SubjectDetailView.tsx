@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, AVAILABLE_CLASSES } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, AVAILABLE_CLASSES, formatFileSize, AttachedFile } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useSubjectControls } from '../context/SubjectControlsContext';
 import { LessonCard } from './LessonCard';
 import { HomeworkSection } from './HomeworkSection';
 import { ClassFilterDropdown } from './ClassFilterDropdown';
+import { FilePreviewModal } from './FilePreviewModal';
 import {
   ArrowRight,
   BookOpen,
@@ -19,7 +20,11 @@ import {
   Lock,
   Share2,
   Check,
-  Search
+  Search,
+  Image as ImageIcon,
+  Eye,
+  Upload,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF, downloadBookletPDF, triggerFileDownload } from '../utils/pdfGenerator';
@@ -134,11 +139,19 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   const [bookletPages, setBookletPages] = useState('');
   const [bookletDesc, setBookletDesc] = useState('');
   const [bookletFileName, setBookletFileName] = useState('');
+  const [bookletFileSize, setBookletFileSize] = useState<string | undefined>();
+  const [bookletFileType, setBookletFileType] = useState<'pdf' | 'png' | 'jpg'>('pdf');
+  const [bookletImagePreview, setBookletImagePreview] = useState<string | null>(null);
   const [bookletFileDataUrl, setBookletFileDataUrl] = useState<string | undefined>();
   const [bookletTargetClasses, setBookletTargetClasses] = useState<string[]>(['all']);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [isDraggingBookletFile, setIsDraggingBookletFile] = useState(false);
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [contentSearchQuery, setContentSearchQuery] = useState<string>('');
+  const bookletFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Preview modal for booklet (PDF or PNG)
+  const [previewBooklet, setPreviewBooklet] = useState<SubjectBooklet | null>(null);
 
   const toggleBookletClass = (cls: string) => {
     if (cls === 'all') {
@@ -219,15 +232,38 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleBookletFileSelect = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const file = files[0];
     setFileError(null);
+
+    const isPdf = file.type.includes('pdf') || file.name.toLowerCase().endsWith('.pdf');
+    const isPng = file.type.includes('png') || file.name.toLowerCase().endsWith('.png');
+    const isJpg = file.type.includes('jpeg') || file.type.includes('jpg') || file.name.toLowerCase().endsWith('.jpg') || file.name.toLowerCase().endsWith('.jpeg');
+    const isImage = file.type.includes('image') || isPng || isJpg;
+
+    if (!isPdf && !isImage) {
+      setFileError('يرجى اختيار ملف بصيغة PDF أو صورة PNG / JPG');
+      return;
+    }
+
+    const typeKey = isPdf ? 'pdf' : isPng ? 'png' : 'jpg';
+    setBookletFileType(typeKey);
     setBookletFileName(file.name);
+    setBookletFileSize(formatFileSize(file.size));
 
     const reader = new FileReader();
     reader.onload = () => {
-      setBookletFileDataUrl(reader.result as string);
+      const dataUrl = reader.result as string;
+      setBookletFileDataUrl(dataUrl);
+      if (isImage) {
+        setBookletImagePreview(dataUrl);
+        if (!bookletPages.trim()) {
+          setBookletPages(isPng ? 'ملخص PNG' : 'صورة ملخص');
+        }
+      } else {
+        setBookletImagePreview(null);
+      }
     };
     reader.onerror = () => {
       setFileError('حدث خطأ أثناء قراءة الملف، يرجى المحاولة مرة أخرى.');
@@ -239,17 +275,30 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
     e.preventDefault();
     if (!bookletTitle.trim()) return;
 
-    const formattedPages = bookletPages.trim()
-      ? (bookletPages.includes('صفح') ? bookletPages.trim() : `${bookletPages.trim()} صفحة`)
-      : 'غير محدد';
+    let formattedPages = bookletPages.trim();
+    if (!formattedPages) {
+      if (bookletFileType === 'png') {
+        formattedPages = 'ملخص PNG';
+      } else if (bookletFileType === 'jpg') {
+        formattedPages = 'صورة ملخص';
+      } else {
+        formattedPages = 'ملف PDF';
+      }
+    } else if (!formattedPages.includes('صفح') && !formattedPages.includes('ملخص') && !formattedPages.includes('PNG') && !formattedPages.includes('PDF')) {
+      formattedPages = `${formattedPages} صفحة`;
+    }
+
+    const isImage = bookletFileType === 'png' || bookletFileType === 'jpg';
+    const fallbackExt = bookletFileType === 'png' ? 'png' : bookletFileType === 'jpg' ? 'jpg' : 'pdf';
 
     onAddBooklet({
       subjectId: subject.id,
       title: bookletTitle.trim(),
       pagesCount: formattedPages,
-      description: bookletDesc.trim() || 'ملخص شامل ومذكرة لمفاهيم المقرر',
-      fileName: bookletFileName || `ملخص_${subject.name}.pdf`,
+      description: bookletDesc.trim() || (isImage ? 'ملخص مصور شامل لمفاهيم المقرر' : 'ملخص شامل ومذكرة لمفاهيم المقرر'),
+      fileName: bookletFileName || `ملخص_${subject.name}.${fallbackExt}`,
       fileDataUrl: bookletFileDataUrl,
+      fileSize: bookletFileSize,
       supervisorName: user?.name || 'مشرف المادة',
       targetClasses: bookletTargetClasses.length === 0 ? ['all'] : bookletTargetClasses
     });
@@ -259,6 +308,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
     setBookletPages('');
     setBookletDesc('');
     setBookletFileName('');
+    setBookletFileSize(undefined);
+    setBookletFileType('pdf');
+    setBookletImagePreview(null);
     setBookletFileDataUrl(undefined);
     setBookletTargetClasses(['all']);
     setIsAddBookletModalOpen(false);
@@ -280,8 +332,16 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
         }
       }
 
+      const isImage = booklet.fileName?.toLowerCase().endsWith('.png') ||
+        booklet.fileName?.toLowerCase().endsWith('.jpg') ||
+        booklet.fileName?.toLowerCase().endsWith('.jpeg') ||
+        booklet.fileName?.toLowerCase().endsWith('.webp') ||
+        urlToUse?.startsWith('data:image/');
+
+      const ext = isImage ? (booklet.fileName?.split('.').pop() || 'png') : 'pdf';
+
       if (urlToUse) {
-        triggerFileDownload(urlToUse, booklet.fileName || `${booklet.title}.pdf`);
+        triggerFileDownload(urlToUse, booklet.fileName || `${booklet.title}.${ext}`);
       } else {
         // Generate authentic, high-quality PDF booklet
         await downloadBookletPDF(booklet, subject, subjectLessons);
@@ -676,77 +736,136 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
 
       {/* Booklets List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 md:gap-5">
-        {subjectBooklets.map((b) => (
-          <div
-            key={b.id}
-            className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition space-y-3 md:space-y-4 flex flex-col justify-between"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <FileCheck className="w-5 h-5 md:w-6 md:h-6" />
-                </div>
-                <div>
-                  <h4 className="font-black text-slate-900 text-sm sm:text-base md:text-lg">
-                    {b.title}
-                  </h4>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-[10px] md:text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
-                      📄 {b.pagesCount}
-                    </span>
+        {subjectBooklets.map((b) => {
+          const isImage = b.fileName?.toLowerCase().endsWith('.png') ||
+            b.fileName?.toLowerCase().endsWith('.jpg') ||
+            b.fileName?.toLowerCase().endsWith('.jpeg') ||
+            b.fileName?.toLowerCase().endsWith('.webp') ||
+            b.fileDataUrl?.startsWith('data:image/');
+          const isPng = b.fileName?.toLowerCase().endsWith('.png');
+
+          return (
+            <div
+              key={b.id}
+              className="bg-white rounded-2xl md:rounded-3xl p-4 md:p-5 border border-slate-200/90 shadow-2xs hover:shadow-xs transition space-y-3 md:space-y-4 flex flex-col justify-between"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                    isImage ? 'bg-purple-50 text-purple-600' : 'bg-emerald-50 text-emerald-600'
+                  }`}>
+                    {isImage ? <ImageIcon className="w-5 h-5 md:w-6 md:h-6" /> : <FileCheck className="w-5 h-5 md:w-6 md:h-6" />}
+                  </div>
+                  <div>
+                    <h4 className="font-black text-slate-900 text-sm sm:text-base md:text-lg">
+                      {b.title}
+                    </h4>
+                    <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                      <span className={`text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-lg ${
+                        isPng ? 'bg-purple-100 text-purple-800' : isImage ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {isPng ? '🖼️ ملخص PNG' : isImage ? '🖼️ صورة ملخص' : '📄 ملف PDF'}
+                      </span>
+                      {b.pagesCount && (
+                        <span className="text-[10px] md:text-xs font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                          {b.pagesCount}
+                        </span>
+                      )}
+                      {b.fileSize && (
+                        <span className="text-[10px] md:text-xs font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded-lg border border-slate-100">
+                          {b.fileSize}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {canEditCurrentSubject && (
+                  <button
+                    onClick={() => onDeleteBooklet(b.id)}
+                    className="p-1.5 rounded-xl text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                    title="حذف المذكرة"
+                  >
+                    <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                  </button>
+                )}
               </div>
 
-              {canEditCurrentSubject && (
+              {/* Action Buttons: Preview & Download */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
                 <button
-                  onClick={() => onDeleteBooklet(b.id)}
-                  className="p-1.5 rounded-xl text-slate-300 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                  title="حذف المذكرة"
+                  onClick={() => setPreviewBooklet(b)}
+                  className="py-2 md:py-2.5 px-3 md:px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs md:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  title="معاينة سريعة للملخص"
                 >
-                  <Trash2 className="w-4 h-4 md:w-5 md:h-5" />
+                  <Eye className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-600" />
+                  <span>معاينة</span>
                 </button>
-              )}
-            </div>
 
-            <div className="pt-2 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() => handleDownloadBooklet(b)}
-                disabled={downloadingBookletId === b.id}
-                className="py-2 md:py-2.5 px-4 md:px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60"
-              >
-                {downloadingBookletId === b.id ? (
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                )}
-                <span>{downloadingBookletId === b.id ? 'جاري التنزيل...' : 'تنزيل PDF'}</span>
-              </button>
+                <button
+                  onClick={() => handleDownloadBooklet(b)}
+                  disabled={downloadingBookletId === b.id}
+                  className={`py-2 md:py-2.5 px-4 md:px-5 text-white rounded-xl text-xs md:text-sm font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-60 ${
+                    isImage ? 'bg-purple-600 hover:bg-purple-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                >
+                  {downloadingBookletId === b.id ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  )}
+                  <span>
+                    {downloadingBookletId === b.id
+                      ? 'جاري التحميل...'
+                      : isPng
+                      ? 'تنزيل PNG'
+                      : isImage
+                      ? 'تنزيل الصورة'
+                      : 'تنزيل PDF'}
+                  </span>
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {subjectBooklets.length === 0 && (
           <div className="col-span-full text-center py-12 md:py-16 bg-white rounded-3xl border border-dashed border-slate-200">
             <FileText className="w-8 h-8 md:w-10 md:h-10 text-slate-300 mx-auto mb-2" />
-            <p className="text-xs md:text-sm text-slate-500">لا توجد مذكرات مضافة حالياً في هذه المادة</p>
+            <p className="text-xs md:text-sm text-slate-500">لا توجد مذكرات أو ملخصات مضافة حالياً في هذه المادة</p>
           </div>
         )}
       </div>
 
-      {/* Add Booklet Modal (For Supervisors) */}
+      {/* Add Booklet Modal (For Supervisors / Teachers) */}
       <AnimatePresence>
         {isAddBookletModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-['Tajawal',sans-serif]">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white w-full max-w-md md:max-w-xl rounded-3xl p-6 md:p-8 shadow-2xl text-right space-y-4 md:space-y-5"
+              className="bg-white w-full max-w-md md:max-w-xl rounded-3xl p-6 md:p-8 shadow-2xl text-right space-y-4 md:space-y-5 max-h-[92vh] overflow-y-auto"
             >
-              <h3 className="text-base font-black text-slate-900">
-                إضافة ملخص أو مذكرة جديدة للمادة
-              </h3>
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center font-bold">
+                    <Plus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-slate-900">
+                      إضافة ملخص أو مذكرة جديدة للمادة
+                    </h3>
+                    <p className="text-[11px] text-slate-400">يدعم ملفات PDF وصور الملخصات (PNG / JPG)</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsAddBookletModalOpen(false)}
+                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
               <form onSubmit={handleCreateBooklet} className="space-y-3.5">
                 <div>
@@ -758,21 +877,21 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                     required
                     value={bookletTitle}
                     onChange={(e) => setBookletTitle(e.target.value)}
-                    placeholder="مثال: مذكرة شاملة لمقرر كيمياء 1"
-                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="مثال: ملخص شامل للفصل الأول - بصيغة PNG أو PDF"
+                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    عدد الصفحات
+                    وصف أو عدد الصفحات (اختياري)
                   </label>
                   <input
                     type="text"
                     value={bookletPages}
                     onChange={(e) => setBookletPages(e.target.value)}
-                    placeholder="اكتب عدد الصفحات (مثال: 5)"
-                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="مثال: 5 صفحات أو ملخص PNG أو مذكرة مراجعة"
+                    className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500"
                   />
                 </div>
 
@@ -809,7 +928,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                           onClick={() => toggleBookletClass(cls)}
                           className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                             isSelected
-                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                               : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-transparent'
                           }`}
                         >
@@ -820,37 +939,112 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                   </div>
                 </div>
 
+                {/* File Upload Zone: PDF or PNG / JPG */}
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    إرفاق ملف المذكرة (PDF)
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    إرفاق ملف الملخص (صورة PNG / JPG أو ملف PDF) *
                   </label>
+
                   <input
                     type="file"
-                    accept=".pdf,application/pdf"
-                    onChange={handleFileUpload}
-                    className="w-full text-xs text-slate-600 file:ml-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer"
+                    ref={bookletFileInputRef}
+                    accept=".pdf,application/pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg"
+                    onChange={(e) => handleBookletFileSelect(e.target.files)}
+                    className="hidden"
                   />
-                  {bookletFileName && (
-                    <p className="text-[11px] text-emerald-600 font-bold mt-1">
-                      تم اختيار: {bookletFileName}
-                    </p>
+
+                  {!bookletFileDataUrl ? (
+                    <div
+                      onClick={() => bookletFileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setIsDraggingBookletFile(true);
+                      }}
+                      onDragLeave={() => setIsDraggingBookletFile(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingBookletFile(false);
+                        handleBookletFileSelect(e.dataTransfer.files);
+                      }}
+                      className={`border-2 border-dashed rounded-2xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center gap-2 ${
+                        isDraggingBookletFile
+                          ? 'border-purple-500 bg-purple-50/60'
+                          : 'border-slate-200 hover:border-purple-400 bg-slate-50/50 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="w-11 h-11 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center shadow-xs">
+                        <Upload className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-slate-700">اضغط لرفع ملخص أو اسحب الملف هنا</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          يدعم صور <strong className="text-purple-600 font-bold">PNG</strong> و JPG ومستندات PDF
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-2xl space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                            {bookletFileType === 'pdf' ? (
+                              <FileText className="w-5 h-5" />
+                            ) : (
+                              <ImageIcon className="w-5 h-5" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-purple-950 truncate">
+                              {bookletFileName}
+                            </p>
+                            <p className="text-[10px] text-purple-700 font-medium">
+                              صيغة {bookletFileType.toUpperCase()} {bookletFileSize ? `• ${bookletFileSize}` : ''}
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBookletFileDataUrl(undefined);
+                            setBookletFileName('');
+                            setBookletFileSize(undefined);
+                            setBookletImagePreview(null);
+                          }}
+                          className="text-xs font-bold text-rose-500 hover:text-rose-700 p-1.5 rounded-lg hover:bg-rose-50 transition cursor-pointer shrink-0"
+                        >
+                          إزالة الملف
+                        </button>
+                      </div>
+
+                      {bookletImagePreview && (
+                        <div className="rounded-xl overflow-hidden border border-purple-200 bg-white max-h-48 flex items-center justify-center p-1">
+                          <img
+                            src={bookletImagePreview}
+                            alt="معاينة الملخص"
+                            className="max-h-44 object-contain rounded-lg w-full"
+                          />
+                        </div>
+                      )}
+                    </div>
                   )}
-                  {fileError && <p className="text-[11px] text-rose-500 mt-1">{fileError}</p>}
+
+                  {fileError && <p className="text-[11px] text-rose-500 font-bold mt-1.5">{fileError}</p>}
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                   <button
                     type="button"
                     onClick={() => setIsAddBookletModalOpen(false)}
-                    className="py-2 px-4 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition cursor-pointer"
+                    className="py-2.5 px-4 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition cursor-pointer"
                   >
                     إلغاء
                   </button>
                   <button
                     type="submit"
-                    className="py-2 px-4 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 transition shadow-xs cursor-pointer"
+                    className="py-2.5 px-5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
                   >
-                    حفظ ونشر المذكرة
+                    حفظ ونشر الملخص
                   </button>
                 </div>
               </form>
@@ -858,6 +1052,25 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Full-screen interactive File Preview Modal for Booklets / Summaries (PNG or PDF) */}
+      {previewBooklet && (
+        <FilePreviewModal
+          isOpen={!!previewBooklet}
+          onClose={() => setPreviewBooklet(null)}
+          title={previewBooklet.title}
+          studentName={previewBooklet.supervisorName}
+          files={[{
+            name: previewBooklet.fileName || `${previewBooklet.title}.${previewBooklet.fileName?.toLowerCase().endsWith('.png') ? 'png' : 'pdf'}`,
+            type: (previewBooklet.fileName?.toLowerCase().endsWith('.png') || previewBooklet.fileName?.toLowerCase().endsWith('.jpg') || previewBooklet.fileDataUrl?.startsWith('data:image/')) ? 'png' : 'pdf',
+            size: previewBooklet.fileSize || previewBooklet.pagesCount || 'ملخص',
+            dataUrl: previewBooklet.fileDataUrl,
+            previewUrl: previewBooklet.fileDataUrl,
+            fileId: previewBooklet.id,
+            hasFile: true
+          }]}
+        />
+      )}
     </motion.div>
   );
 };
