@@ -7,7 +7,8 @@ import {
   collection,
   query,
   where,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from '../lib/firebase';
 import { storeLargeFile, getLargeFile, deleteLargeFile } from './fileStorage';
 import { normalizeFileDataUrl } from './pdfGenerator';
@@ -94,29 +95,32 @@ export async function uploadFileToCloud(
     }
   }
 
-  // 3. Upload chunks to Firestore collection 'file_chunks' in high-speed parallel batches
-  const BATCH_SIZE = 12;
+  // 3. Upload chunks to Firestore collection 'file_chunks' using atomic writeBatch
+  const BATCH_SIZE = 10;
   let completed = 0;
 
   for (let b = 0; b < chunks.length; b += BATCH_SIZE) {
-    const batch = chunks.slice(b, b + BATCH_SIZE);
-    await Promise.all(
-      batch.map(async (chunkData, idx) => {
-        const chunkIndex = b + idx;
-        const chunkDocId = `${fileId}_${chunkIndex}`;
-        await setDoc(doc(db, 'file_chunks', chunkDocId), {
-          fileId,
-          index: chunkIndex,
-          totalChunks,
-          data: chunkData,
-          updatedAt: Date.now()
-        }, { merge: true });
-        completed++;
-        if (onProgress) {
-          onProgress(Math.round((completed / totalChunks) * 100));
-        }
-      })
-    );
+    const chunkBatch = chunks.slice(b, b + BATCH_SIZE);
+    const batch = writeBatch(db);
+
+    chunkBatch.forEach((chunkData, idx) => {
+      const chunkIndex = b + idx;
+      const chunkDocId = `${fileId}_${chunkIndex}`;
+      const chunkRef = doc(db, 'file_chunks', chunkDocId);
+      batch.set(chunkRef, {
+        fileId,
+        index: chunkIndex,
+        totalChunks,
+        data: chunkData,
+        updatedAt: Date.now()
+      }, { merge: true });
+    });
+
+    await batch.commit();
+    completed += chunkBatch.length;
+    if (onProgress) {
+      onProgress(Math.round((completed / totalChunks) * 100));
+    }
   }
 
   return { fileId, totalChunks, size: totalLength };

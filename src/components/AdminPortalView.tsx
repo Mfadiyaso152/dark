@@ -23,7 +23,6 @@ import {
   ChevronDown,
   AlertTriangle,
   ArrowRight,
-  Activity,
   BarChart3,
   Layers,
   Clock,
@@ -31,6 +30,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { triggerHaptic } from '../utils/haptics';
 
 const ADMIN_SECRET_PASSCODE = '199090';
 
@@ -54,7 +54,7 @@ interface AdminPortalViewProps {
   initialTab?: AdminTab;
 }
 
-type AdminTab = 'stats' | 'users' | 'activity' | 'banners';
+type AdminTab = 'stats' | 'users' | 'banners';
 
 export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   subjects,
@@ -72,6 +72,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   onAddBanner,
   onUpdateBanner,
   onNavigateHome,
+  onSelectLesson,
   initialTab
 }) => {
   const {
@@ -102,10 +103,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   }, []);
 
   // 2. Active Tab in Admin Dashboard
-  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab || 'stats');
+  const [activeTab, setActiveTab] = useState<AdminTab>(initialTab && initialTab !== ('submissions' as any) ? initialTab : 'stats');
 
   useEffect(() => {
-    if (initialTab) {
+    if (initialTab && initialTab !== ('submissions' as any)) {
       setActiveTab(initialTab);
     }
   }, [initialTab]);
@@ -479,94 +480,74 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   // ==========================================
   return (
     <div className="space-y-4 text-right font-['IBM_Plex_Sans_Arabic',sans-serif] pb-10">
-      {/* Clean Options & Action Header Bar */}
-      <div className="bg-white p-3 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        {/* Navigation Tabs - Icon only without text as requested */}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          <button
-            onClick={() => setActiveTab('stats')}
-            aria-label="الإحصائيات"
-            title="الإحصائيات"
-            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
-              activeTab === 'stats'
-                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-          </button>
+      {/* Fixed Sticky Liquid Glass Admin Header Bar - Matching TopNav Glass Aesthetics with Admin-only icons */}
+      <div className="sticky top-0 z-40 w-full pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-3 select-none">
+        <div className="ios26-liquid-glass-nav relative mx-auto max-w-4xl h-14 sm:h-15 px-3 sm:px-4 rounded-full flex items-center justify-between transition-all duration-300 shadow-lg">
+          {/* Glass Specular Reflection Highlight Line */}
+          <div className="ios26-specular-highlight" />
 
-          <button
-            onClick={() => setActiveTab('users')}
-            aria-label={`إدارة المستخدمين (${uniqueUsers.length})`}
-            title={`إدارة المستخدمين (${uniqueUsers.length})`}
-            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
-              activeTab === 'users'
-                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-          </button>
+          {/* Left Actions: Refresh & Lock */}
+          <div className="flex items-center gap-1.5 sm:gap-2 z-10">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-2 sm:p-2.5 rounded-full bg-white/40 hover:bg-white/70 active:scale-95 text-slate-700 hover:text-slate-950 border border-white/60 shadow-2xs transition flex items-center justify-center cursor-pointer backdrop-blur-lg"
+              title="تحديث البيانات"
+              aria-label="تحديث البيانات"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
+            </button>
 
-          {/* Banner Management Tab (Icon only as requested) */}
-          <button
-            onClick={() => setActiveTab('banners')}
-            aria-label="إدارة الإعلانات والبنايات"
-            title="إدارة الإعلانات والبنايات"
-            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
-              activeTab === 'banners'
-                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <ImageIcon className="w-4 h-4" />
-          </button>
+            <button
+              onClick={handleLockPortal}
+              className="p-2 sm:p-2.5 rounded-full bg-rose-500/15 hover:bg-rose-500/25 active:scale-95 text-rose-700 border border-rose-300/40 shadow-2xs transition flex items-center justify-center cursor-pointer backdrop-blur-lg"
+              title="قفل لوحة الإدارة"
+              aria-label="قفل لوحة الإدارة"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
+          </div>
 
-          <button
-            onClick={() => setActiveTab('activity')}
-            aria-label={`سجل التسليمات (${submissions.length})`}
-            title={`سجل التسليمات (${submissions.length})`}
-            className={`p-2.5 rounded-xl transition flex items-center justify-center cursor-pointer shrink-0 ${
-              activeTab === 'activity'
-                ? 'bg-slate-900 text-white shadow-xs border border-slate-900'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-          </button>
-        </div>
+          {/* Center Navigation Tabs: Centered in Top Bar */}
+          <div className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-1 sm:gap-2 z-10">
+            {[
+              { id: 'stats' as AdminTab, label: 'الإحصائيات', icon: BarChart3 },
+              { id: 'users' as AdminTab, label: `المستخدمين (${uniqueUsers.length})`, icon: Users },
+              { id: 'banners' as AdminTab, label: 'الإعلانات والبنايات', icon: ImageIcon }
+            ].map((tab) => {
+              const isSelected = activeTab === tab.id;
+              const IconComp = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  aria-label={tab.label}
+                  title={tab.label}
+                  className={`relative p-2.5 sm:px-3.5 sm:py-2 rounded-full transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
+                    isSelected
+                      ? 'bg-slate-900 text-white font-black shadow-xs'
+                      : 'text-slate-700 hover:text-slate-950 hover:bg-white/50 font-bold'
+                  }`}
+                >
+                  <IconComp className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline text-xs">{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
-        {/* Quick Action Buttons */}
-        <div className="flex items-center gap-1.5 mr-auto">
-
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="p-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer border border-slate-200"
-            title="تحديث البيانات"
-            aria-label="تحديث البيانات"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
-          </button>
-
-          <button
-            onClick={handleLockPortal}
-            className="p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer border border-rose-200"
-            title="قفل البوابة"
-            aria-label="قفل البوابة"
-          >
-            <Lock className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={onNavigateHome}
-            className="p-2.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer border border-slate-200"
-            title="الرئيسية"
-            aria-label="الرئيسية"
-          >
-            <Home className="w-4 h-4" />
-          </button>
+          {/* Right Action: Navigate to Home */}
+          <div className="flex items-center justify-end shrink-0 z-10">
+            <button
+              onClick={onNavigateHome}
+              className="p-2 sm:p-2.5 rounded-full bg-white/40 hover:bg-white/70 active:scale-95 text-slate-700 hover:text-slate-950 border border-white/60 shadow-2xs transition flex items-center justify-center cursor-pointer backdrop-blur-lg"
+              title="العودة للرئيسية"
+              aria-label="العودة للرئيسية"
+            >
+              <Home className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -595,135 +576,151 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
       {/* TAB 1: Statistics & Analytics */}
       {activeTab === 'stats' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {/* Main Key Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">إجمالي المستخدمين</span>
-                <Users className="w-4 h-4 text-purple-600" />
+                <span className="text-[11px] font-bold text-slate-500">إجمالي المستخدمين</span>
+                <div className="p-2 rounded-2xl bg-purple-500/10 text-purple-600 border border-purple-200/50">
+                  <Users className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-slate-800">
+              <div className="text-2xl font-black text-slate-900 tracking-tight">
                 {stats.totalUsersCount}
               </div>
             </div>
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">الطلاب</span>
-                <GraduationCap className="w-4 h-4 text-blue-600" />
+                <span className="text-[11px] font-bold text-slate-500">الطلاب</span>
+                <div className="p-2 rounded-2xl bg-blue-500/10 text-blue-600 border border-blue-200/50">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-blue-700">
+              <div className="text-2xl font-black text-blue-700 tracking-tight">
                 {stats.studentsCount}
               </div>
             </div>
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">المعلمون</span>
-                <Briefcase className="w-4 h-4 text-emerald-600" />
+                <span className="text-[11px] font-bold text-slate-500">المعلمون</span>
+                <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
+                  <Briefcase className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-emerald-700">
+              <div className="text-2xl font-black text-emerald-700 tracking-tight">
                 {stats.teachersCount}
               </div>
             </div>
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">المشرفون</span>
-                <Crown className="w-4 h-4 text-amber-600" />
+                <span className="text-[11px] font-bold text-slate-500">المشرفون</span>
+                <div className="p-2 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-200/50">
+                  <Crown className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-amber-700">
+              <div className="text-2xl font-black text-amber-700 tracking-tight">
                 {stats.supervisorsCount}
               </div>
             </div>
           </div>
 
           {/* Educational Content Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">الواجبات المنشورة</span>
-                <ClipboardList className="w-4 h-4 text-indigo-600" />
+                <span className="text-[11px] font-bold text-slate-500">الواجبات المنشورة</span>
+                <div className="p-2 rounded-2xl bg-indigo-500/10 text-indigo-600 border border-indigo-200/50">
+                  <ClipboardList className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-indigo-700">
+              <div className="text-2xl font-black text-indigo-700 tracking-tight">
                 {stats.totalHomeworksCount}
               </div>
             </div>
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">حلول الطلاب المستلمة</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-[11px] font-bold text-slate-500">حلول الطلاب المستلمة</span>
+                <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-emerald-700">
+              <div className="text-2xl font-black text-emerald-700 tracking-tight">
                 {stats.totalSubmissionsCount}
               </div>
             </div>
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">الدروس والشروحات</span>
-                <BookOpen className="w-4 h-4 text-rose-600" />
+                <span className="text-[11px] font-bold text-slate-500">الدروس والشروحات</span>
+                <div className="p-2 rounded-2xl bg-rose-500/10 text-rose-600 border border-rose-200/50">
+                  <BookOpen className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-rose-700">
+              <div className="text-2xl font-black text-rose-700 tracking-tight">
                 {stats.totalLessonsCount}
               </div>
             </div>
 
-            <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-2xs space-y-1">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
               <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold">المذكرات والملخصات</span>
-                <FileText className="w-4 h-4 text-teal-600" />
+                <span className="text-[11px] font-bold text-slate-500">المذكرات والملخصات</span>
+                <div className="p-2 rounded-2xl bg-teal-500/10 text-teal-600 border border-teal-200/50">
+                  <FileText className="w-4 h-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-teal-700">
+              <div className="text-2xl font-black text-teal-700 tracking-tight">
                 {stats.totalBookletsCount}
               </div>
             </div>
           </div>
 
           {/* Activity Breakdown Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             {/* User Distribution Bar */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs space-y-3">
+            <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xs space-y-3.5">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Users className="w-3.5 h-3.5 text-purple-600" />
+                  <Users className="w-4 h-4 text-purple-600" />
                   <span>توزيع المستخدمين</span>
                 </h3>
-                <span className="text-[11px] text-slate-400 font-bold">
+                <span className="text-[11px] text-slate-500 font-bold">
                   {stats.totalUsersCount} مستخدم
                 </span>
               </div>
 
-              <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
+              <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
                 <div
                   style={{ width: `${(stats.studentsCount / (stats.totalUsersCount || 1)) * 100}%` }}
-                  className="bg-blue-500 h-full"
+                  className="bg-blue-500 h-full transition-all duration-500"
                   title={`طلاب: ${stats.studentsCount}`}
                 />
                 <div
                   style={{ width: `${(stats.teachersCount / (stats.totalUsersCount || 1)) * 100}%` }}
-                  className="bg-emerald-500 h-full"
+                  className="bg-emerald-500 h-full transition-all duration-500"
                   title={`معلمون: ${stats.teachersCount}`}
                 />
                 <div
                   style={{ width: `${(stats.supervisorsCount / (stats.totalUsersCount || 1)) * 100}%` }}
-                  className="bg-amber-500 h-full"
+                  className="bg-amber-500 h-full transition-all duration-500"
                   title={`مشرفون: ${stats.supervisorsCount}`}
                 />
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="bg-blue-50/70 p-2 rounded-xl border border-blue-100">
+                <div className="bg-blue-50/80 p-2.5 rounded-2xl border border-blue-100/80">
                   <span className="text-[10px] font-bold text-blue-900 block">طلاب</span>
                   <span className="text-xs font-black text-blue-700">{stats.studentsCount}</span>
                 </div>
-                <div className="bg-emerald-50/70 p-2 rounded-xl border border-emerald-100">
+                <div className="bg-emerald-50/80 p-2.5 rounded-2xl border border-emerald-100/80">
                   <span className="text-[10px] font-bold text-emerald-900 block">معلمون</span>
                   <span className="text-xs font-black text-emerald-700">{stats.teachersCount}</span>
                 </div>
-                <div className="bg-amber-50/70 p-2 rounded-xl border border-amber-100">
+                <div className="bg-amber-50/80 p-2.5 rounded-2xl border border-amber-100/80">
                   <span className="text-[10px] font-bold text-amber-900 block">مشرفون</span>
                   <span className="text-xs font-black text-amber-700">{stats.supervisorsCount}</span>
                 </div>
@@ -731,25 +728,25 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
             </div>
 
             {/* Subject Activity Breakdown */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-2xs space-y-2">
+            <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xs space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                  <Layers className="w-4 h-4 text-indigo-600" />
                   <span>نشاط المواد الدراسية</span>
                 </h3>
-                <span className="text-[11px] text-slate-400 font-bold">
+                <span className="text-[11px] text-slate-500 font-bold">
                   {subjects.length} مادة
                 </span>
               </div>
 
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                 {subjects.map((sub) => {
                   const subHwCount = homeworks.filter((h) => h.subjectId === sub.id).length;
                   const subLessonsCount = lessons.filter((l) => l.subjectId === sub.id).length;
                   return (
                     <div
                       key={sub.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs"
+                      className="flex items-center justify-between p-2.5 rounded-2xl bg-white/70 hover:bg-white border border-slate-100/80 text-xs transition-colors"
                     >
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-purple-600" />
@@ -771,9 +768,9 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
       {/* TAB 2: User Management with Editable Triple Names */}
       {activeTab === 'users' && (
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {/* Filter & Search Bar */}
-          <div className="bg-white rounded-2xl p-3 border border-slate-100 shadow-2xs space-y-2.5">
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-3.5 border border-white/60 shadow-xs space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               {/* Search Bar */}
               <div className="relative flex-1">
@@ -782,13 +779,13 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ابحث بالاسم، البريد، أو الوظيفة..."
-                  className="w-full py-2 pr-9 pl-4 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white"
+                  className="w-full py-2.5 pr-9 pl-4 bg-slate-50/90 border border-slate-200/90 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
                 />
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-2.5" />
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
               </div>
 
               {/* Role Filter Tabs */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
                 {[
                   { key: 'all', label: 'الكل' },
                   { key: 'students', label: 'الطلاب' },
@@ -799,10 +796,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                     key={f.key}
                     type="button"
                     onClick={() => setRoleFilter(f.key as any)}
-                    className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition cursor-pointer shrink-0 ${
+                    className={`py-2 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                       roleFilter === f.key
-                        ? 'bg-purple-700 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'bg-slate-900 text-white shadow-2xs'
+                        : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
                     }`}
                   >
                     {f.label}
@@ -938,84 +935,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
         </div>
       )}
 
-      {/* TAB 3: Activity Stream & Submissions */}
-      {activeTab === 'activity' && (
-        <div className="space-y-3">
-          <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-2xs space-y-2.5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-purple-600" />
-                <span>تسليمات واجبات الطلاب ({submissions.length})</span>
-              </h3>
-              <span className="text-[10px] text-slate-400 font-medium">مرتب من الأحدث</span>
-            </div>
-
-            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-              {submissions.length === 0 ? (
-                <div className="text-center py-8 text-slate-400 text-xs font-medium">
-                  لا توجد تسليمات واجبات بعد
-                </div>
-              ) : (
-                [...submissions]
-                  .sort((a, b) => new Date(b.submittedAt || 0).getTime() - new Date(a.submittedAt || 0).getTime())
-                  .map((sub) => {
-                    const hw = homeworks.find((h) => h.id === sub.homeworkId);
-                    const subSubject = subjects.find((s) => s.id === hw?.subjectId);
-                    const studentFullName = resolveStudentFullName(sub.studentEmail, sub.studentName, registeredUsers);
-                    const isConfirmed = isFullNameValid(studentFullName);
-
-                    return (
-                      <div
-                        key={sub.id}
-                        className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                      >
-                        <div className="space-y-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-black text-slate-900 text-xs">
-                              {studentFullName}
-                            </span>
-                            {isConfirmed && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                الاسم الثلاثي ✓
-                              </span>
-                            )}
-                            {subSubject && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-bold">
-                                {subSubject.name}
-                              </span>
-                            )}
-                            {hw && (
-                              <span className="text-[10px] text-slate-600 font-medium">
-                                - {hw.title}
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-[9px] text-slate-400">
-                            <span className="font-mono">{sub.studentEmail}</span>
-                            <span>{formatGregorianDate(sub.submittedAt)}</span>
-                          </div>
-                          {sub.notes && (
-                            <p className="text-[10px] text-slate-600 bg-white p-1 rounded border border-slate-100 mt-1">
-                              {sub.notes}
-                            </p>
-                          )}
-                        </div>
-
-                        {sub.attachedFile?.hasFile && (
-                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md self-end sm:self-center shrink-0">
-                            ملف مرفق ✓
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: Banner Management Full Page View */}
+      {/* TAB 3: Banner Management Full Page View */}
       {activeTab === 'banners' && (
         <BannerManagementView
           banners={banners}

@@ -20,7 +20,10 @@ import {
   Pencil,
   Cloud,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  GripVertical,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { BannerItem, BannerSettings } from '../types';
 
@@ -110,9 +113,8 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
   const [editDescription, setEditDescription] = useState('');
   const [editLinkUrl, setEditLinkUrl] = useState('');
 
-  // Confirmation state for deleting a banner or deleting all banners
+  // Confirmation state for deleting a banner
   const [bannerToDelete, setBannerToDelete] = useState<BannerItem | null>(null);
-  const [isConfirmingDeleteAll, setIsConfirmingDeleteAll] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Settings state
@@ -287,22 +289,66 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
     }
   };
 
-  const handleConfirmDeleteAll = async () => {
+  // Reordering state for dragging or moving banners
+  const [draggedBannerIndex, setDraggedBannerIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Move banner up or down
+  const handleMoveBanner = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= banners.length) return;
+
+    const newBanners = [...banners];
+    const [moved] = newBanners.splice(index, 1);
+    newBanners.splice(targetIndex, 0, moved);
+
+    // Re-assign order indices 1, 2, 3...
+    const updated = newBanners.map((b, i) => ({ ...b, order: i + 1 }));
+    onSaveBanners(updated);
+    showTempSuccess(`تم تغيير ترتيب الإعلان إلى المركز (${targetIndex + 1}) وحفظه سحابياً!`);
+  };
+
+  // Drag and drop handlers using HTML5 Drag API with touch compatibility
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedBannerIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
     try {
-      setIsDeleting(true);
-      if (onDeleteAllBanners) {
-        await onDeleteAllBanners();
-      } else {
-        onSaveBanners([]);
-      }
-      showTempSuccess('تم حذف جميع الإعلانات نهائياً من السحابة بنجاح ولجميع الأجهزة!');
-      setIsConfirmingDeleteAll(false);
-    } catch (err) {
-      console.error(err);
-      showTempSuccess('حدث خطأ أثناء حذف جميع الإعلانات من السحابة');
-    } finally {
-      setIsDeleting(false);
+      e.dataTransfer.setData('text/plain', String(index));
+    } catch (err) {}
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
     }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedBannerIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedBannerIndex === null || draggedBannerIndex === dropIndex) {
+      setDraggedBannerIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    const newBanners = [...banners];
+    const [moved] = newBanners.splice(draggedBannerIndex, 1);
+    newBanners.splice(dropIndex, 0, moved);
+
+    // Re-assign sequential order
+    const updated = newBanners.map((b, i) => ({ ...b, order: i + 1 }));
+    onSaveBanners(updated);
+    showTempSuccess(`تم تحديث ترتيب الإعلانات بنجاح ومزامنته سحابياً ولحظياً!`);
+
+    setDraggedBannerIndex(null);
+    setDragOverIndex(null);
   };
 
   // Save Settings
@@ -316,31 +362,6 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
 
   return (
     <div className="space-y-6 font-['IBM_Plex_Sans_Arabic',sans-serif]" dir="rtl">
-      {/* Full Page Header Card */}
-      <div className="bg-gradient-to-r from-slate-900 via-sky-950 to-indigo-950 text-white p-5 sm:p-7 rounded-3xl shadow-md border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-400/30 text-sky-400 flex items-center justify-center shrink-0 shadow-inner">
-            <ImageIcon className="w-6 h-6" />
-          </div>
-          <div>
-            <h2 className="text-lg sm:text-xl font-black text-white">إدارة الإعلانات والبنايات (Banners)</h2>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 rounded-2xl text-xs font-bold shadow-xs">
-            <Cloud className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span>مزامنة سحابية لحظية ☁️</span>
-          </div>
-
-          <div className="flex items-center gap-2 bg-white/10 p-1.5 rounded-2xl border border-white/15 backdrop-blur-md self-start sm:self-auto">
-            <span className="text-xs font-bold text-white px-3">
-              الإجمالي: <span className="text-sky-300 font-black">{banners.length}</span> | المُفعل: <span className="text-emerald-400 font-black">{banners.filter((b) => b.isActive !== false).length}</span>
-            </span>
-          </div>
-        </div>
-      </div>
-
       {/* Instant Success Alert */}
       {successMessage && (
         <motion.div
@@ -355,9 +376,9 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
       )}
 
       {/* Main Container Card */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden">
+      <div className="bg-white/90 backdrop-blur-md rounded-3xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all duration-300">
         {/* Navigation Sub-Tabs */}
-        <div className="flex items-center gap-2 p-3 bg-slate-50 border-b border-slate-200 overflow-x-auto">
+        <div className="flex items-center gap-2 p-3 bg-slate-50/80 border-b border-slate-200 overflow-x-auto">
           <button
             onClick={() => setActiveSubTab('banners')}
             className={`py-2.5 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
@@ -389,22 +410,12 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
           {activeSubTab === 'banners' && (
             <div className="space-y-6">
               {/* Top Action Bar */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200/80">
                 <span className="text-xs font-bold text-slate-600">
-                  تحديث الإعلانات لحظي فور التفعيل أو الإلغاء أو الإضافة
+                  تحديث الإعلانات لحظي فور التفعيل أو الإلغاء أو الترتيب
                 </span>
 
                 <div className="flex items-center gap-2">
-                  {banners.length > 0 && (
-                    <button
-                      onClick={() => setIsConfirmingDeleteAll(true)}
-                      className="py-2.5 px-3.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 active:scale-95 text-rose-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                      <span>حذف جميع الإعلانات ({banners.length})</span>
-                    </button>
-                  )}
-
                   {!isAdding && (
                     <button
                       onClick={() => setIsAdding(true)}
@@ -662,7 +673,7 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
 
               {/* BANNERS LIST */}
               {banners.length === 0 ? (
-                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
+                <div className="text-center py-12 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 space-y-2">
                   <ImageIcon className="w-8 h-8 text-slate-400 mx-auto" />
                   <p className="text-xs font-bold text-slate-600">لا توجد صور إعلانات حالياً</p>
                   <p className="text-[11px] text-slate-400">اضغط على زر "إضافة إعلان جديد" بالأعلى لرفع أول صورة.</p>
@@ -672,13 +683,62 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                   {banners.map((banner, index) => (
                     <div
                       key={banner.id}
-                      className={`p-4 rounded-2xl border transition flex flex-col sm:flex-row items-center justify-between gap-4 ${
-                        banner.isActive !== false
-                          ? 'bg-white border-slate-200/90 shadow-2xs'
-                          : 'bg-slate-50 border-slate-200/60 opacity-75'
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                      onDragEnd={handleDragEnd}
+                      onDrop={(e) => handleDrop(e, index)}
+                      className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 flex flex-col sm:flex-row items-center justify-between gap-4 ${
+                        draggedBannerIndex === index
+                          ? 'opacity-40 scale-[0.99] border-sky-400 bg-sky-50/50'
+                          : dragOverIndex === index
+                          ? 'border-sky-500 ring-2 ring-sky-200 bg-sky-50/30'
+                          : banner.isActive !== false
+                          ? 'bg-white/90 border-slate-200/90 shadow-2xs hover:border-slate-300 hover:shadow-xs'
+                          : 'bg-slate-50/70 border-slate-200/60 opacity-75'
                       }`}
                     >
-                      <div className="flex items-center gap-4 w-full sm:w-auto">
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        {/* Drag Handle & Order Controls */}
+                        <div className="flex flex-col items-center gap-1 shrink-0">
+                          {/* Order Number Badge */}
+                          <span className="w-6 h-6 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-black flex items-center justify-center shadow-2xs">
+                            {index + 1}
+                          </span>
+
+                          {/* Up / Down Arrows prioritized for quick precision sorting */}
+                          <div className="flex flex-col gap-1 my-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveBanner(index, 'up')}
+                              disabled={index === 0}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 disabled:opacity-20 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 border border-slate-200 transition cursor-pointer disabled:cursor-not-allowed shadow-2xs active:scale-90"
+                              title="تحريك لأعلى"
+                              aria-label="تحريك لأعلى"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveBanner(index, 'down')}
+                              disabled={index === banners.length - 1}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-600 disabled:opacity-20 disabled:hover:bg-slate-100 disabled:hover:text-slate-600 border border-slate-200 transition cursor-pointer disabled:cursor-not-allowed shadow-2xs active:scale-90"
+                              title="تحريك لأسفل"
+                              aria-label="تحريك لأسفل"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </button>
+                          </div>
+
+                          {/* 3 Stripes / Grip Handle for Drag & Drop */}
+                          <div
+                            className="p-1 text-slate-400 hover:text-sky-600 cursor-grab active:cursor-grabbing rounded-lg hover:bg-slate-100 transition"
+                            title="اضغط واسحب لتغيير ترتيب الإعلان"
+                          >
+                            <GripVertical className="w-4 h-4" />
+                          </div>
+                        </div>
+
                         {/* Banner Image Preview */}
                         <div className="relative w-28 sm:w-36 h-20 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 shrink-0">
                           <img src={banner.imageUrl} alt={banner.title || 'إعلان'} className="w-full h-full object-cover" />
@@ -996,57 +1056,6 @@ export const BannerManagementView: React.FC<BannerManagementViewProps> = ({
                   type="button"
                   disabled={isDeleting}
                   onClick={() => setBannerToDelete(null)}
-                  className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
-                >
-                  تراجع
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Modal: Confirm Delete ALL Banners */}
-        {isConfirmingDeleteAll && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-rose-100 space-y-4 text-center font-['IBM_Plex_Sans_Arabic',sans-serif]"
-              dir="rtl"
-            >
-              <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto border border-rose-200 shadow-inner">
-                <AlertTriangle className="w-7 h-7" />
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-base font-black text-slate-900">حذف جميع الإعلانات نهائياً؟</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  هل أنت متأكد من رغبتك في حذف جميع الإعلانات ({banners.length} إعلان) نهائياً من السحابة؟
-                  ستختفي الإعلانات فوراً من الواجهة الرئيسية لجميع الطلاب وعلى جميع الأجهزة.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={handleConfirmDeleteAll}
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs sm:text-sm transition shadow-xs cursor-pointer flex items-center justify-center gap-2"
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>جاري حذف الكل سحابياً...</span>
-                    </>
-                  ) : (
-                    <span>تأكيد حذف جميع الإعلانات 🗑️</span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  disabled={isDeleting}
-                  onClick={() => setIsConfirmingDeleteAll(false)}
                   className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs sm:text-sm transition cursor-pointer"
                 >
                   تراجع

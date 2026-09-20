@@ -12,8 +12,10 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
   banners,
   settings
 }) => {
-  // Only show active banners on the home view (never deleted and must not be deactivated)
-  const activeBanners = banners.filter((b) => b.isActive !== false && !b.isDeleted);
+  // Only show active banners on the home view sorted by order
+  const activeBanners = [...banners]
+    .filter((b) => b.isActive !== false && !b.isDeleted)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -98,26 +100,26 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
     enter: (dir: number) => ({
       x: dir > 0 ? '100%' : '-100%',
       opacity: 0,
-      scale: 1.01
+      scale: 1.02
     }),
     center: {
       x: '0%',
       opacity: 1,
       scale: 1,
       transition: {
-        x: { type: 'spring', stiffness: 280, damping: 26, mass: 0.75 },
-        opacity: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
-        scale: { duration: 0.35, ease: [0.16, 1, 0.3, 1] }
+        x: { type: 'spring', stiffness: 320, damping: 30, mass: 0.6 },
+        opacity: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+        scale: { duration: 0.32, ease: [0.16, 1, 0.3, 1] }
       }
     },
     exit: (dir: number) => ({
       x: dir < 0 ? '100%' : '-100%',
       opacity: 0,
-      scale: 0.99,
+      scale: 0.98,
       transition: {
-        x: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
-        opacity: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
-        scale: { duration: 0.35, ease: [0.16, 1, 0.3, 1] }
+        x: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+        opacity: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
+        scale: { duration: 0.3, ease: [0.16, 1, 0.3, 1] }
       }
     })
   };
@@ -186,13 +188,19 @@ export const HomeBannerSlider: React.FC<HomeBannerSliderProps> = ({
                 )}
 
                 {hasLink && (
-                  <div className="pt-1.5">
-                    <span
-                      className="inline-flex items-center gap-1.5 py-1.5 px-3.5 bg-sky-600/90 hover:bg-sky-500 text-white border border-sky-400/30 rounded-xl text-xs font-bold backdrop-blur-md transition shadow-sm"
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(currentBanner.linkUrl!.trim(), '_blank', 'noopener,noreferrer');
+                      }}
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 active:bg-white/45 text-white border border-white/40 shadow-xs backdrop-blur-md transition-all duration-200 cursor-pointer group/link hover:scale-105"
+                      title="فتح الرابط المرفق"
+                      aria-label="فتح الرابط المرفق"
                     >
-                      <span>الانتقال للرابط المرفق</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </span>
+                      <ExternalLink className="w-4 h-4 text-white group-hover/link:translate-x-[-1px] group-hover/link:translate-y-[-1px] transition-transform duration-200" />
+                    </button>
                   </div>
                 )}
               </div>

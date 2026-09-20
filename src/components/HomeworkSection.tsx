@@ -37,7 +37,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
-import { formatGregorianDate } from '../utils/dateFormatter';
+import { formatGregorianDate, formatGregorianNumericWithDay } from '../utils/dateFormatter';
 import { FilePreviewModal } from './FilePreviewModal';
 
 const getSubmissionFiles = (sub: HomeworkSubmission): AttachedFile[] => {
@@ -221,6 +221,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+  const [dueDateSort, setDueDateSort] = useState<'desc' | 'asc'>('desc');
 
   // Sort homeworks: unsubmitted/pending homeworks come first; submitted homeworks are placed at the very bottom
   const subjectHomeworks = [...homeworks.filter((h) => h.subjectId === subject.id)]
@@ -253,7 +254,13 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
     if (!aDone && bDone) return -1;
     if (aDone && !bDone) return 1;
 
-    return (b.dueDate || '').localeCompare(a.dueDate || '');
+    const dateA = a.dueDate || '';
+    const dateB = b.dueDate || '';
+    if (dueDateSort === 'asc') {
+      return dateA.localeCompare(dateB);
+    } else {
+      return dateB.localeCompare(dateA);
+    }
   });
 
   // Open Teacher Add Homework Modal
@@ -657,16 +664,18 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
       </div>
 
       {/* Header Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200/80 p-4 sm:p-5 rounded-3xl shadow-xs">
+      {/* Header card with Add button */}
+      <div className="flex flex-wrap items-center justify-between gap-3 glass-subject-vessel border border-white/90 p-4 sm:p-5 rounded-3xl shadow-xs relative overflow-hidden">
+        <div className="absolute top-0 inset-x-6 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-            <ClipboardList className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-2xl bg-white/70 text-indigo-700 border border-white/90 flex items-center justify-center shadow-2xs shrink-0 backdrop-blur-md">
+            <ClipboardList className="w-5 h-5 text-indigo-600" />
           </div>
           <div>
             <h3 className="text-base sm:text-lg font-black text-slate-900">
               واجبات {subject.name}
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-600">
               {canEdit
                 ? 'إدارة واجبات المادة ومتابعة تسليمات وحلول الطلاب'
                 : 'تابع الواجبات المدرسية وقم بإرفاق حلولك ومتابعة تقييمك'}
@@ -679,20 +688,32 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.95 }}
             onClick={handleOpenAddModal}
-            className="py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs sm:text-sm font-black transition flex items-center gap-1.5 shadow-sm cursor-pointer shrink-0 active:scale-95"
+            className="py-2.5 px-4 glass-subject-vessel hover:bg-white/80 text-slate-900 border border-white/90 rounded-2xl text-xs sm:text-sm font-black transition flex items-center gap-1.5 shadow-xs cursor-pointer shrink-0 active:scale-95"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 text-sky-600 font-black" />
             <span>إضافة واجب جديد</span>
           </motion.button>
         )}
       </div>
 
-      {/* Class filter dropdown button (الافتراضي جميع الفصول) */}
-      <div className="flex items-center">
+      {/* Filters Bar: Class Filter & Due Date Sort Filter */}
+      <div className="flex items-center justify-between gap-2.5 flex-wrap">
         <ClassFilterDropdown
           selectedClass={selectedClassFilter}
           onSelectClass={setSelectedClassFilter}
         />
+
+        {/* Due Date Sort Filter */}
+        <div className="relative inline-flex items-center gap-1.5">
+          <select
+            value={dueDateSort}
+            onChange={(e) => setDueDateSort(e.target.value as 'desc' | 'asc')}
+            className="py-2 px-3 bg-white/80 hover:bg-white text-slate-800 border border-white/90 rounded-2xl text-xs font-bold shadow-2xs focus:outline-none cursor-pointer transition"
+          >
+            <option value="desc">تاريخ التسليم: الأحدث إلى الأقدم (الأكبر للأصغر)</option>
+            <option value="asc">تاريخ التسليم: الأقدم إلى الأحدث (الأصغر للأكبر)</option>
+          </select>
+        </div>
       </div>
 
       {/* Homework Cards List */}
@@ -728,20 +749,22 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ duration: 0.2, delay: idx * 0.03 }}
-                className={`rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all flex flex-col justify-between relative overflow-hidden group shadow-2xs hover:shadow-xs space-y-2.5 ${
+                className={`rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 border transition-all flex flex-col justify-between relative overflow-hidden group shadow-xs space-y-2.5 glass-subject-vessel ${
                   isClosed
-                    ? 'bg-rose-50/20 border-rose-200/80 hover:border-rose-300'
+                    ? 'border-white/60 opacity-80'
                     : hasStudentSubmission
-                    ? 'bg-emerald-50/20 border-emerald-300/80'
-                    : 'bg-white border-slate-200/90 hover:border-purple-300'
+                    ? 'border-emerald-300/80 ring-1 ring-emerald-500/20'
+                    : 'border-white/90 hover:border-white'
                 }`}
               >
+                {/* Specular Highlight */}
+                <div className="absolute top-0 inset-x-4 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
                 {/* Top line: Date & Status Badges */}
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-100 text-[11px] font-bold">
                       <Calendar className="w-3.5 h-3.5 text-purple-600" />
-                      <span>تاريخ الواجب: {hw.dueDate}</span>
+                      <span>{formatGregorianNumericWithDay(hw.dueDate) || hw.dueDate}</span>
                     </div>
 
                     {isClosed ? (
@@ -1090,13 +1113,13 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                             }`}
                             title={
                               deadlinePassed
-                                ? 'انتهت مدة التسليم، يمكنك الآن إنهاء الواجب ليظهر كمنتهي للطلاب'
-                                : `يتفعل هذا الزر تلقائياً بعد انتهاء تاريخ التسليم (${hw.dueDate})`
+                                ? 'يمكنك الآن إنهاء الواجب ليظهر كمنتهي للطلاب'
+                                : `يتفعل هذا الزر بحلول تاريخ التسليم (${formatGregorianNumericWithDay(hw.dueDate) || hw.dueDate})`
                             }
                           >
                             <Clock className={`w-3 h-3 ${deadlinePassed ? 'text-white' : 'text-slate-400'}`} />
                             <span>
-                              {deadlinePassed ? 'إنهاء الواجب' : 'إنهاء الواجب (يتفعل بعد انتهاء المدة)'}
+                              {deadlinePassed ? 'إنهاء الواجب' : 'إنهاء الواجب'}
                             </span>
                           </button>
                         )}
@@ -1511,39 +1534,15 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                       )}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-purple-200 hover:border-purple-500 bg-white/80 hover:bg-purple-50/40 rounded-xl cursor-pointer transition text-center group">
-                        <Camera className="w-5 h-5 text-purple-600 mb-1 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-bold text-purple-900">الكاميرا</span>
-                        <span className="text-[9px] text-slate-400">تصوير مباشر</span>
+                    <div>
+                      <label className="flex items-center justify-center gap-2 py-3 px-4 border-2 border-dashed border-purple-200 hover:border-purple-500 bg-white/80 hover:bg-purple-50/40 rounded-2xl cursor-pointer transition text-center group active:scale-95 shadow-2xs">
+                        <Paperclip className="w-5 h-5 text-purple-600 group-hover:scale-110 transition-transform" />
+                        <span className="text-xs font-bold text-slate-800">
+                          إرفاق ملف الحل النموذجي (صورة / كاميرا / PDF)
+                        </span>
                         <input
                           type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleTeacherFileSelect}
-                          className="hidden"
-                        />
-                      </label>
-
-                      <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-purple-200 hover:border-purple-500 bg-white/80 hover:bg-purple-50/40 rounded-xl cursor-pointer transition text-center group">
-                        <ImageIcon className="w-5 h-5 text-indigo-600 mb-1 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-bold text-indigo-900">الصور</span>
-                        <span className="text-[9px] text-slate-400">ألبوم الصور</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleTeacherFileSelect}
-                          className="hidden"
-                        />
-                      </label>
-
-                      <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-purple-200 hover:border-purple-500 bg-white/80 hover:bg-purple-50/40 rounded-xl cursor-pointer transition text-center group">
-                        <UploadCloud className="w-5 h-5 text-slate-600 mb-1 group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-bold text-slate-900">ملف PDF</span>
-                        <span className="text-[9px] text-slate-400">مستند جاهز</span>
-                        <input
-                          type="file"
-                          accept="application/pdf,.pdf"
+                          accept="image/*,application/pdf,.pdf"
                           onChange={handleTeacherFileSelect}
                           className="hidden"
                         />

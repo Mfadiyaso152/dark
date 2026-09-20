@@ -34,10 +34,10 @@ export const ClassFilterDropdown: React.FC<ClassFilterDropdownProps> = ({
         <select
           value={selectedClass}
           onChange={(e) => onSelectClass(e.target.value)}
-          className={`appearance-none px-3.5 py-2.5 sm:px-4 sm:py-3 pr-9 pl-8 rounded-2xl border transition-all font-bold text-xs sm:text-sm cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-purple-500 ${
+          className={`appearance-none px-3.5 py-2.5 sm:px-4 sm:py-2.5 pr-9 pl-8 rounded-2xl border transition-all font-black text-xs sm:text-sm cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-sky-500/30 glass-subject-vessel ${
             selectedClass !== 'all'
-              ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-              : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50'
+              ? 'text-slate-950 font-black border-white ring-1 ring-sky-500/20'
+              : 'text-slate-800 border-white/85 hover:bg-white/60'
           }`}
           title={t('choose_class', 'اختر الفصل')}
           aria-label={t('choose_class', 'اختر الفصل')}
@@ -54,10 +54,10 @@ export const ClassFilterDropdown: React.FC<ClassFilterDropdownProps> = ({
 
         {/* Icons inside the select button */}
         <div className={`absolute ${isRTL ? 'right-3' : 'left-3'} pointer-events-none flex items-center`}>
-          <Filter className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-sky-400' : 'text-slate-400'}`} />
+          <Filter className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-sky-600' : 'text-slate-500'}`} />
         </div>
         <div className={`absolute ${isRTL ? 'left-3' : 'right-3'} pointer-events-none flex items-center`}>
-          <ChevronDown className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-slate-300' : 'text-slate-400'}`} />
+          <ChevronDown className={`w-3.5 h-3.5 ${selectedClass !== 'all' ? 'text-slate-700' : 'text-slate-500'}`} />
         </div>
       </div>
     </div>

@@ -1,3 +1,5 @@
+import { parseDateParts } from './utils/dateFormatter';
+
 export type UserRole = 'student' | 'supervisor' | 'teacher';
 
 export interface UserJobOption {
@@ -232,29 +234,16 @@ export interface Homework {
 }
 
 export function isHomeworkDeadlinePassed(dueDate?: string): boolean {
-  if (!dueDate) return false;
-  const clean = dueDate.trim();
+  if (!dueDate) return true;
+  const parts = parseDateParts(dueDate);
+  if (!parts) return true;
+
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const todayStr = `${year}-${month}-${day}`;
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  const dueStart = new Date(parts.year, parts.month - 1, parts.day, 0, 0, 0, 0).getTime();
 
-  const match = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (match) {
-    const formattedDue = `${match[1]}-${String(match[2]).padStart(2, '0')}-${String(match[3]).padStart(2, '0')}`;
-    return todayStr > formattedDue;
-  }
-
-  try {
-    const parsed = new Date(clean);
-    if (!isNaN(parsed.getTime())) {
-      parsed.setHours(23, 59, 59, 999);
-      return Date.now() > parsed.getTime();
-    }
-  } catch {}
-
-  return false;
+  // يتفعل زر الإنهاء بحلول تاريخ التسليم أو بعده (اليوم نفسه أو بعده)
+  return todayStart >= dueStart;
 }
 
 export interface SubjectFeatureControl {

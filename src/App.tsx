@@ -30,7 +30,7 @@ import {
 } from './utils/routes';
 import { useAuth, resolveStudentFullName } from './context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
-import { db, doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc } from './lib/firebase';
+import { db, doc, setDoc, getDoc, getDocs, collection, onSnapshot, deleteDoc, writeBatch } from './lib/firebase';
 import {
   safeSetItem,
   safeGetItem,
@@ -132,7 +132,7 @@ export default function App() {
     return INITIAL_BANNER_SETTINGS;
   });
 
-  const [adminInitialTab, setAdminInitialTab] = useState<'stats' | 'users' | 'activity' | 'banners'>('stats');
+  const [adminInitialTab, setAdminInitialTab] = useState<'stats' | 'users' | 'banners'>('stats');
 
   // Instant recovery from IndexedDB on startup (guarantees banners load instantly even if localStorage is empty or cleared)
   useEffect(() => {
@@ -387,16 +387,19 @@ export default function App() {
     setBanners(newBanners);
     safeSetItem('thanaweya_banners_v1', JSON.stringify(newBanners));
 
-    // Detect deleted banners from collection
-    for (const prevB of banners) {
-      if (!currentMap.has(prevB.id)) {
-        await handleDeleteBanner(prevB.id);
-      }
-    }
+    try {
+      const batch = writeBatch(db);
 
-    // Upsert remaining/new banners in collection
-    for (const b of newBanners) {
-      try {
+      // Detect deleted banners from collection and batch delete them
+      for (const prevB of banners) {
+        if (!currentMap.has(prevB.id)) {
+          const bannerRef = doc(db, 'banners', prevB.id);
+          batch.delete(bannerRef);
+        }
+      }
+
+      // Upsert remaining/new banners in collection
+      for (const b of newBanners) {
         const payload = sanitizeForFirestore({
           ...b,
           title: b.title !== undefined ? String(b.title).trim() : '',
@@ -405,10 +408,13 @@ export default function App() {
           isDeleted: false,
           updatedAt: new Date().toISOString()
         });
-        await setDoc(doc(db, 'banners', b.id), payload, { merge: true });
-      } catch (err) {
-        console.error('Failed to sync banner to Firestore:', err);
+        const bannerRef = doc(db, 'banners', b.id);
+        batch.set(bannerRef, payload, { merge: true });
       }
+
+      await batch.commit();
+    } catch (err) {
+      console.error('Failed to sync banners batch to Firestore:', err);
     }
   };
 
@@ -766,25 +772,38 @@ export default function App() {
     fetchCloudProgress();
   }, [userStorageKey, user?.id]);
 
-  // Sync progress safely
+  // Debounced safe cloud sync for user progress
   useEffect(() => {
-    if (userStorageKey && progress && Array.isArray(progress.completedLessonIds)) {
-      safeSetItem(userStorageKey, JSON.stringify(progress));
+    if (!userStorageKey || !progress || !Array.isArray(progress.completedLessonIds)) return;
 
-      if (user?.id) {
-        try {
-          const docRef = doc(db, 'userProgress', user.id);
-          setDoc(docRef, {
-            email: user.email,
-            completedLessonIds: progress.completedLessonIds,
-            completedHomeworkIds: progress.completedHomeworkIds || [],
-            updatedAt: new Date().toISOString()
-          }, { merge: true }).catch((err) => console.warn('Firestore sync note:', err));
-        } catch (err) {
-          console.warn('Firestore sync catch:', err);
+    // LocalStorage immediate caching
+    safeSetItem(userStorageKey, JSON.stringify(progress));
+
+    if (!user?.id && !user?.email) return;
+
+    const timer = setTimeout(() => {
+      try {
+        const docKey = user.id || user.email?.toLowerCase().replace(/[.#$/[\]]/g, '_');
+        if (docKey) {
+          const docRef = doc(db, 'userProgress', docKey);
+          setDoc(
+            docRef,
+            {
+              userId: user.id || docKey,
+              email: user.email || '',
+              completedLessonIds: progress.completedLessonIds || [],
+              completedHomeworkIds: progress.completedHomeworkIds || [],
+              updatedAt: new Date().toISOString()
+            },
+            { merge: true }
+          ).catch((err) => console.warn('Firestore progress sync note:', err));
         }
+      } catch (err) {
+        console.warn('Firestore sync catch:', err);
       }
-    }
+    }, 600);
+
+    return () => clearTimeout(timer);
   }, [progress, userStorageKey, user?.id, user?.email]);
 
   // Sync lessons safely to localStorage (stripping heavy attachments from cache)
@@ -1524,11 +1543,6 @@ export default function App() {
         : [...current, id];
       const newProgress = { ...prev, completedHomeworkIds: updated };
       safeSetItem(userStorageKey, JSON.stringify(newProgress));
-
-      if (user?.email) {
-        const safeEmail = user.email.toLowerCase().replace(/[.#$/[\]]/g, '_');
-        setDoc(doc(db, 'user_progress', safeEmail), newProgress, { merge: true }).catch(console.error);
-      }
       return newProgress;
     });
   };
@@ -1712,7 +1726,28 @@ export default function App() {
                     />
                   ) : (
                     /* All Subjects Grid */
-                    <div className="space-y-4 md:space-y-6">
+                    <div className="relative space-y-4 md:space-y-6">
+                      {/* Elegant Ambient Mesh Backdrop behind full Home View (behind banner, search, and subjects down to footer) */}
+                      <div 
+                        className="absolute -inset-4 sm:-inset-6 md:-inset-8 -z-10 rounded-[2.5rem] md:rounded-[3.5rem] pointer-events-none overflow-hidden"
+                        aria-hidden="true"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-b from-sky-500/[0.05] via-indigo-500/[0.04] to-slate-200/25 backdrop-blur-[2px]" />
+                        {/* Soft atmospheric gradient orbs matching the platform palette */}
+                        <div className="absolute -top-16 -right-16 w-80 h-80 rounded-full bg-sky-400/[0.10] blur-3xl" />
+                        <div className="absolute top-1/3 -left-20 w-96 h-96 rounded-full bg-indigo-400/[0.08] blur-3xl" />
+                        <div className="absolute top-2/3 right-1/4 w-80 h-80 rounded-full bg-cyan-400/[0.08] blur-3xl" />
+                        <div className="absolute -bottom-10 left-1/4 w-72 h-72 rounded-full bg-purple-400/[0.07] blur-3xl" />
+                        {/* Delicate micro grid texture for educational sophistication */}
+                        <div 
+                          className="absolute inset-0 opacity-[0.45] mix-blend-multiply"
+                          style={{
+                            backgroundImage: `radial-gradient(rgba(15, 23, 42, 0.07) 1px, transparent 1px)`,
+                            backgroundSize: '24px 24px'
+                          }}
+                        />
+                      </div>
+
                       {/* Home Banner Slider - مربع بحواف ناعمة جداً للإعلانات والبنايات قبل المواد */}
                       <HomeBannerSlider
                         banners={banners}
@@ -1726,13 +1761,13 @@ export default function App() {
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           placeholder="ابحث عن مادة..."
-                          className="w-full py-3.5 sm:py-4 pr-11 md:pr-12 pl-4 bg-white border border-slate-200/90 rounded-2xl md:rounded-3xl text-xs md:text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-2xs transition"
+                          className="w-full py-3.5 sm:py-4 pr-11 md:pr-12 pl-4 bg-white/90 backdrop-blur-md border border-slate-200/90 rounded-2xl md:rounded-3xl text-xs md:text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-2xs transition"
                         />
                         <Search className="w-4 h-4 md:w-5 md:h-5 text-slate-400 absolute right-4 top-4 sm:top-4.5" />
                       </div>
 
                       {/* 2-Column Responsive Subject Grid */}
-                      <div className="grid grid-cols-2 gap-3.5 sm:gap-4.5 md:gap-5 w-full">
+                      <div className="grid grid-cols-2 gap-3.5 sm:gap-4.5 md:gap-5 w-full relative z-0">
                         {displayedSubjects.map((sub) => (
                           <SubjectCard
                             key={sub.id}
@@ -1748,7 +1783,7 @@ export default function App() {
                       </div>
 
                       {displayedSubjects.length === 0 && (
-                        <div className="text-center py-12 md:py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+                        <div className="text-center py-12 md:py-16 bg-white/90 backdrop-blur-md rounded-3xl border border-dashed border-slate-200">
                           <p className="text-xs md:text-sm text-slate-400">لا توجد مواد مطابقة للبحث حالياً</p>
                         </div>
                       )}

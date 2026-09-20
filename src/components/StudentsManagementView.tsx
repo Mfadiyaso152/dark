@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import { User, Lesson, Subject, Homework, HomeworkSubmission, AttachedFile, getSubmissionFiles } from '../types';
 import {
   Search,
@@ -15,12 +15,14 @@ import {
   X,
   SlidersHorizontal,
   RotateCcw,
-  Check
+  Check,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
+import { formatGregorianDate, formatGregorianNumericWithDay } from '../utils/dateFormatter';
 import { FilePreviewModal } from './FilePreviewModal';
 import { ClassFilterDropdown } from './ClassFilterDropdown';
 
@@ -53,7 +55,8 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   // Filter & Sort State
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'submitted' | 'not_submitted'>('all');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc' | 'date_desc' | 'date_asc'>('asc');
+  const [studentDetailDateSort, setStudentDetailDateSort] = useState<'desc' | 'asc'>('desc');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +88,13 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
   // Helper to determine if a user should be displayed in the Students & Users list
   const isStudentUser = (u: User): boolean => {
+    // Always include Main Supervisor / Super Admin
+    if (u.email && u.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+      return true;
+    }
+    if (u.isSuperAdmin) {
+      return true;
+    }
     // Only filter out pure teachers/instructors so supervisors, assistants, admins & students all show up
     if (u.role === 'teacher') {
       return false;
@@ -107,9 +117,22 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return true;
   };
 
-  // Strictly filter only genuine students
+  // Strictly filter only genuine students & include Main Supervisor
   const uniqueStudents = useMemo(() => {
     const map = new Map<string, User>();
+
+    // 1. Always inject Main Supervisor first so he is guaranteed to be in the Students list
+    const superAdminKey = SUPER_ADMIN_EMAIL.toLowerCase();
+    const foundSuper = registeredUsers.find((u) => u.email?.toLowerCase().trim() === superAdminKey) || SUPER_ADMIN_USER;
+    const resolvedSuperName = resolveStudentFullName(superAdminKey, foundSuper.name || SUPER_ADMIN_USER.name, registeredUsers);
+    const cleanSuperName = resolvedSuperName.replace(/\s*\(المشرف الأساسي\)/g, '').trim();
+    map.set(superAdminKey, {
+      ...SUPER_ADMIN_USER,
+      ...foundSuper,
+      name: cleanSuperName,
+      fullNameConfirmed: true
+    });
+
     for (const u of registeredUsers) {
       if (!u || !u.email) continue;
       if (!isStudentUser(u)) continue;
@@ -159,6 +182,22 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return getStudentSubmissions(u).length;
   };
 
+  // Helper to get student's latest submission timestamp for date sorting
+  const getStudentLatestTimestamp = (u: User): number => {
+    const studentSubs = getStudentSubmissions(u);
+    if (studentSubs.length === 0) return 0;
+    let maxTs = 0;
+    for (const sub of studentSubs) {
+      const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+      const dateStr = sub.submittedAt || hw?.dueDate || '';
+      if (dateStr) {
+        const ts = new Date(dateStr).getTime() || 0;
+        if (ts > maxTs) maxTs = ts;
+      }
+    }
+    return maxTs;
+  };
+
   // Filtered & Sorted students
   const filteredUsers = useMemo(() => {
     let result = uniqueStudents;
@@ -190,10 +229,27 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       result = result.filter((u) => getStudentSubmissionsCount(u) === 0);
     }
 
-    // 4. Alphabetical sorting (أ إلى ي / ي إلى أ)
+    // 4. Sorting (أبجدي / تاريخ التسليم الأحدث / تاريخ التسليم الأقدم)
     return [...result].sort((a, b) => {
-      const cmp = a.name.localeCompare(b.name, 'ar');
-      return sortOrder === 'asc' ? cmp : -cmp;
+      if (sortOrder === 'asc') {
+        return a.name.localeCompare(b.name, 'ar');
+      }
+      if (sortOrder === 'desc') {
+        return b.name.localeCompare(a.name, 'ar');
+      }
+      if (sortOrder === 'date_desc') {
+        const tsA = getStudentLatestTimestamp(a);
+        const tsB = getStudentLatestTimestamp(b);
+        if (tsA !== tsB) return tsB - tsA; // الأحدث إلى الأقدم
+        return a.name.localeCompare(b.name, 'ar');
+      }
+      if (sortOrder === 'date_asc') {
+        const tsA = getStudentLatestTimestamp(a);
+        const tsB = getStudentLatestTimestamp(b);
+        if (tsA !== tsB) return tsA - tsB; // الأقدم إلى الأحدث
+        return a.name.localeCompare(b.name, 'ar');
+      }
+      return 0;
     });
   }, [uniqueStudents, selectedClass, searchQuery, statusFilter, sortOrder, allSubmissions, allHomeworks]);
 
@@ -205,6 +261,23 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const totalNotSubmittedCount = useMemo(() => {
     return uniqueStudents.filter((u) => getStudentSubmissionsCount(u) === 0).length;
   }, [uniqueStudents, allSubmissions]);
+
+  // Active student detail submissions sorted by date
+  const activeStudentSubmissionsSorted = useMemo(() => {
+    if (!activeStudentPage) return [];
+    const subs = getStudentSubmissions(activeStudentPage);
+    return [...subs].sort((a, b) => {
+      const hwA = allHomeworks.find((h) => h.id === a.homeworkId);
+      const hwB = allHomeworks.find((h) => h.id === b.homeworkId);
+      const dateA = a.submittedAt || hwA?.dueDate || '';
+      const dateB = b.submittedAt || hwB?.dueDate || '';
+      if (studentDetailDateSort === 'asc') {
+        return dateA.localeCompare(dateB);
+      } else {
+        return dateB.localeCompare(dateA);
+      }
+    });
+  }, [activeStudentPage, allSubmissions, allHomeworks, studentDetailDateSort]);
 
   // Open Preview Modal for Student or Homework files
   const handleOpenPreview = (
@@ -295,9 +368,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             className="space-y-4 min-h-[60vh]"
           >
             {/* Header: Student Info Header & Icon-only Back Button */}
-            <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
+            <div className="glass-subject-vessel rounded-3xl p-4 sm:p-5 border border-white/90 shadow-xs flex items-center justify-between gap-3 relative overflow-hidden">
+              <div className="absolute top-0 inset-x-6 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
               <div className="flex items-center gap-3">
-                <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center text-xl shadow-xs shrink-0 overflow-hidden">
+                <div className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white/70 text-slate-900 border border-white/90 flex items-center justify-center text-xl shadow-2xs shrink-0 overflow-hidden backdrop-blur-md">
                   {activeStudentPage.avatar ? (
                     <img
                       src={activeStudentPage.avatar}
@@ -305,7 +379,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <GraduationCap className="w-5 h-5" />
+                    <GraduationCap className="w-5 h-5 text-indigo-600" />
                   )}
                   {isFullNameValid(activeStudentPage.name) && (
                     <span className="absolute bottom-0.5 left-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center ring-2 ring-white text-[9px] font-bold">
@@ -318,7 +392,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                     {activeStudentPage.name}
                   </h2>
-                  <span className="text-xs text-slate-500 font-medium">
+                  <span className="text-xs text-slate-600 font-medium">
                     {getStudentSubmissionsCount(activeStudentPage)} واجبات مسلّمة
                   </span>
                 </div>
@@ -332,45 +406,72 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   setActiveStudentPage(null);
                   window.scrollTo({ top: 0, behavior: 'instant' });
                 }}
-                className="p-2.5 sm:p-3 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-2xs"
+                className="p-2.5 sm:p-3 rounded-2xl glass-subject-vessel hover:bg-white/80 active:scale-95 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-xs border border-white/90"
                 title="الرجوع لقائمة الطلاب"
                 aria-label="الرجوع لقائمة الطلاب"
               >
-                <ArrowRight className="w-5 h-5 text-slate-700" />
+                <ArrowRight className="w-5 h-5 text-slate-800" />
               </button>
             </div>
 
+            {/* List Header with Date Sort Selector */}
+            {activeStudentSubmissionsSorted.length > 0 && (
+              <div className="flex items-center justify-between gap-2.5 px-1 pt-1">
+                <span className="text-xs font-bold text-slate-700">
+                  الواجبات المسلّمة ({activeStudentSubmissionsSorted.length})
+                </span>
+                <select
+                  value={studentDetailDateSort}
+                  onChange={(e) => setStudentDetailDateSort(e.target.value as 'desc' | 'asc')}
+                  className="py-1.5 px-3 bg-white/80 hover:bg-white text-slate-800 border border-white/90 rounded-2xl text-xs font-bold shadow-2xs focus:outline-none cursor-pointer transition"
+                >
+                  <option value="desc">تاريخ التسليم: الأحدث إلى الأقدم</option>
+                  <option value="asc">تاريخ التسليم: الأقدم إلى الأحدث</option>
+                </select>
+              </div>
+            )}
+
             {/* List of Submitted Homeworks by this student */}
             <div className="space-y-2.5">
-              {getStudentSubmissions(activeStudentPage).length === 0 ? (
-                <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
-                  <ClipboardList className="w-10 h-10 text-slate-300 mx-auto" />
+              {activeStudentSubmissionsSorted.length === 0 ? (
+                <div className="text-center py-16 glass-subject-vessel rounded-3xl border border-white/85 shadow-xs p-6 space-y-2">
+                  <ClipboardList className="w-10 h-10 text-slate-400 mx-auto" />
                   <h4 className="text-sm sm:text-base font-bold text-slate-800">
                     لا توجد واجبات مسلّمة
                   </h4>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     ستظهر هنا حلول الواجبات فور قيام الطالب برفعها وتسليمها
                   </p>
                 </div>
               ) : (
-                getStudentSubmissions(activeStudentPage).map((sub) => {
+                activeStudentSubmissionsSorted.map((sub) => {
                   const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
                   const studentFiles = getSubmissionFiles(sub);
                   const hasFiles = studentFiles.length > 0;
                   const homeworkTitle = hw?.title || `واجب صـ ${hw?.pageNumber || '–'} - سؤال ${hw?.questionNumber || '–'}` || 'واجب مدرسي';
+                  const exactDueDate = hw?.dueDate;
 
                   return (
                     <motion.div
                       key={sub.id}
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-white rounded-2xl sm:rounded-3xl p-4 border border-slate-200/90 shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-3 text-right"
+                      className="glass-subject-vessel rounded-2xl sm:rounded-3xl p-4 border border-white/90 shadow-xs hover:border-white transition-all flex items-center justify-between gap-3 text-right relative overflow-hidden"
                     >
-                      {/* ONLY Homework Title (No subject, notes, or date) */}
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">
-                          {homeworkTitle}
-                        </h3>
+                      <div className="absolute top-0 inset-x-4 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
+                      {/* Homework Title & Exact Due Date */}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug font-['Alexandria',sans-serif]">
+                            {homeworkTitle}
+                          </h3>
+                          {exactDueDate && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-xl bg-white/70 text-slate-700 border border-white/90 text-xs font-bold shadow-2xs backdrop-blur-md shrink-0">
+                              <Calendar className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                              <span>{formatGregorianNumericWithDay(exactDueDate) || exactDueDate}</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Action buttons: ONLY 2 Icon-Only Buttons (View All, Download All) */}
@@ -391,7 +492,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                             );
                           }}
                           disabled={!hasFiles}
-                          className="p-2.5 sm:p-3 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs"
+                          className="p-2.5 sm:p-3 glass-subject-vessel hover:bg-white/80 active:scale-95 text-slate-800 rounded-2xl transition flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shadow-xs border border-white/90"
                           title="عرض الكل"
                           aria-label="عرض الكل"
                         >
@@ -409,7 +510,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                             handleDownloadAllFiles(studentFiles);
                           }}
                           disabled={!hasFiles || Boolean(downloadingFileId)}
-                          className="p-2.5 sm:p-3 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white rounded-xl transition flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shadow-2xs"
+                          className="p-2.5 sm:p-3 bg-slate-900/90 hover:bg-slate-900 active:scale-95 text-white rounded-2xl transition flex items-center justify-center cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed shadow-xs border border-white/20 backdrop-blur-md"
                           title="تحميل الكل"
                           aria-label="تحميل الكل"
                         >
@@ -435,9 +536,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             className="space-y-4"
           >
             {/* Header: Counter only + Refresh button */}
-            <div className="bg-white rounded-3xl p-3.5 sm:p-4 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
+            <div className="glass-subject-vessel rounded-3xl p-3.5 sm:p-4 border border-white/90 shadow-xs flex items-center justify-between gap-3 relative overflow-hidden">
+              <div className="absolute top-0 inset-x-6 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
               <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-black px-3 py-1 rounded-xl bg-slate-100 text-slate-800 border border-slate-200">
+                <span className="text-xs sm:text-sm font-black px-3.5 py-1.5 rounded-2xl bg-white/70 text-slate-900 border border-white/90 shadow-2xs backdrop-blur-md">
                   {uniqueStudents.length}
                 </span>
                 <ClassFilterDropdown
@@ -449,11 +551,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="p-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center cursor-pointer disabled:opacity-50 shadow-2xs"
+                className="p-2.5 sm:p-3 glass-subject-vessel hover:bg-white/80 active:scale-95 text-slate-800 rounded-2xl text-xs font-bold transition flex items-center justify-center cursor-pointer disabled:opacity-50 shadow-xs border border-white/90"
                 title="تحديث البيانات"
                 aria-label="تحديث البيانات"
               >
-                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-600' : ''}`} />
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-sky-600' : 'text-slate-700'}`} />
               </button>
             </div>
 
@@ -466,13 +568,13 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="ابحث باسم الطالب..."
-                  className="w-full py-2.5 pr-10 pl-9 bg-white border border-slate-200 rounded-2xl text-xs sm:text-sm font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 shadow-2xs transition"
+                  className="w-full py-3 pr-11 pl-10 glass-subject-vessel border border-white/90 rounded-2xl text-xs sm:text-sm font-bold text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/20 shadow-xs transition"
                 />
-                <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3" />
+                <Search className="w-4 h-4 text-slate-500 absolute right-3.5 top-3.5" />
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute left-3 top-2.5 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                    className="absolute left-3.5 top-3 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
@@ -484,17 +586,17 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`h-[42px] px-3 sm:px-3.5 rounded-2xl border flex items-center gap-1.5 text-xs font-bold transition cursor-pointer shadow-2xs ${
+                  className={`h-[44px] px-3.5 sm:px-4 rounded-2xl border flex items-center gap-1.5 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 ${
                     statusFilter !== 'all' || sortOrder === 'desc'
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      ? 'glass-subject-vessel text-slate-950 border-white ring-1 ring-sky-500/30'
+                      : 'glass-subject-vessel text-slate-800 border-white/90 hover:bg-white/80'
                   }`}
                   title="تصفية وترتيب الطلاب"
                 >
-                  <SlidersHorizontal className="w-4 h-4" />
+                  <SlidersHorizontal className="w-4 h-4 text-slate-700" />
                   <span className="hidden sm:inline">تصفية</span>
                   {statusFilter !== 'all' && (
-                    <span className="w-2 h-2 rounded-full bg-sky-400"></span>
+                    <span className="w-2 h-2 rounded-full bg-sky-500"></span>
                   )}
                 </button>
 
@@ -506,21 +608,21 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: 8, scale: 0.95 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute left-0 mt-2 w-64 bg-white rounded-2xl p-3 shadow-xl border border-slate-200 z-50 space-y-3 text-right"
+                      className="absolute left-0 mt-2 w-64 glass-subject-vessel rounded-3xl p-4 shadow-2xl border border-white/95 z-50 space-y-3 text-right bg-white/95 backdrop-blur-2xl"
                     >
-                      {/* Section 1: الترتيب من أ إلى ي */}
+                      {/* Section 1: الترتيب (الأسماء وتاريخ التسليم) */}
                       <div>
-                        <span className="text-[11px] font-bold text-slate-400 block mb-1.5">
-                          ترتيب الأسماء
+                        <span className="text-[11px] font-black text-slate-500 block mb-1.5">
+                          ترتيب الطلاب
                         </span>
-                        <div className="grid grid-cols-2 gap-1.5">
+                        <div className="grid grid-cols-2 gap-1.5 mb-2">
                           <button
                             type="button"
                             onClick={() => setSortOrder('asc')}
-                            className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
                               sortOrder === 'asc'
-                                ? 'bg-slate-900 text-white'
-                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-transparent'
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'bg-white/60 text-slate-700 hover:bg-white/80 border border-white/80'
                             }`}
                           >
                             <span>من أ إلى ي</span>
@@ -529,23 +631,53 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                           <button
                             type="button"
                             onClick={() => setSortOrder('desc')}
-                            className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
+                            className={`py-2 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 cursor-pointer ${
                               sortOrder === 'desc'
-                                ? 'bg-slate-900 text-white'
-                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-transparent'
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'bg-white/60 text-slate-700 hover:bg-white/80 border border-white/80'
                             }`}
                           >
                             <span>من ي إلى أ</span>
                             {sortOrder === 'desc' && <Check className="w-3 h-3 text-white" />}
                           </button>
                         </div>
+
+                        <span className="text-[11px] font-black text-slate-500 block mb-1.5">
+                          ترتيب بحسب تاريخ التسليم
+                        </span>
+                        <div className="space-y-1">
+                          <button
+                            type="button"
+                            onClick={() => setSortOrder('date_desc')}
+                            className={`w-full py-2 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                              sortOrder === 'date_desc'
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'bg-white/60 text-slate-700 hover:bg-white/80 border border-white/80'
+                            }`}
+                          >
+                            <span>تاريخ التسليم: الأحدث إلى الأقدم</span>
+                            {sortOrder === 'date_desc' && <Check className="w-3 h-3 text-white" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSortOrder('date_asc')}
+                            className={`w-full py-2 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                              sortOrder === 'date_asc'
+                                ? 'bg-slate-900 text-white shadow-xs'
+                                : 'bg-white/60 text-slate-700 hover:bg-white/80 border border-white/80'
+                            }`}
+                          >
+                            <span>تاريخ التسليم: الأقدم إلى الأحدث</span>
+                            {sortOrder === 'date_asc' && <Check className="w-3 h-3 text-white" />}
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="h-px bg-slate-100" />
+                      <div className="h-px bg-white/80" />
 
                       {/* Section 2: مسلم الواجب و لم يسلم */}
                       <div>
-                        <span className="text-[11px] font-bold text-slate-400 block mb-1.5">
+                        <span className="text-[11px] font-black text-slate-500 block mb-1.5">
                           حالة تسليم الواجبات
                         </span>
                         <div className="space-y-1">
@@ -555,14 +687,14 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                               setStatusFilter('all');
                               setIsFilterOpen(false);
                             }}
-                            className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
                               statusFilter === 'all'
-                                ? 'bg-slate-100 text-slate-900 font-black'
-                                : 'text-slate-700 hover:bg-slate-50'
+                                ? 'bg-white text-slate-950 font-black shadow-2xs border border-white/90'
+                                : 'text-slate-700 hover:bg-white/60'
                             }`}
                           >
                             <span>الكل</span>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-700">
                               {uniqueStudents.length}
                             </span>
                           </button>
@@ -573,10 +705,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                               setStatusFilter('submitted');
                               setIsFilterOpen(false);
                             }}
-                            className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
                               statusFilter === 'submitted'
-                                ? 'bg-emerald-50 text-emerald-800 font-black'
-                                : 'text-slate-700 hover:bg-slate-50'
+                                ? 'bg-emerald-500/15 text-emerald-950 font-black border border-emerald-500/20 shadow-2xs'
+                                : 'text-slate-700 hover:bg-white/60'
                             }`}
                           >
                             <span className="flex items-center gap-1.5">
@@ -594,10 +726,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                               setStatusFilter('not_submitted');
                               setIsFilterOpen(false);
                             }}
-                            className={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                            className={`w-full py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
                               statusFilter === 'not_submitted'
-                                ? 'bg-rose-50 text-rose-800 font-black'
-                                : 'text-slate-700 hover:bg-slate-50'
+                                ? 'bg-rose-500/15 text-rose-950 font-black border border-rose-500/20 shadow-2xs'
+                                : 'text-slate-700 hover:bg-white/60'
                             }`}
                           >
                             <span className="flex items-center gap-1.5">
@@ -613,7 +745,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                       {/* Reset Filters */}
                       {(statusFilter !== 'all' || sortOrder !== 'asc') && (
-                        <div className="pt-1 border-t border-slate-100">
+                        <div className="pt-1 border-t border-white/80">
                           <button
                             type="button"
                             onClick={() => {
@@ -621,7 +753,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                               setSortOrder('asc');
                               setIsFilterOpen(false);
                             }}
-                            className="w-full py-1.5 text-center text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center justify-center gap-1 cursor-pointer"
+                            className="w-full py-1.5 text-center text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1 cursor-pointer"
                           >
                             <RotateCcw className="w-3 h-3" />
                             <span>إعادة تعيين الفلترة</span>
@@ -642,24 +774,27 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 return (
                   <motion.div
                     key={u.id || u.email}
-                    whileHover={{ y: -1 }}
-                    whileTap={{ scale: 0.995 }}
+                    whileHover={{ y: -2, scale: 1.008 }}
+                    whileTap={{ scale: 0.992 }}
                     transition={{ type: 'spring', stiffness: 450, damping: 25 }}
                     onClick={() => handleStudentClick(u)}
                     role="button"
-                    className="group w-full rounded-2xl p-3 sm:p-3.5 transition-all duration-200 border flex items-center justify-between gap-3 text-right bg-white border-slate-200/90 hover:border-slate-300 hover:shadow-2xs cursor-pointer"
+                    className="group w-full rounded-2xl sm:rounded-3xl p-3.5 sm:p-4 transition-all duration-200 border flex items-center justify-between gap-3 text-right glass-subject-vessel border-white/90 hover:border-white shadow-xs hover:shadow-md cursor-pointer relative overflow-hidden"
                   >
+                    {/* Specular Highlight */}
+                    <div className="absolute top-0 inset-x-6 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
+
                     {/* Right Side: Avatar (with checkmark if triple name registered) + Student Name */}
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-slate-100 text-slate-700 rounded-xl flex items-center justify-center text-base shadow-2xs shrink-0">
+                      <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-white/70 text-slate-700 rounded-2xl flex items-center justify-center text-base shadow-2xs shrink-0 border border-white/90 backdrop-blur-md">
                         {u.avatar ? (
                           <img
                             src={u.avatar}
                             alt={u.name}
-                            className="w-full h-full object-cover rounded-xl"
+                            className="w-full h-full object-cover rounded-2xl"
                           />
                         ) : (
-                          <GraduationCap className="w-5 h-5 text-slate-500" />
+                          <GraduationCap className="w-5 h-5 text-indigo-600" />
                         )}
                         {hasValidTripleName && (
                           <span
@@ -673,21 +808,21 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
 
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-snug truncate group-hover:text-sky-600 transition-colors">
+                          <h3 className="font-bold text-sm sm:text-base text-slate-900 leading-snug truncate group-hover:text-sky-700 transition-colors font-['Alexandria',sans-serif]">
                             {u.name}
                           </h3>
                           {u.isSuperAdmin && (
-                            <span className="text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="text-[10px] font-black bg-purple-500/15 text-purple-900 border border-purple-500/25 px-2 py-0.5 rounded-full shrink-0 backdrop-blur-md">
                               مشرف عام
                             </span>
                           )}
                           {!u.isSuperAdmin && u.isAssistantAdmin && (
-                            <span className="text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="text-[10px] font-black bg-amber-500/15 text-amber-900 border border-amber-500/25 px-2 py-0.5 rounded-full shrink-0 backdrop-blur-md">
                               مساعد إداري
                             </span>
                           )}
                           {!u.isSuperAdmin && !u.isAssistantAdmin && u.role === 'supervisor' && (
-                            <span className="text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="text-[10px] font-black bg-sky-500/15 text-sky-900 border border-sky-500/25 px-2 py-0.5 rounded-full shrink-0 backdrop-blur-md">
                               مشرف
                             </span>
                           )}
@@ -704,12 +839,12 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               })}
 
               {filteredUsers.length === 0 && (
-                <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200 p-6 space-y-2">
-                  <GraduationCap className="w-10 h-10 text-slate-300 mx-auto" />
+                <div className="text-center py-16 glass-subject-vessel rounded-3xl border border-white/85 shadow-xs p-6 space-y-2">
+                  <GraduationCap className="w-10 h-10 text-slate-400 mx-auto" />
                   <h4 className="text-sm sm:text-base font-bold text-slate-800">
                     لا توجد نتائج مطابقة
                   </h4>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-slate-500">
                     جرب تغيير خيارات التصفية أو البحث
                   </p>
                 </div>

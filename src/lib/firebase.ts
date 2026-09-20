@@ -23,7 +23,8 @@ import {
   query,
   where,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
 
 // Your web app's Firebase configuration from user
@@ -70,7 +71,8 @@ export {
   query,
   where,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  writeBatch
 };
 export type { FirebaseUser };
 

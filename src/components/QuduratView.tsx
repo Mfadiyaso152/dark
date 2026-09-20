@@ -1,73 +1,72 @@
-import React, { useState } from 'react';
-import { BookOpen, ExternalLink, Sparkles, LogIn, Clock } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import React from 'react';
+import { Lock, Sparkles, BookOpen, ExternalLink, ArrowRight } from 'lucide-react';
+import { motion } from 'motion/react';
 
-export const QuduratView: React.FC = () => {
-  const [showSoonNotice, setShowSoonNotice] = useState(false);
+interface QuduratViewProps {
+  onBackHome?: () => void;
+}
 
-  const handleEnterQudurat = () => {
-    setShowSoonNotice(true);
-  };
-
+export const QuduratView: React.FC<QuduratViewProps> = ({ onBackHome }) => {
   return (
-    <div className="max-w-3xl mx-auto text-right font-['Tajawal',sans-serif] py-8 px-3 space-y-6">
-      {/* Main Card */}
+    <div className="max-w-2xl mx-auto text-right font-['IBM_Plex_Sans_Arabic',sans-serif] py-6 sm:py-10 px-3 space-y-6">
+      {/* Liquid Glass Locked Card */}
       <motion.div
-        initial={{ opacity: 0, scale: 0.97 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200/90 shadow-xs space-y-8"
+        initial={{ opacity: 0, y: 10, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 450, damping: 28 }}
+        className="glass-subject-vessel rounded-[2.5rem] p-6 sm:p-10 text-center space-y-6 relative overflow-hidden shadow-[0_16px_40px_-10px_rgba(15,23,42,0.12)] border border-white/95"
       >
-        {/* Header Badge & Title */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-50 text-indigo-900 border border-indigo-200 text-xs sm:text-sm font-black">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span>منصة اختبارات القدرات العامة</span>
+        {/* Specular Highlight */}
+        <div className="absolute top-0 inset-x-10 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
+
+        {/* Lock Icon in Glass Vessel */}
+        <div className="w-20 h-20 rounded-full bg-white/60 text-slate-900 border border-white/90 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.1),inset_0_2px_3px_0_rgba(255,255,255,1)] backdrop-blur-2xl flex items-center justify-center mx-auto relative overflow-hidden">
+          <div className="absolute top-0 inset-x-3 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent" />
+          <Lock className="w-9 h-9 text-amber-500 animate-pulse" />
+        </div>
+
+        {/* Title and Message */}
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 text-amber-900 border border-amber-500/20 text-xs sm:text-sm font-black backdrop-blur-md">
+            <Sparkles className="w-4 h-4 text-amber-600" />
+            <span>قريباً جداً</span>
           </div>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-            قسم القدرات
+          <h2 className="text-2xl sm:text-3xl font-black font-['Alexandria',sans-serif] text-slate-950">
+            قسم اختبارات القدرات
           </h2>
+          <p className="text-sm sm:text-base font-medium text-slate-600 max-w-md mx-auto leading-relaxed">
+            قسم اختبارات وتدريبات القدرات العامة قيد التطوير والتجهيز حالياً، وسيتوفر لجميع الطلاب والمعلمين قريباً.
+          </p>
         </div>
 
-        {/* Enter Qudurat Button & Notice */}
-        <div className="text-center space-y-4">
-          <button
-            type="button"
-            onClick={handleEnterQudurat}
-            className="py-3.5 px-8 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-black text-sm sm:text-base inline-flex items-center gap-2.5 shadow-md transition cursor-pointer"
-          >
-            <LogIn className="w-5 h-5" />
-            <span>الدخول إلى قسم القدرات</span>
-          </button>
+        {/* Action Button */}
+        {onBackHome && (
+          <div className="pt-2">
+            <button
+              type="button"
+              onClick={onBackHome}
+              className="py-3 px-6 rounded-full glass-subject-vessel text-slate-900 font-black text-xs sm:text-sm inline-flex items-center gap-2 shadow-xs hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
+            >
+              <ArrowRight className="w-4 h-4 text-sky-600" />
+              <span>العودة للصفحة الرئيسية</span>
+            </button>
+          </div>
+        )}
 
-          <AnimatePresence>
-            {showSoonNotice && (
-              <motion.div
-                initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                className="max-w-md mx-auto p-4 bg-amber-50 border border-amber-300 rounded-2xl text-amber-900 text-center font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-sm"
-              >
-                <Clock className="w-5 h-5 text-amber-600 shrink-0" />
-                <span>قريباً التفعيل</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <hr className="border-white/60 my-4" />
 
-        <hr className="border-slate-100 my-4" />
-
-        {/* Al-Moaser Book Section */}
-        <div className="bg-slate-50 rounded-3xl p-6 sm:p-8 border border-slate-200/80 space-y-4">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+        {/* Recommended Resource: Al-Moaser Book in Glass Card */}
+        <div className="glass-subject-vessel rounded-3xl p-5 sm:p-6 text-right space-y-3 border border-white/80">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <div className="w-12 h-12 rounded-2xl bg-white/70 border border-white/90 text-indigo-700 flex items-center justify-center shrink-0 shadow-2xs backdrop-blur-md">
                 <BookOpen className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg sm:text-xl font-black text-slate-900">
-                  كتاب المعاصر 11
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  كتاب المعاصر 11 للقدرات
                 </h3>
+                <span className="text-xs text-slate-500 font-medium">المرجع المعتمد للتدريب</span>
               </div>
             </div>
 
@@ -75,10 +74,10 @@ export const QuduratView: React.FC = () => {
               href="https://www.jarir.com/arabic-books-688126.html"
               target="_blank"
               rel="noopener noreferrer"
-              className="py-2.5 px-5 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white rounded-xl text-xs sm:text-sm font-black inline-flex items-center gap-2 shadow-xs transition cursor-pointer shrink-0"
+              className="py-2.5 px-4 bg-slate-900/90 hover:bg-slate-900 active:scale-95 text-white rounded-2xl text-xs font-bold inline-flex items-center gap-2 shadow-xs transition cursor-pointer shrink-0 backdrop-blur-md border border-white/20"
             >
-              <ExternalLink className="w-4 h-4" />
-              <span>رابط الشراء (مكتبة جرير)</span>
+              <ExternalLink className="w-3.5 h-3.5 text-sky-300" />
+              <span>مكتبة جرير</span>
             </a>
           </div>
         </div>

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Home, Sparkles, GraduationCap, ClipboardCheck, Bell, LogIn, Clock } from 'lucide-react';
+import { Home, Sparkles, GraduationCap, ClipboardCheck, Bell, LogIn, Clock, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerHaptic } from '../utils/haptics';
 
@@ -21,16 +21,15 @@ export const TopNav: React.FC<TopNavProps> = ({
   const { openNotificationsModal, unreadCount } = useNotifications();
   const { t } = useLanguage();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isScrubbing, setIsScrubbing] = useState(false);
+
+  // iOS 26 Press & Scrubbing State
+  const [isPressing, setIsPressing] = useState(false);
+  const [previewTab, setPreviewTab] = useState<TabType | null>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const lastActiveRef = useRef<TabType>(activeTab);
-  const longPressTimerRef = useRef<any>(null);
-  const isHoldingRef = useRef(false);
-
-  useEffect(() => {
-    lastActiveRef.current = activeTab;
-  }, [activeTab]);
+  const pointerIdRef = useRef<number | null>(null);
+  const isPressingRef = useRef(false);
+  const previewTabRef = useRef<TabType | null>(null);
 
   const showNavToast = (msg: string) => {
     setToastMessage(msg);
@@ -62,132 +61,181 @@ export const TopNav: React.FC<TopNavProps> = ({
 
   const showStudents = Boolean(isTeacher || isSupervisorUser);
 
-  const handleTabSelect = (tab: TabType) => {
+  // Navigation Items
+  const navItems = [
+    { id: 'home' as TabType, label: t('home', 'الرئيسية'), icon: Home },
+    { id: 'homeworks' as TabType, label: t('homeworks', 'الواجبات'), icon: ClipboardCheck },
+    { id: 'qudurat' as TabType, label: t('qudurat', 'القدرات'), icon: Sparkles },
+    ...(showStudents ? [{ id: 'students' as TabType, label: t('students', 'الطلاب'), icon: GraduationCap }] : [])
+  ];
+
+  // Final committed navigation (only triggered on finger lift / pointerup)
+  const commitTabSelection = (tab: TabType) => {
+    if (tab === 'qudurat') {
+      triggerHaptic('warning');
+      showNavToast('قسم القدرات قريباً 🔒✨');
+      return;
+    }
+
     if (tab === 'homeworks' && !user) {
       triggerHaptic('warning');
       showNavToast(t('login_required_homeworks', 'يجب تسجيل الدخول أولاً للوصول للواجبات 🔒'));
       setIsAuthModalOpen(true);
       return;
     }
-    if (tab === lastActiveRef.current) return;
-    lastActiveRef.current = tab;
-    triggerHaptic('selection');
-    onTabChange(tab);
-  };
 
-  const handleHomeworksClick = () => {
-    if (!user) {
-      triggerHaptic('warning');
-      showNavToast(t('login_required_homeworks', 'يجب تسجيل الدخول أولاً للوصول للواجبات 🔒'));
-      setIsAuthModalOpen(true);
-      return;
+    if (tab !== activeTab) {
+      triggerHaptic('medium');
+      onTabChange(tab);
+    } else {
+      triggerHaptic('light');
     }
-    handleTabSelect('homeworks');
   };
 
-  // Advanced Touch & Drag Scrubbing across Tabs
+  // Fast coordinate resolution with horizontal interpolation and vertical tolerance
   const getTabFromCoordinates = (clientX: number, clientY: number): TabType | null => {
-    // 1. First check direct element hit
-    const elements = document.elementsFromPoint ? document.elementsFromPoint(clientX, clientY) : [];
-    for (const el of elements) {
-      const tabBtn = el.closest('[data-nav-tab]') as HTMLElement | null;
-      if (tabBtn) {
-        return tabBtn.getAttribute('data-nav-tab') as TabType;
+    if (!containerRef.current) return null;
+    const buttons = Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-nav-tab]'));
+    if (buttons.length === 0) return null;
+
+    // 1. Direct hit with generous vertical tolerance (+/- 45px for natural finger placement)
+    for (const btn of buttons) {
+      const rect = btn.getBoundingClientRect();
+      const inY = clientY >= rect.top - 45 && clientY <= rect.bottom + 45;
+      const inX = clientX >= rect.left && clientX <= rect.right;
+      if (inX && inY) {
+        return btn.getAttribute('data-nav-tab') as TabType;
       }
     }
 
-    // 2. Fallback: Horizontal closest-distance interpolation within container
-    if (containerRef.current) {
-      const buttons = Array.from(containerRef.current.querySelectorAll<HTMLElement>('[data-nav-tab]'));
-      if (buttons.length === 0) return null;
+    // 2. Horizontal clamping: find the nearest tab horizontally
+    let closestTab: TabType | null = null;
+    let minDistance = Infinity;
 
-      let closestTab: TabType | null = null;
-      let minDistance = Infinity;
+    buttons.forEach((btn) => {
+      const rect = btn.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const dist = Math.abs(clientX - centerX);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestTab = btn.getAttribute('data-nav-tab') as TabType;
+      }
+    });
 
-      buttons.forEach((btn) => {
-        const rect = btn.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const dist = Math.abs(clientX - centerX);
-        if (dist < minDistance) {
-          minDistance = dist;
-          closestTab = btn.getAttribute('data-nav-tab') as TabType;
-        }
-      });
-
-      return closestTab;
-    }
-
-    return null;
+    return closestTab;
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    isHoldingRef.current = true;
-    const { clientX, clientY } = e;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
 
-    // Start long-press gesture detection
-    longPressTimerRef.current = setTimeout(() => {
-      if (isHoldingRef.current) {
-        setIsScrubbing(true);
-        triggerHaptic('medium');
-      }
-    }, 180);
+    const targetTab = getTabFromCoordinates(e.clientX, e.clientY);
+    if (!targetTab) return;
 
-    const targetTab = getTabFromCoordinates(clientX, clientY);
-    if (targetTab) {
-      handleTabSelect(targetTab);
+    isPressingRef.current = true;
+    previewTabRef.current = targetTab;
+    setIsPressing(true);
+    setPreviewTab(targetTab);
+    triggerHaptic('light');
+
+    // Capture pointer so all sliding movements track smoothly across the viewport
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      pointerIdRef.current = e.pointerId;
+    } catch (err) {
+      // Ignored if not supported
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isHoldingRef.current) return;
-    setIsScrubbing(true);
+    if (!isPressingRef.current) return;
+
     const targetTab = getTabFromCoordinates(e.clientX, e.clientY);
-    if (targetTab && targetTab !== lastActiveRef.current) {
-      handleTabSelect(targetTab);
+    if (targetTab && targetTab !== previewTabRef.current) {
+      previewTabRef.current = targetTab;
+      setPreviewTab(targetTab);
+      triggerHaptic('selection'); // Subtle iOS selection tick during slide
     }
   };
 
-  const handlePointerUp = () => {
-    isHoldingRef.current = false;
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isPressingRef.current) return;
+    isPressingRef.current = false;
+    setIsPressing(false);
+
+    try {
+      if (pointerIdRef.current !== null) {
+        (e.currentTarget as HTMLElement).releasePointerCapture(pointerIdRef.current);
+      }
+    } catch (err) {
+      // Ignored
     }
-    setIsScrubbing(false);
+    pointerIdRef.current = null;
+
+    const finalTab = previewTabRef.current;
+    setPreviewTab(null);
+
+    // Commit navigation only when finger lifts
+    if (finalTab) {
+      commitTabSelection(finalTab);
+    }
   };
+
+  const handlePointerCancel = (e: React.PointerEvent) => {
+    if (!isPressingRef.current) return;
+    isPressingRef.current = false;
+    setIsPressing(false);
+
+    try {
+      if (pointerIdRef.current !== null) {
+        (e.currentTarget as HTMLElement).releasePointerCapture(pointerIdRef.current);
+      }
+    } catch (err) {
+      // Ignored
+    }
+    pointerIdRef.current = null;
+    setPreviewTab(null);
+  };
+
+  // Which tab is currently visually focused (preview during press, or committed activeTab)
+  const displayedTab = (isPressing && previewTab) ? previewTab : activeTab;
 
   return (
     <>
-      {/* Toast Notification */}
+      {/* iOS Floating Glass Toast Notification */}
       <AnimatePresence>
         {toastMessage && (
           <motion.div
-            initial={{ opacity: 0, y: -16, scale: 0.95 }}
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.95 }}
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-60 bg-slate-900/95 text-white text-xs sm:text-sm px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2 backdrop-blur-2xl font-bold border border-white/20 ring-1 ring-black/10"
+            exit={{ opacity: 0, y: -16, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+            className="fixed top-20 sm:top-22 left-1/2 -translate-x-1/2 z-60 glass-subject-vessel text-slate-900 text-xs sm:text-sm px-6 py-3 rounded-full shadow-[0_16px_40px_-8px_rgba(15,23,42,0.18)] flex items-center gap-2.5 backdrop-blur-2xl font-black border border-white/95"
           >
-            <Clock className="w-4 h-4 text-sky-400 shrink-0 animate-spin" />
+            <Sparkles className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
             <span>{toastMessage}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Floating Conical Beveled Glass Top Navigation Bar */}
-      <header className="sticky top-2 sm:top-4 z-40 px-2 sm:px-4 max-w-5xl mx-auto w-full font-['IBM_Plex_Sans_Arabic',sans-serif]">
+      {/* iOS 26 Floating Liquid Glass Navigation Bar */}
+      <header
+        className="sticky top-0 z-40 w-full px-3 sm:px-6 pt-[calc(env(safe-area-inset-top,0px)+10px)] pb-2 transition-all select-none"
+        dir="rtl"
+      >
         <nav
-          className="glass-conic-bar relative w-full h-15 sm:h-16 px-3 sm:px-5 rounded-full flex items-center justify-between transition-all duration-300"
-          aria-label="التنقل الرئيسي"
+          className="ios26-liquid-glass-nav relative mx-auto max-w-4xl h-14 sm:h-15 px-3 sm:px-4 rounded-full flex items-center justify-between transition-all duration-300"
+          aria-label="شريط التنقل الرئيسي"
         >
           {/* Glass Specular Reflection Highlight Line */}
-          <div className="glass-reflection-sheen" />
+          <div className="ios26-specular-highlight" />
 
           {/* Right side: Notification Bell */}
           <div className="flex items-center justify-start shrink-0 z-10">
             <motion.button
-              whileHover={{ scale: 1.06 }}
-              whileTap={{ scale: 0.94 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={openNotificationsModal}
-              className="relative p-2 sm:p-2.5 rounded-full bg-white/70 hover:bg-white text-slate-700 hover:text-slate-900 border border-slate-200/70 shadow-2xs transition flex items-center justify-center cursor-pointer"
+              className="relative p-2 sm:p-2.5 rounded-full bg-white/40 hover:bg-white/70 text-slate-700 hover:text-slate-950 border border-white/60 shadow-2xs transition flex items-center justify-center cursor-pointer backdrop-blur-lg"
               title={t('notifications', 'الإشعارات')}
               aria-label={t('notifications', 'الإشعارات')}
             >
@@ -200,108 +248,73 @@ export const TopNav: React.FC<TopNavProps> = ({
             </motion.button>
           </div>
 
-          {/* Center: Navigation Tabs directly integrated in Top Nav with Long-Press & Drag Scrubbing */}
+          {/* Center: iOS 26 Interactive Liquid Glass Scrubbing Tabs */}
           <div
             ref={containerRef}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            className="absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-1 sm:gap-2 transition-all duration-200 touch-none select-none"
+            onPointerCancel={handlePointerCancel}
+            className={`absolute left-1/2 -translate-x-1/2 flex items-center justify-center gap-1 sm:gap-2 touch-none select-none transition-transform duration-150 ${
+              isPressing ? 'scale-[0.985]' : 'scale-100'
+            }`}
           >
-            {/* 1. Home */}
-            <button
-              data-nav-tab="home"
-              onClick={() => handleTabSelect('home')}
-              title={t('home', 'الرئيسية')}
-              aria-label={t('home', 'الرئيسية')}
-              className={`relative p-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
-                activeTab === 'home'
-                  ? 'text-white'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
-              }`}
-            >
-              {activeTab === 'home' && (
-                <motion.div
-                  layoutId="top-nav-active-pill"
-                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
-                />
-              )}
-              <Home className="w-6.5 h-6.5 sm:w-5 sm:h-5 relative z-10 shrink-0" />
-              <span className="hidden sm:inline relative z-10">{t('home', 'الرئيسية')}</span>
-            </button>
-
-            {/* 2. Homeworks */}
-            <button
-              data-nav-tab="homeworks"
-              onClick={handleHomeworksClick}
-              title={t('homeworks', 'الواجبات')}
-              aria-label={t('homeworks', 'الواجبات')}
-              className={`relative p-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
-                activeTab === 'homeworks'
-                  ? 'text-white'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
-              }`}
-            >
-              {activeTab === 'homeworks' && (
-                <motion.div
-                  layoutId="top-nav-active-pill"
-                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
-                />
-              )}
-              <ClipboardCheck className="w-6.5 h-6.5 sm:w-5 sm:h-5 relative z-10 shrink-0" />
-              <span className="hidden sm:inline relative z-10">{t('homeworks', 'الواجبات')}</span>
-            </button>
-
-            {/* 3. Qudurat */}
-            <button
-              data-nav-tab="qudurat"
-              onClick={() => handleTabSelect('qudurat')}
-              title={t('qudurat', 'القدرات')}
-              aria-label={t('qudurat', 'القدرات')}
-              className={`relative p-2 sm:px-3.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
-                activeTab === 'qudurat'
-                  ? 'text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
-              }`}
-            >
-              {activeTab === 'qudurat' && (
-                <motion.div
-                  layoutId="top-nav-active-pill"
-                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                  className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
-                />
-              )}
-              <Sparkles className="w-6.5 h-6.5 sm:w-5 sm:h-5 text-indigo-500 relative z-10 shrink-0" />
-              <span className="hidden sm:inline relative z-10">{t('qudurat', 'القدرات')}</span>
-            </button>
-
-            {/* 4. Students (Teachers/Supervisors only) */}
-            {showStudents && (
-              <button
-                data-nav-tab="students"
-                onClick={() => handleTabSelect('students')}
-                title={t('students', 'الطلاب')}
-                aria-label={t('students', 'الطلاب')}
-                className={`relative p-2 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
-                  activeTab === 'students'
-                    ? 'text-white'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-900/5'
-                }`}
-              >
-                {activeTab === 'students' && (
-                  <motion.div
-                    layoutId="top-nav-active-pill"
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                    className="absolute inset-0 bg-slate-900 rounded-full shadow-sm"
+            {navItems.map((item) => {
+              const isSelected = displayedTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-nav-tab={item.id}
+                  title={item.label}
+                  aria-label={item.label}
+                  className={`relative px-3 sm:px-4.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none touch-none ${
+                    isSelected
+                      ? 'text-slate-950 font-extrabold'
+                      : isPressing
+                      ? 'text-slate-400 opacity-60'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/30'
+                  }`}
+                >
+                  {isSelected && (
+                    <motion.div
+                      layoutId="ios26-liquid-pill"
+                      initial={false}
+                      animate={{
+                        scaleY: isPressing ? 1.28 : 1,
+                        scaleX: isPressing ? 1.08 : 1,
+                        y: isPressing ? -5 : 0,
+                      }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: isPressing ? 480 : 520,
+                        damping: isPressing ? 24 : 32,
+                        mass: 0.55
+                      }}
+                      className="ios26-liquid-pill absolute inset-0 rounded-full pointer-events-none origin-bottom"
+                    />
+                  )}
+                  <item.icon
+                    className={`w-5.5 h-5.5 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-transform duration-200 ${
+                      isSelected
+                        ? isPressing
+                          ? '-translate-y-1 scale-110 text-sky-600'
+                          : 'scale-105 text-sky-600'
+                        : 'scale-100 text-slate-600'
+                    }`}
                   />
-                )}
-                <GraduationCap className="w-6.5 h-6.5 sm:w-5 sm:h-5 relative z-10 shrink-0" />
-                <span className="hidden sm:inline relative z-10">{t('students', 'الطلاب')}</span>
-              </button>
-            )}
+                  <span className={`hidden sm:inline relative z-10 transition-all duration-200 ${
+                    isSelected
+                      ? isPressing
+                        ? '-translate-y-1 text-slate-950 font-black'
+                        : 'text-slate-950 font-extrabold'
+                      : 'text-slate-600'
+                  }`}>
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Left side: Auth / Profile */}
@@ -311,7 +324,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setIsAuthModalOpen(true)}
-                className="relative p-0.5 rounded-full border border-slate-200/80 hover:border-slate-400 bg-white shadow-2xs transition cursor-pointer"
+                className="relative p-0.5 rounded-full border border-white/80 hover:border-slate-300 bg-white/80 shadow-2xs transition cursor-pointer backdrop-blur-md"
                 title={`${t('profile', 'الملف الشخصي')}: ${user.name}`}
               >
                 <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-slate-100">
@@ -334,10 +347,10 @@ export const TopNav: React.FC<TopNavProps> = ({
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
                 onClick={() => setIsAuthModalOpen(true)}
-                className="px-2.5 sm:px-3.5 py-1.5 sm:py-1.8 rounded-full bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/20"
+                className="px-2.5 sm:px-3.5 py-1.5 sm:py-1.8 rounded-full bg-slate-900/85 hover:bg-slate-900 text-white text-xs sm:text-sm font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/30 backdrop-blur-lg"
                 title={t('login', 'تسجيل الدخول')}
               >
-                <LogIn className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-400" />
+                <LogIn className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-sky-300" />
                 <span className="hidden sm:inline">{t('login', 'دخول')}</span>
               </motion.button>
             )}

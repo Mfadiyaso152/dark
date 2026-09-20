@@ -63,20 +63,23 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
 
   return (
     <motion.div
-      whileHover={isComingSoon ? {} : { y: -3, scale: 1.015 }}
-      whileTap={isComingSoon ? {} : { scale: 0.96 }}
-      transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+      whileHover={isComingSoon ? {} : { y: -3, scale: 1.025 }}
+      whileTap={isComingSoon ? {} : { scale: 0.95 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 26, mass: 0.6 }}
       onClick={handleCardClick}
       role={isComingSoon ? 'status' : 'button'}
       aria-disabled={isComingSoon}
-      className={`group w-full h-[84px] sm:h-[92px] md:h-[98px] rounded-2xl md:rounded-3xl p-3.5 sm:p-4.5 transition-all duration-300 border flex items-center justify-between gap-3 text-right relative overflow-hidden select-none bg-white/95 backdrop-blur-xs shadow-[0_2px_12px_-3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_28px_-6px_rgba(15,23,42,0.1)] active:shadow-xs ${
+      className={`group w-full h-[84px] sm:h-[92px] md:h-[98px] rounded-full sm:rounded-full p-3 sm:p-4 px-4 sm:px-5 transition-all duration-300 flex items-center justify-between gap-3 text-right relative overflow-hidden select-none touch-manipulation cursor-pointer ${
         isComingSoon
-          ? 'cursor-not-allowed opacity-65 border-slate-200 bg-slate-50/80'
-          : 'border-slate-200/90 hover:border-slate-300 hover:bg-white cursor-pointer'
+          ? 'cursor-not-allowed opacity-65 border border-slate-200/70 bg-slate-50/70 backdrop-blur-md'
+          : 'glass-subject-vessel'
       } ${isSelected ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
     >
-      {/* Top subtle highlight */}
-      <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-sky-500/20 to-transparent group-hover:via-sky-500/60 transition-all duration-500" />
+      {/* Top subtle highlight reflecting the top navigation bar specular highlight */}
+      <div className="absolute top-0 inset-x-8 h-[1.5px] bg-gradient-to-r from-transparent via-white/90 to-transparent group-hover:via-sky-300 transition-all duration-500 pointer-events-none" />
+
+      {/* Internal ambient diagonal glass refraction sheen */}
+      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/15 to-transparent pointer-events-none group-hover:opacity-100 opacity-60 transition-opacity duration-300" />
 
       {/* Toast Notice when clicked if coming soon */}
       {showSoonNotice && (
@@ -89,19 +92,24 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
       )}
 
       {/* Subject Icon & Short Name */}
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        {/* Subject Emoji / Icon in bespoke vessel */}
+      <div className="flex items-center gap-3 min-w-0 flex-1 relative z-10">
+        {/* Subject Emoji / Icon in cylindrical transparent liquid glass vessel identical to top nav aesthetics */}
         <div
-          className={`w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 ${
+          className={`w-11 h-11 sm:w-12 sm:h-12 md:w-13 md:h-13 ${
             isComingSoon
-              ? 'bg-slate-100 text-slate-400'
-              : 'bg-slate-900 text-white'
-          } rounded-xl sm:rounded-2xl flex items-center justify-center text-lg sm:text-xl md:text-2xl shadow-2xs shrink-0 group-hover:scale-105 transition-all duration-300 ring-1 ring-black/5`}
+              ? 'bg-slate-100/50 text-slate-400 border border-slate-200/50'
+              : 'bg-white/40 group-hover:bg-white/65 text-slate-900 border border-white/90 shadow-[0_4px_18px_-2px_rgba(15,23,42,0.08),inset_0_1.5px_2px_0_rgba(255,255,255,1),inset_0_-1px_1px_0_rgba(15,23,42,0.04)] backdrop-blur-2xl'
+          } rounded-full flex items-center justify-center text-xl sm:text-2xl shrink-0 group-hover:scale-105 transition-all duration-300 relative overflow-hidden`}
         >
+          {/* Subtle internal glass specular reflection highlight */}
+          {!isComingSoon && (
+            <div className="absolute top-0 inset-x-2 h-[1px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none opacity-90" />
+          )}
+
           {subject?.emoji ? (
-            <span>{subject.emoji}</span>
+            <span className="leading-none drop-shadow-2xs relative z-10">{subject.emoji}</span>
           ) : (
-            <SubjectIcon name={subject?.icon || 'book'} className="w-5 h-5 sm:w-6 sm:h-6 text-sky-400" />
+            <SubjectIcon name={subject?.icon || 'book'} className="w-5.5 h-5.5 sm:w-6.5 sm:h-6.5 text-sky-600 drop-shadow-2xs relative z-10" />
           )}
         </div>
 
@@ -118,7 +126,7 @@ export const SubjectCard: React.FC<SubjectCardProps> = ({
 
       {/* Lock Indicator only if coming soon */}
       {isComingSoon && (
-        <div className="shrink-0">
+        <div className="shrink-0 relative z-10">
           <span className="text-[10px] sm:text-xs px-2.5 py-1 rounded-xl font-bold bg-slate-100 text-slate-600 border border-slate-200 flex items-center gap-1">
             <Lock className="w-3 h-3 text-amber-600" />
           </span>
