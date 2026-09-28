@@ -37,7 +37,19 @@ export const parseDateParts = (dateVal?: string | Date | number | null): DatePar
   str = str.replace(/[٠-٩]/g, (ch) => '٠١٢٣٤٥٦٧٨٩'.indexOf(ch).toString());
   str = str.replace(/[۰-۹]/g, (ch) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(ch).toString());
 
-  // 1. Try YYYY-MM-DD or YYYY/MM/DD (e.g. 2026-09-20, 2026/09/20, 2026-09-20T00:00:00.000Z)
+  // 1. If string contains ISO timestamp with 'T' or a time colon ':', parse it into Date so it converts from UTC to viewer's local date!
+  if (str.includes('T') || (str.includes(':') && str.match(/\d{1,2}:\d{2}/))) {
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return {
+        year: parsed.getFullYear(),
+        month: parsed.getMonth() + 1,
+        day: parsed.getDate()
+      };
+    }
+  }
+
+  // 2. Try YYYY-MM-DD or YYYY/MM/DD (e.g. 2026-09-20, 2026/09/20)
   const ymdMatch = str.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (ymdMatch) {
     const y = parseInt(ymdMatch[1], 10);
@@ -48,7 +60,7 @@ export const parseDateParts = (dateVal?: string | Date | number | null): DatePar
     }
   }
 
-  // 2. Try DD-MM-YYYY or DD/MM/YYYY (e.g. 20/09/2026, 20-9-2026)
+  // 3. Try DD-MM-YYYY or DD/MM/YYYY (e.g. 20/09/2026, 20-9-2026)
   const dmyMatch = str.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
   if (dmyMatch) {
     const d = parseInt(dmyMatch[1], 10);
@@ -59,7 +71,7 @@ export const parseDateParts = (dateVal?: string | Date | number | null): DatePar
     }
   }
 
-  // 3. Fallback to JS Date parsing
+  // 4. Fallback to JS Date parsing
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
     return {
@@ -121,4 +133,31 @@ export const formatGregorianNumericWithDay = (dateVal?: string | Date | number |
 
   return `${yearStr}/${monthStr}/${dayStr} - ${dayName}`;
 };
+
+/**
+ * Format student submission timestamp with exact Gregorian date and optional 12-hour local time (e.g. 2026/09/21 م (11:30 ص))
+ */
+export const formatSubmissionDateTime = (dateVal?: string | Date | number | null): string => {
+  if (!dateVal) return '';
+  const dateStr = formatGregorianDate(dateVal);
+  if (!dateStr) return '';
+
+  try {
+    const d = typeof dateVal === 'string' || typeof dateVal === 'number' ? new Date(dateVal) : dateVal;
+    if (d && !isNaN(d.getTime())) {
+      const isTimestamp = typeof dateVal !== 'string' || dateVal.includes('T') || dateVal.includes(':');
+      if (isTimestamp) {
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'م' : 'ص';
+        hours = hours % 12 || 12;
+        const hoursStr = String(hours).padStart(2, '0');
+        return `${dateStr} (${hoursStr}:${minutes} ${ampm})`;
+      }
+    }
+  } catch {}
+
+  return dateStr;
+};
+
 

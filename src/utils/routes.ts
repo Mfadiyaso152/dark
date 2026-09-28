@@ -84,9 +84,9 @@ const SUBJECT_SLUG_ALIASES: Record<string, string> = {
 };
 
 // Section slug translations
-export type SubViewType = 'lessons' | 'booklets' | 'homework' | null;
+export type SubViewType = 'lessons' | 'booklets' | 'homework' | 'performance' | null;
 
-const SECTION_SLUGS: Record<string, 'lessons' | 'booklets' | 'homework'> = {
+const SECTION_SLUGS: Record<string, 'lessons' | 'booklets' | 'homework' | 'performance'> = {
   'summaries': 'lessons',
   'lessons': 'lessons',
   'lectures': 'lessons',
@@ -99,6 +99,11 @@ const SECTION_SLUGS: Record<string, 'lessons' | 'booklets' | 'homework'> = {
   'memos': 'booklets',
   'notes': 'booklets',
   'molakhasat': 'booklets',
+  'performance': 'performance',
+  'grades': 'performance',
+  'level': 'performance',
+  'academic-level': 'performance',
+  'mustawa': 'performance',
   'quizzes': 'lessons', // fallback to lessons/quizzes tab
   'exams': 'lessons'
 };
@@ -407,6 +412,9 @@ export function buildUrl(
     }
     if (subView === 'booklets') {
       return `/${subjectSlug}/booklets`;
+    }
+    if (subView === 'performance') {
+      return `/${subjectSlug}/performance`;
     }
 
     return `/${subjectSlug}`;

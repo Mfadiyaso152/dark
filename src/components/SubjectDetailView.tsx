@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, AVAILABLE_CLASSES, formatFileSize, AttachedFile } from '../types';
+import {
+  Subject,
+  Lesson,
+  SubjectBooklet,
+  Homework,
+  HomeworkSubmission,
+  AVAILABLE_CLASSES,
+  formatFileSize,
+  AttachedFile,
+  StudentSubjectPerformance,
+  calculateStudentSubjectProgress
+} from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useSubjectControls } from '../context/SubjectControlsContext';
 import { LessonCard } from './LessonCard';
 import { HomeworkSection } from './HomeworkSection';
 import { ClassFilterDropdown } from './ClassFilterDropdown';
 import { FilePreviewModal } from './FilePreviewModal';
+import { StudentAcademicLevelView } from './StudentAcademicLevelView';
 import {
   ArrowRight,
   BookOpen,
@@ -24,20 +36,23 @@ import {
   Image as ImageIcon,
   Eye,
   Upload,
-  X
+  X,
+  TrendingUp,
+  Award
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { downloadAllSummariesPDF, downloadBookletPDF, triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
+import { triggerHaptic } from '../utils/haptics';
 
 interface SubjectDetailViewProps {
   subject: Subject;
   lessons: Lesson[];
   booklets: SubjectBooklet[];
   homeworks?: Homework[];
-  initialSubView?: 'lessons' | 'booklets' | 'homework' | null;
-  onSubViewChange?: (subView: 'lessons' | 'booklets' | 'homework' | null) => void;
+  initialSubView?: 'lessons' | 'booklets' | 'homework' | 'performance' | null;
+  onSubViewChange?: (subView: 'lessons' | 'booklets' | 'homework' | 'performance' | null) => void;
   onBack: () => void;
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (id: string) => void;
@@ -55,6 +70,7 @@ interface SubjectDetailViewProps {
   submissions?: HomeworkSubmission[];
   onSubmitHomeworkSolution?: (sub: Omit<HomeworkSubmission, 'id' | 'submittedAt'>) => Promise<void>;
   onDeleteSubmission?: (submissionId: string) => Promise<void> | void;
+  performances?: StudentSubjectPerformance[];
 }
 
 export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
@@ -80,7 +96,8 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   onToggleCompleteHomework,
   submissions = [],
   onSubmitHomeworkSolution,
-  onDeleteSubmission
+  onDeleteSubmission,
+  performances = []
 }) => {
   const { user, isSuperAdmin, isAssistantAdmin, canManageSubject, setIsAuthModalOpen } = useAuth();
   const { isSubjectPaused, isLessonsPaused, isBookletsPaused, isHomeworksPaused } = useSubjectControls();
@@ -93,16 +110,30 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   // Check if current user is authorized to add/edit/delete content for THIS specific subject
   const canEditCurrentSubject = canManageSubject(subject.id);
 
-  // Sub-view: null = show main choices, 'lessons' = lessons page, 'booklets' = booklets page, 'homework' = homework page
-  const [subView, setSubViewState] = useState<'lessons' | 'booklets' | 'homework' | null>(initialSubView);
+  // Sub-view: null = show main choices, 'lessons' = lessons page, 'booklets' = booklets page, 'homework' = homework page, 'performance' = academic level page
+  const [subView, setSubViewState] = useState<'lessons' | 'booklets' | 'homework' | 'performance' | null>(initialSubView);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Find the logged-in student's performance for this subject
+  const userPerformance = React.useMemo(() => {
+    if (!user) return null;
+    const userEmail = (user.email || '').toLowerCase().trim();
+    return performances.find(
+      (p) =>
+        ((p.studentEmail && p.studentEmail.toLowerCase().trim() === userEmail) ||
+          (p.studentId && p.studentId === user.id)) &&
+        p.subjectId === subject.id
+    ) || null;
+  }, [performances, user, subject.id]);
+
+  const userProgressSummary = calculateStudentSubjectProgress(userPerformance);
 
   // Keep state synchronized with prop if it changes externally
   useEffect(() => {
     setSubViewState(initialSubView);
   }, [initialSubView]);
 
-  const handleSubViewSelect = (newSubView: 'lessons' | 'booklets' | 'homework' | null) => {
+  const handleSubViewSelect = (newSubView: 'lessons' | 'booklets' | 'homework' | 'performance' | null) => {
     if (newSubView && !user) {
       setIsAuthModalOpen(true);
       return;
@@ -133,6 +164,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   const [showHomeworkSoonToast, setShowHomeworkSoonToast] = useState(false);
   const [showLessonsSoonToast, setShowLessonsSoonToast] = useState(false);
   const [showBookletsSoonToast, setShowBookletsSoonToast] = useState(false);
+  const [showPerformanceSoonToast, setShowPerformanceSoonToast] = useState(false);
 
   // New booklet form state
   const [bookletTitle, setBookletTitle] = useState('');
@@ -538,12 +570,70 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
               </div>
             </motion.div>
           </div>
+
+          {/* Option 3: المستوى الدراسي (تحت آخر شيء في خيارات المادة - مقفل مؤقتاً ويظهر إشعار قريباً) */}
+          <div className="pt-3 sm:pt-4">
+            <motion.div
+              whileHover={{ y: -3, scale: 1.006 }}
+              whileTap={{ scale: 0.985 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+              onClick={() => {
+                triggerHaptic('light');
+                setShowPerformanceSoonToast(true);
+                setTimeout(() => setShowPerformanceSoonToast(false), 3000);
+              }}
+              className="bg-white border border-slate-200 hover:border-sky-400 hover:bg-slate-50/60 rounded-3xl p-5 sm:p-6 shadow-2xs transition-all text-right flex items-center justify-between relative overflow-hidden cursor-pointer group"
+            >
+              {showPerformanceSoonToast && (
+                <div className="absolute inset-0 bg-slate-900/95 backdrop-blur-xs flex items-center justify-center p-3 z-20 animate-fade-in text-center">
+                  <span className="text-white text-xs sm:text-sm font-bold font-['Alexandria',sans-serif] flex items-center gap-2">
+                    <span>✨</span>
+                    <span>خدمة المستوى الدراسي ستتوفر قريباً!</span>
+                  </span>
+                </div>
+              )}
+
+              {/* Top gradient highlight */}
+              <div className="absolute top-0 inset-x-8 h-[1.5px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent pointer-events-none" />
+
+              <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-slate-900 text-white border border-slate-800 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition">
+                  <TrendingUp className="w-6 h-6 sm:w-7 sm:h-7 text-sky-400" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-base sm:text-lg font-bold font-['Alexandria',sans-serif] text-slate-900 group-hover:text-sky-700 transition">
+                      المستوى الدراسي
+                    </h4>
+                    <span className="text-[10px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs">
+                      قريباً
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-2 mr-2">
+                <ChevronLeft className="w-5 h-5 text-slate-400 transition group-hover:-translate-x-1 group-hover:text-slate-900" />
+              </div>
+            </motion.div>
+          </div>
         </div>
       </motion.div>
     );
   }
 
-  // 2) Homework Page Screen
+  // 2) Academic Level & Grades Page Screen
+  if (subView === 'performance') {
+    return (
+      <StudentAcademicLevelView
+        subject={subject}
+        performance={userPerformance}
+        onBack={() => handleSubViewSelect(null)}
+      />
+    );
+  }
+
+  // 3) Homework Page Screen
   if (subView === 'homework') {
     return (
       <HomeworkSection

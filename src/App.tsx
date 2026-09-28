@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings, formatFileSize, getLatestUniqueSubmissions, getSubmissionFiles } from './types';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings, formatFileSize, getLatestUniqueSubmissions, getSubmissionFiles, StudentSubjectPerformance } from './types';
 import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNER_SETTINGS, INITIAL_BANNERS } from './data/initialData';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
@@ -705,6 +705,94 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // Student Academic Performance & Grades (المستوى الدراسي ودرجات الطلاب لكل مادة)
+  const [studentPerformances, setStudentPerformances] = useState<StudentSubjectPerformance[]>(() => {
+    try {
+      const saved = safeGetItem('thanaweya_student_performances_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  });
+
+  // Sync student performances safely to localStorage
+  useEffect(() => {
+    safeSetItem('thanaweya_student_performances_v1', JSON.stringify(studentPerformances));
+  }, [studentPerformances]);
+
+  // Real-time Firestore sync for Student Performances across all users (instant cloud sync)
+  useEffect(() => {
+    const perfCol = collection(db, 'student_performances');
+    const unsubscribe = onSnapshot(perfCol, (snapshot) => {
+      const cloudPerfs: StudentSubjectPerformance[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && !data.isDeleted && (data.studentEmail || data.studentId) && data.subjectId) {
+          cloudPerfs.push({
+            id: data.id || docSnap.id,
+            studentId: data.studentId || '',
+            studentEmail: data.studentEmail || '',
+            studentName: data.studentName || '',
+            subjectId: data.subjectId || '',
+            grades: Array.isArray(data.grades) ? data.grades : [],
+            customProgressPercentage: data.customProgressPercentage,
+            teacherNotes: data.teacherNotes,
+            updatedAt: data.updatedAt || new Date().toISOString(),
+            updatedBy: data.updatedBy
+          });
+        }
+      });
+
+      setStudentPerformances((prev) => {
+        const map = new Map<string, StudentSubjectPerformance>();
+        prev.forEach((p) => map.set(p.id, p));
+        cloudPerfs.forEach((cp) => map.set(cp.id, cp));
+        const merged = Array.from(map.values());
+        safeSetItem('thanaweya_student_performances_v1', JSON.stringify(merged));
+        return merged;
+      });
+    }, (err) => {
+      console.warn('Firestore student_performances snapshot error:', err);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Handler to save/update student grades & academic performance
+  const handleSaveStudentPerformance = async (perf: StudentSubjectPerformance) => {
+    const perfId = perf.id || `${(perf.studentEmail || perf.studentId).replace(/[^a-zA-Z0-9]/g, '_')}_${perf.subjectId}`;
+    const fullPerf: StudentSubjectPerformance = {
+      ...perf,
+      id: perfId,
+      updatedAt: new Date().toISOString()
+    };
+
+    // 1. Immediate local state update
+    setStudentPerformances((prev) => {
+      const map = new Map(prev.map((p) => [p.id, p]));
+      map.set(perfId, fullPerf);
+      const updated = Array.from(map.values());
+      safeSetItem('thanaweya_student_performances_v1', JSON.stringify(updated));
+      return updated;
+    });
+
+    // 2. Real-time Cloud Firestore save
+    try {
+      const payload = sanitizeForFirestore({
+        ...fullPerf,
+        isDeleted: false,
+        updatedAt: new Date().toISOString()
+      });
+      await setDoc(doc(db, 'student_performances', perfId), payload, { merge: true });
+    } catch (err) {
+      console.error('Failed to save student performance to Firestore:', err);
+    }
+  };
 
   // User-specific cloud progress key
   const userStorageKey = useMemo(() => {
@@ -1663,6 +1751,8 @@ export default function App() {
                   allSubjects={subjects}
                   allHomeworks={homeworks}
                   allSubmissions={submissions}
+                  performances={studentPerformances}
+                  onSavePerformance={handleSaveStudentPerformance}
                   onSelectLesson={openLessonDetail}
                 />
               ) : activeTab === 'admin' ? (
@@ -1723,6 +1813,7 @@ export default function App() {
                       submissions={submissions}
                       onSubmitHomeworkSolution={handleSubmitHomeworkSolution}
                       onDeleteSubmission={handleDeleteSubmission}
+                      performances={studentPerformances}
                     />
                   ) : (
                     /* All Subjects Grid */

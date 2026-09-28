@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationsContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Home, Sparkles, GraduationCap, ClipboardCheck, Bell, LogIn, Clock, Lock } from 'lucide-react';
+import { Home, Sparkles, GraduationCap, ClipboardCheck, Bell, LogIn, Clock, Lock, User as UserIcon, LogOut, School } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerHaptic } from '../utils/haptics';
 
@@ -11,16 +11,37 @@ export type TabType = 'home' | 'homeworks' | 'qudurat' | 'students' | 'admin';
 interface TopNavProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
+  onBackToPortal?: () => void;
+  onOpenZhrawi?: () => void;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
   activeTab,
-  onTabChange
+  onTabChange,
+  onBackToPortal,
+  onOpenZhrawi
 }) => {
-  const { user, isSuperAdmin, isAssistantAdmin, setIsAuthModalOpen } = useAuth();
+  const { user, isSuperAdmin, isAssistantAdmin, setIsAuthModalOpen, logout } = useAuth();
   const { openNotificationsModal, unreadCount } = useNotifications();
   const { t } = useLanguage();
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isAvatarMenuOpen, setIsAvatarMenuOpen] = useState(false);
+  const avatarMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Close avatar dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (avatarMenuRef.current && !avatarMenuRef.current.contains(e.target as Node)) {
+        setIsAvatarMenuOpen(false);
+      }
+    };
+    if (isAvatarMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isAvatarMenuOpen]);
 
   // iOS 26 Press & Scrubbing State
   const [isPressing, setIsPressing] = useState(false);
@@ -320,28 +341,111 @@ export const TopNav: React.FC<TopNavProps> = ({
           {/* Left side: Auth / Profile */}
           <div className="flex items-center justify-end shrink-0 z-10">
             {user ? (
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setIsAuthModalOpen(true)}
-                className="relative p-0.5 rounded-full border border-white/80 hover:border-slate-300 bg-white/80 shadow-2xs transition cursor-pointer backdrop-blur-md"
-                title={`${t('profile', 'الملف الشخصي')}: ${user.name}`}
-              >
-                <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-slate-100">
-                  {user.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xs font-bold text-slate-700">
-                      {user.name ? user.name.charAt(0) : '👤'}
-                    </span>
+              <div className="relative" ref={avatarMenuRef}>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setIsAvatarMenuOpen((prev) => !prev)}
+                  className="relative p-0.5 rounded-full border border-white/80 hover:border-slate-300 bg-white/80 shadow-2xs transition cursor-pointer backdrop-blur-md"
+                  title={`${t('profile', 'الملف الشخصي')}: ${user.name}`}
+                  aria-expanded={isAvatarMenuOpen}
+                  aria-label="قائمة الحساب"
+                >
+                  <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-slate-100">
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-slate-700">
+                        {user.name ? user.name.charAt(0) : '👤'}
+                      </span>
+                    )}
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
+                </motion.button>
+
+                {/* Dropdown Menu when clicking account picture */}
+                <AnimatePresence>
+                  {isAvatarMenuOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.94, y: 8 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.94, y: 8 }}
+                      transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute left-0 mt-2.5 w-72 sm:w-80 rounded-3xl bg-white/95 backdrop-blur-2xl border border-slate-200/90 shadow-2xl p-3 sm:p-4 z-50 text-right font-['IBM_Plex_Sans_Arabic',sans-serif] ring-1 ring-black/5"
+                      dir="rtl"
+                    >
+                      {/* User Mini Profile Info */}
+                      <div className="flex items-center gap-3 pb-3 mb-2.5 border-b border-slate-100">
+                        <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 border border-slate-200 bg-slate-100">
+                          {user.avatar ? (
+                            <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="w-full h-full flex items-center justify-center text-sm font-bold text-slate-700">
+                              {user.name ? user.name.charAt(0) : '👤'}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-black text-xs sm:text-sm text-slate-900 truncate font-['Alexandria',sans-serif]">
+                            {user.name}
+                          </h4>
+                          <p className="text-[11px] text-slate-500 truncate font-mono">{user.email}</p>
+                        </div>
+                      </div>
+
+                      {/* Primary Return to Home / Beginning Button */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAvatarMenuOpen(false);
+                          if (onBackToPortal) {
+                            onBackToPortal();
+                          }
+                        }}
+                        className="w-full py-2.5 px-3 mb-2 rounded-2xl bg-gradient-to-r from-sky-600 via-sky-500 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 transition cursor-pointer active:scale-95"
+                      >
+                        <Home className="w-4 h-4 text-sky-100 shrink-0" />
+                        <span>العودة للرئيسية (صفحة البداية)</span>
+                      </button>
+
+                      {/* Other Account Options */}
+                      <div className="space-y-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAvatarMenuOpen(false);
+                            setIsAuthModalOpen(true);
+                          }}
+                          className="w-full py-2 px-3 rounded-xl hover:bg-slate-100 text-slate-700 text-xs font-bold flex items-center justify-between transition cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2">
+                            <UserIcon className="w-4 h-4 text-slate-400" />
+                            <span>بيانات الحساب الشخصي</span>
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsAvatarMenuOpen(false);
+                            logout();
+                          }}
+                          className="w-full py-2 px-3 rounded-xl hover:bg-rose-50 text-rose-700 text-xs font-bold flex items-center justify-between transition cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2">
+                            <LogOut className="w-4 h-4 text-rose-500" />
+                            <span>تسجيل الخروج</span>
+                          </span>
+                        </button>
+                      </div>
+                    </motion.div>
                   )}
-                </div>
-                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
-              </motion.button>
+                </AnimatePresence>
+              </div>
             ) : (
               <motion.button
                 whileHover={{ scale: 1.04 }}

@@ -391,6 +391,168 @@ export interface AppNotification {
   isDeleted?: boolean;
 }
 
+export type GradeCategory = 'exam' | 'quiz' | 'homework' | 'participation' | 'project' | 'task' | 'custom';
+
+export interface GradeItem {
+  id: string;
+  title: string;
+  category: GradeCategory;
+  score: number;
+  maxScore: number;
+  notes?: string;
+  date: string;
+  teacherName?: string;
+}
+
+export interface StudentSubjectPerformance {
+  id: string;
+  studentId: string;
+  studentEmail: string;
+  studentName: string;
+  subjectId: string;
+  grades: GradeItem[];
+  customProgressPercentage?: number;
+  teacherNotes?: string;
+  updatedAt: string;
+  updatedBy?: string;
+  isDeleted?: boolean;
+}
+
+export interface StudentPerformanceSummary {
+  percentage: number;
+  totalScore: number;
+  totalMaxScore: number;
+  gradesCount: number;
+  levelTitle: string;
+  levelBadge: string;
+  colorClass: string;
+  textColorClass: string;
+  bgGradient: string;
+}
+
+export function calculateStudentSubjectProgress(
+  performance?: StudentSubjectPerformance | null
+): StudentPerformanceSummary {
+  if (!performance || !Array.isArray(performance.grades) || performance.grades.length === 0) {
+    const custom = typeof performance?.customProgressPercentage === 'number'
+      ? Math.min(100, Math.max(0, performance.customProgressPercentage))
+      : 0;
+    
+    let levelTitle = 'لم يبدأ التقييم بعد';
+    let levelBadge = 'جديد';
+    let colorClass = 'from-slate-500 to-slate-700';
+    let textColorClass = 'text-slate-600';
+    let bgGradient = 'from-slate-50 to-slate-100';
+
+    if (custom > 0) {
+      if (custom >= 90) {
+        levelTitle = 'مستوى ممتاز ومتميز';
+        levelBadge = 'ممتاز 🌟';
+        colorClass = 'from-emerald-500 to-teal-600';
+        textColorClass = 'text-emerald-700';
+        bgGradient = 'from-emerald-500/10 to-teal-500/10';
+      } else if (custom >= 80) {
+        levelTitle = 'مستوى متقدم وجيد جداً';
+        levelBadge = 'متقدم ✨';
+        colorClass = 'from-blue-500 to-indigo-600';
+        textColorClass = 'text-blue-700';
+        bgGradient = 'from-blue-500/10 to-indigo-500/10';
+      } else if (custom >= 70) {
+        levelTitle = 'مستوى جيد';
+        levelBadge = 'جيد 👍';
+        colorClass = 'from-amber-500 to-orange-600';
+        textColorClass = 'text-amber-700';
+        bgGradient = 'from-amber-500/10 to-orange-500/10';
+      } else {
+        levelTitle = 'يحتاج إلى متابعة';
+        levelBadge = 'يحتاج دعم 💡';
+        colorClass = 'from-rose-500 to-pink-600';
+        textColorClass = 'text-rose-700';
+        bgGradient = 'from-rose-500/10 to-pink-500/10';
+      }
+    }
+
+    return {
+      percentage: custom,
+      totalScore: 0,
+      totalMaxScore: 0,
+      gradesCount: 0,
+      levelTitle,
+      levelBadge,
+      colorClass,
+      textColorClass,
+      bgGradient
+    };
+  }
+
+  let totalScore = 0;
+  let totalMaxScore = 0;
+
+  performance.grades.forEach((g) => {
+    const s = Number(g.score) || 0;
+    const m = Number(g.maxScore) || 0;
+    totalScore += s;
+    totalMaxScore += m > 0 ? m : s;
+  });
+
+  let percentage = 0;
+  if (typeof performance.customProgressPercentage === 'number') {
+    percentage = Math.min(100, Math.max(0, performance.customProgressPercentage));
+  } else if (totalMaxScore > 0) {
+    percentage = Math.min(100, Math.max(0, Math.round((totalScore / totalMaxScore) * 100)));
+  }
+
+  let levelTitle = 'مستوى ممتاز ومتميز';
+  let levelBadge = 'ممتاز 🌟';
+  let colorClass = 'from-emerald-500 to-teal-600';
+  let textColorClass = 'text-emerald-700';
+  let bgGradient = 'from-emerald-500/10 to-teal-500/10';
+
+  if (percentage >= 90) {
+    levelTitle = 'مستوى ممتاز ومتميز';
+    levelBadge = 'ممتاز 🌟';
+    colorClass = 'from-emerald-500 to-teal-600';
+    textColorClass = 'text-emerald-700';
+    bgGradient = 'from-emerald-500/10 to-teal-500/10';
+  } else if (percentage >= 80) {
+    levelTitle = 'مستوى متقدم وجيد جداً';
+    levelBadge = 'متقدم ✨';
+    colorClass = 'from-blue-500 to-indigo-600';
+    textColorClass = 'text-blue-700';
+    bgGradient = 'from-blue-500/10 to-indigo-500/10';
+  } else if (percentage >= 70) {
+    levelTitle = 'مستوى جيد ومستقر';
+    levelBadge = 'جيد 👍';
+    colorClass = 'from-amber-500 to-orange-600';
+    textColorClass = 'text-amber-700';
+    bgGradient = 'from-amber-500/10 to-orange-500/10';
+  } else if (percentage >= 60) {
+    levelTitle = 'مستوى مقبول';
+    levelBadge = 'مقبول ⚠️';
+    colorClass = 'from-orange-500 to-amber-600';
+    textColorClass = 'text-orange-700';
+    bgGradient = 'from-orange-500/10 to-amber-500/10';
+  } else {
+    levelTitle = 'يحتاج إلى مزيد من المتابعة والاجتهاد';
+    levelBadge = 'يحتاج دعم 💡';
+    colorClass = 'from-rose-500 to-pink-600';
+    textColorClass = 'text-rose-700';
+    bgGradient = 'from-rose-500/10 to-pink-500/10';
+  }
+
+  return {
+    percentage,
+    totalScore,
+    totalMaxScore,
+    gradesCount: performance.grades.length,
+    levelTitle,
+    levelBadge,
+    colorClass,
+    textColorClass,
+    bgGradient
+  };
+}
+
 export const AVAILABLE_CLASSES = ['1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7'] as const;
 export type ClassName = typeof AVAILABLE_CLASSES[number];
 

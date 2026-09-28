@@ -40,7 +40,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
-import { formatGregorianDate, formatGregorianNumericWithDay } from '../utils/dateFormatter';
+import { formatGregorianDate, formatGregorianNumericWithDay, formatSubmissionDateTime } from '../utils/dateFormatter';
 import { FilePreviewModal } from './FilePreviewModal';
 
 interface DailyHomeworksViewProps {
@@ -908,7 +908,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                       <span>بيانات تسليمك للواجب</span>
                     </span>
                     <span className="text-[11px] text-emerald-700">
-                      {formatGregorianDate(studentSub.submittedAt)}
+                      {formatSubmissionDateTime(studentSub.submittedAt) || formatGregorianDate(studentSub.submittedAt)}
                     </span>
                   </div>
 
@@ -1116,7 +1116,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                             )}
                           </div>
                           <span className="text-[11px] text-slate-400 block mt-0.5">
-                            بتاريخ: {formatGregorianDate(sub.submittedAt)}
+                            بتاريخ: {formatSubmissionDateTime(sub.submittedAt) || formatGregorianDate(sub.submittedAt)}
                           </span>
                         </div>
 

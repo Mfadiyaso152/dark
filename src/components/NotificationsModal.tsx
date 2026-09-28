@@ -133,11 +133,14 @@ export const NotificationsModal: React.FC = () => {
   const formatArabicDate = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
-      return new Intl.DateTimeFormat('ar-SA', {
-        month: 'short',
+      if (isNaN(date.getTime())) return dateStr;
+      return new Intl.DateTimeFormat('ar-EG', {
+        calendar: 'gregory',
         day: 'numeric',
+        month: 'short',
+        year: 'numeric',
         hour: 'numeric',
-        minute: 'numeric',
+        minute: '2-digit',
         hour12: true
       }).format(date);
     } catch {

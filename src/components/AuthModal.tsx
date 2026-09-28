@@ -5,10 +5,15 @@ import { useLanguage } from '../context/LanguageContext';
 import {
   X,
   LogOut,
-  User as UserIcon
+  User as UserIcon,
+  Home
 } from 'lucide-react';
 
-export const AuthModal: React.FC = () => {
+interface AuthModalProps {
+  onBackToPortal?: () => void;
+}
+
+export const AuthModal: React.FC<AuthModalProps> = ({ onBackToPortal }) => {
   const {
     user,
     loginWithGoogle,
@@ -88,6 +93,21 @@ export const AuthModal: React.FC = () => {
                   <p className="text-[11px] text-slate-500 font-mono truncate">{user.email}</p>
                 </div>
               </div>
+
+              {/* Primary Return to Home / Beginning Button */}
+              {onBackToPortal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAuthModalOpen(false);
+                    onBackToPortal();
+                  }}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-sky-600 via-sky-500 to-indigo-600 hover:from-sky-700 hover:to-indigo-700 text-white rounded-2xl text-xs sm:text-sm font-black transition flex items-center justify-center gap-2 shadow-md shadow-sky-500/20 cursor-pointer active:scale-95"
+                >
+                  <Home className="w-4.5 h-4.5 text-sky-100 shrink-0" />
+                  <span>العودة للرئيسية (صفحة البداية • ثانوية الزهراوي)</span>
+                </button>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-2 pt-1">

@@ -37,7 +37,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
-import { formatGregorianDate, formatGregorianNumericWithDay } from '../utils/dateFormatter';
+import {
+  formatGregorianDate,
+  formatGregorianNumericWithDay,
+  formatSubmissionDateTime
+} from '../utils/dateFormatter';
 import { FilePreviewModal } from './FilePreviewModal';
 
 const getSubmissionFiles = (sub: HomeworkSubmission): AttachedFile[] => {
@@ -891,7 +895,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                                 تم تسليم حلك بنجاح ✓
                               </span>
                               <span className="text-slate-400 font-normal">
-                                {formatGregorianDate(studentSub.submittedAt)}
+                                {formatSubmissionDateTime(studentSub.submittedAt) || formatGregorianDate(studentSub.submittedAt)}
                               </span>
                             </div>
 
@@ -1004,7 +1008,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                                             )}
                                           </div>
                                           <span className="text-[10px] text-slate-400 block mt-0.5">
-                                            بتاريخ: {formatGregorianDate(sub.submittedAt)}
+                                            بتاريخ: {formatSubmissionDateTime(sub.submittedAt) || formatGregorianDate(sub.submittedAt)}
                                           </span>
                                         </div>
                                         {subFiles.length > 0 && (

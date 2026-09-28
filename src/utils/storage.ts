@@ -1,4 +1,4 @@
-import { Lesson, SubjectBooklet } from '../types';
+import { Lesson, SubjectBooklet, HomeworkSubmission } from '../types';
 
 /**
  * Robust localStorage utilities that completely prevent and handle QuotaExceededError.
@@ -6,6 +6,8 @@ import { Lesson, SubjectBooklet } from '../types';
 
 // Keys that may have accumulated large payloads
 const BULKY_KEYS = [
+  'thanaweya_homework_submissions_v1',
+  'thanaweya_homeworks_v2',
   'thanaweya_subject_booklets_v4',
   'thanaweya_subject_booklets_v3',
   'thanaweya_subject_booklets_v2',
@@ -98,13 +100,48 @@ export function sanitizeBookletsForStorage(booklets: SubjectBooklet[]): SubjectB
 }
 
 /**
+ * Strips heavy data URLs (> 30KB) from student homework submissions before caching in localStorage.
+ * This prevents the browser from freezing and stops localStorage QuotaExceededError.
+ */
+export function sanitizeSubmissionsForStorage(subs: HomeworkSubmission[]): HomeworkSubmission[] {
+  if (!Array.isArray(subs)) return [];
+  return subs.map((sub) => {
+    let changed = false;
+    let newAttachedFiles = sub.attachedFiles;
+    if (Array.isArray(sub.attachedFiles)) {
+      newAttachedFiles = sub.attachedFiles.map((f) => {
+        if (f.dataUrl && f.dataUrl.length > 30000) {
+          changed = true;
+          return { ...f, dataUrl: undefined };
+        }
+        return f;
+      });
+    }
+    let newAttachedFile = sub.attachedFile;
+    if (sub.attachedFile?.dataUrl && sub.attachedFile.dataUrl.length > 30000) {
+      changed = true;
+      newAttachedFile = { ...sub.attachedFile, dataUrl: undefined };
+    }
+
+    if (changed) {
+      return {
+        ...sub,
+        attachedFiles: newAttachedFiles,
+        attachedFile: newAttachedFile
+      };
+    }
+    return sub;
+  });
+}
+
+/**
  * One-time startup hygiene check: purges any oversized strings already occupying localStorage
  */
 export function sanitizeExistingLocalStorage(): void {
   try {
     for (const key of BULKY_KEYS) {
       const val = localStorage.getItem(key);
-      if (val && val.length > 300000) {
+      if (val && val.length > 200000) {
         try {
           const parsed = JSON.parse(val);
           if (Array.isArray(parsed)) {
@@ -113,6 +150,9 @@ export function sanitizeExistingLocalStorage(): void {
               localStorage.setItem(key, JSON.stringify(cleaned));
             } else if (key.includes('lessons')) {
               const cleaned = sanitizeLessonsForStorage(parsed);
+              localStorage.setItem(key, JSON.stringify(cleaned));
+            } else if (key.includes('submissions')) {
+              const cleaned = sanitizeSubmissionsForStorage(parsed);
               localStorage.setItem(key, JSON.stringify(cleaned));
             }
           }
