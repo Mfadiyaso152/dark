@@ -603,31 +603,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 5. Check specific subject assignment:
     if (job.includes('رياضيات')) {
-      return target === 'math-1' || target.includes('رياضيات') || target.includes('math');
+      return target.startsWith('math') || target.includes('رياضيات');
     }
     if (job.includes('كيمياء')) {
-      return target === 'chem-1' || target.includes('كيمياء') || target.includes('chem');
+      return target.startsWith('chem') || target.includes('كيمياء');
     }
     if (job.includes('بيئة') || job.includes('أحياء') || job.includes('احياء')) {
-      return target === 'eco-1' || target.includes('بيئة') || target.includes('بيئه') || target.includes('eco');
+      return target === 'eco-1' || target === 'bio-1' || target.includes('بيئة') || target.includes('بيئه') || target.includes('eco') || target.includes('أحياء') || target.includes('احياء') || target.includes('bio');
     }
     if (job.includes('تقنية') || job.includes('رقمية') || job.includes('حاسب')) {
-      return target === 'digi-1' || target.includes('تقنية') || target.includes('رقمية') || target.includes('tech') || target.includes('digi');
+      return target.startsWith('digi') || target.includes('تقنية') || target.includes('رقمية') || target.includes('tech') || target.includes('حاسب');
     }
     if (job.includes('تفكير') || job.includes('ناقد')) {
-      return target === 'think-1' || target.includes('تفكير') || target.includes('ناقد') || target.includes('think') || target.includes('crit');
+      return target.startsWith('think') || target.includes('تفكير') || target.includes('ناقد') || target.includes('crit');
     }
     if (job.includes('تفسير') || job.includes('قرآن')) {
-      return target === 'tafsir-1' || target.includes('تفسير') || target.includes('taf');
+      return target.startsWith('tafsir') || target.includes('تفسير') || target.includes('قرآن') || target.includes('taf');
     }
     if (job.includes('إنجليزي') || job.includes('انجليزي') || job.includes('english')) {
-      return target === 'eng-1' || target.includes('إنجليزي') || target.includes('انجليزي') || target.includes('eng');
+      return target.startsWith('eng') || target.includes('إنجليزي') || target.includes('انجليزي') || target.includes('mega');
     }
     if (job.includes('كفايات') || job.includes('عربي') || job.includes('لغوية')) {
-      return target === 'lang-1' || target.includes('كفايات') || target.includes('لغوية') || target.includes('lang');
+      return target.startsWith('lang') || target.includes('كفايات') || target.includes('لغوية') || target.includes('عربي');
     }
     if (job.includes('مرشد') || job.includes('إرشاد') || job.includes('ارشاد')) {
-      return target === 'guidance-1' || target.includes('إرشاد') || target.includes('ارشاد') || target.includes('مرشد') || target.includes('guidance');
+      return target.startsWith('guidance') || target.includes('إرشاد') || target.includes('ارشاد') || target.includes('مرشد');
     }
 
     return false;

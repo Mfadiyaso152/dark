@@ -56,8 +56,39 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const {
     user,
     registeredUsers,
-    refreshUsers
+    refreshUsers,
+    canManageSubject,
+    isSuperAdmin,
+    isAssistantAdmin
   } = useAuth();
+
+  const isGlobalAdminOrSupervisor =
+    isSuperAdmin ||
+    isAssistantAdmin ||
+    user?.role === 'supervisor' ||
+    user?.jobTitle === 'مشرف مساعد' ||
+    (user?.email && user.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase());
+
+  // Submissions visible to the current teacher/supervisor (teacher only sees their assigned subject's submissions)
+  const visibleSubmissions = useMemo(() => {
+    if (isGlobalAdminOrSupervisor) {
+      return allSubmissions;
+    }
+    return allSubmissions.filter((sub) => {
+      if (!sub) return false;
+      const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+      const subjectId = sub.subjectId || hw?.subjectId;
+      return canManageSubject(subjectId);
+    });
+  }, [allSubmissions, allHomeworks, canManageSubject, isGlobalAdminOrSupervisor]);
+
+  // Homeworks visible to current user (teacher only sees their subject's homeworks)
+  const visibleHomeworks = useMemo(() => {
+    if (isGlobalAdminOrSupervisor) {
+      return allHomeworks;
+    }
+    return allHomeworks.filter((hw) => canManageSubject(hw.subjectId));
+  }, [allHomeworks, canManageSubject, isGlobalAdminOrSupervisor]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -195,10 +226,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return Array.from(map.values());
   }, [registeredUsers, allSubmissions]);
 
-  // Get student's submissions count
+  // Get student's submissions count (strictly scoped to teacher's subject)
   const getStudentSubmissions = (u: User) => {
     const email = (u.email || '').toLowerCase().trim();
-    return allSubmissions.filter(
+    return visibleSubmissions.filter(
       (s) =>
         (s.studentEmail && s.studentEmail.toLowerCase().trim() === email) ||
         (s.studentId && s.studentId === u.id) ||
@@ -216,7 +247,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     if (studentSubs.length === 0) return 0;
     let maxTs = 0;
     for (const sub of studentSubs) {
-      const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+      const hw = visibleHomeworks.find((h) => h.id === sub.homeworkId) || allHomeworks.find((h) => h.id === sub.homeworkId);
       const dateStr = sub.submittedAt || hw?.dueDate || '';
       if (dateStr) {
         const ts = new Date(dateStr).getTime() || 0;
@@ -236,7 +267,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         // If student has submissions with matching class or student's class matches
         const studentSubs = getStudentSubmissions(u);
         const hasClassSub = studentSubs.some((sub) => {
-          const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+          const hw = visibleHomeworks.find((h) => h.id === sub.homeworkId) || allHomeworks.find((h) => h.id === sub.homeworkId);
           return hw && (hw.targetClasses?.includes(selectedClass) || hw.targetClasses?.includes('all') || (hw as any).targetClass === selectedClass || (hw as any).classNumber === selectedClass);
         });
         const userClassMatches = (u as any).class === selectedClass || (u as any).section === selectedClass;
@@ -279,24 +310,24 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       }
       return 0;
     });
-  }, [uniqueStudents, selectedClass, searchQuery, statusFilter, sortOrder, allSubmissions, allHomeworks]);
+  }, [uniqueStudents, selectedClass, searchQuery, statusFilter, sortOrder, visibleSubmissions, visibleHomeworks, allHomeworks]);
 
   // Submission count metrics for the filter badges
   const totalSubmittedCount = useMemo(() => {
     return uniqueStudents.filter((u) => getStudentSubmissionsCount(u) > 0).length;
-  }, [uniqueStudents, allSubmissions]);
+  }, [uniqueStudents, visibleSubmissions]);
 
   const totalNotSubmittedCount = useMemo(() => {
     return uniqueStudents.filter((u) => getStudentSubmissionsCount(u) === 0).length;
-  }, [uniqueStudents, allSubmissions]);
+  }, [uniqueStudents, visibleSubmissions]);
 
   // Active student detail submissions sorted by date
   const activeStudentSubmissionsSorted = useMemo(() => {
     if (!activeStudentPage) return [];
     const subs = getStudentSubmissions(activeStudentPage);
     return [...subs].sort((a, b) => {
-      const hwA = allHomeworks.find((h) => h.id === a.homeworkId);
-      const hwB = allHomeworks.find((h) => h.id === b.homeworkId);
+      const hwA = visibleHomeworks.find((h) => h.id === a.homeworkId) || allHomeworks.find((h) => h.id === a.homeworkId);
+      const hwB = visibleHomeworks.find((h) => h.id === b.homeworkId) || allHomeworks.find((h) => h.id === b.homeworkId);
       const timeA = new Date(a.submittedAt || hwA?.dueDate || 0).getTime() || 0;
       const timeB = new Date(b.submittedAt || hwB?.dueDate || 0).getTime() || 0;
       if (studentDetailDateSort === 'asc') {
@@ -305,7 +336,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         return timeB - timeA;
       }
     });
-  }, [activeStudentPage, allSubmissions, allHomeworks, studentDetailDateSort]);
+  }, [activeStudentPage, visibleSubmissions, visibleHomeworks, allHomeworks, studentDetailDateSort]);
 
   // Open Preview Modal for Student or Homework files
   const handleOpenPreview = (

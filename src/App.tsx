@@ -71,13 +71,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((l) => !deletedIds.has(l.id));
+          return parsed.filter((l) => !deletedIds.has(l.id) && !l.subjectId?.startsWith('guidance'));
         }
       }
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_LESSONS.filter((l) => !deletedIds.has(l.id));
+    return INITIAL_LESSONS.filter((l) => !deletedIds.has(l.id) && !l.subjectId?.startsWith('guidance'));
   });
 
   // Booklets (مذكرات وملخصات)

@@ -556,5 +556,23 @@ export function calculateStudentSubjectProgress(
 export const AVAILABLE_CLASSES = ['1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7'] as const;
 export type ClassName = typeof AVAILABLE_CLASSES[number];
 
+export interface ZhrawiFeedback {
+  id: string;
+  type: 'suggestion' | 'complaint';
+  title: string;
+  content: string;
+  studentName: string;
+  studentEmail: string;
+  studentGrade: string;
+  studentClass: string;
+  phone?: string;
+  createdAt: string;
+  status: 'pending' | 'in_review' | 'resolved';
+  adminNotes?: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  isDeleted?: boolean;
+}
+
 
 
