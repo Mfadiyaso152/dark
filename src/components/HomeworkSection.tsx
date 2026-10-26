@@ -34,7 +34,7 @@ import {
   Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { triggerFileDownload } from '../utils/pdfGenerator';
+import { triggerFileDownload, downloadHomeworkSolutionsPDF } from '../utils/pdfGenerator';
 import { getLargeFile } from '../utils/fileStorage';
 import { downloadFileFromCloud } from '../utils/cloudStorage';
 import {
@@ -223,6 +223,19 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
 
   // File Download tracking
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+  const [downloadingReportHwId, setDownloadingReportHwId] = useState<string | null>(null);
+
+  const handleDownloadHomeworkReport = async (hw: Homework, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDownloadingReportHwId(hw.id);
+    try {
+      await downloadHomeworkSolutionsPDF(hw, subject, submissions, registeredUsers);
+    } catch (err) {
+      console.error('Error downloading homework solutions report PDF:', err);
+    } finally {
+      setDownloadingReportHwId(null);
+    }
+  };
 
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [dueDateSort, setDueDateSort] = useState<'desc' | 'asc'>('desc');
@@ -1277,6 +1290,24 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                       )
                     )}
                   </div>
+                </div>
+
+                {/* Download All Student Solutions with Description PDF Button */}
+                <div className="pt-2 border-t border-slate-100/90 mt-1">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDownloadHomeworkReport(hw, e)}
+                    disabled={downloadingReportHwId === hw.id}
+                    className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer disabled:opacity-60"
+                    title="تحميل ملف PDF لجميع حلول الطلاب مع الوصف"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                    <span className="truncate">
+                      {downloadingReportHwId === hw.id
+                        ? 'جاري تجهيز الـ PDF...'
+                        : 'تحميل PDF لجميع حلول الطلاب مع الوصف'}
+                    </span>
+                  </button>
                 </div>
               </motion.div>
             );

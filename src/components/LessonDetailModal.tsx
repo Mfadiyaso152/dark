@@ -14,7 +14,8 @@ import {
   Clock,
   Printer,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Check
 } from 'lucide-react';
 import { Lesson, Subject } from '../types';
 import { downloadLessonPDF, triggerFileDownload } from '../utils/pdfGenerator';
@@ -96,6 +97,8 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
     }
   };
 
+  const [copiedShare, setCopiedShare] = useState(false);
+
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
@@ -105,7 +108,8 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
       }).catch(() => {});
     } else {
       navigator.clipboard.writeText(`${lesson.title} - ${lesson.pages}\n${lesson.summary}`);
-      alert('تم نسخ ملخص الدرس بنجاح!');
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2500);
     }
   };
 
@@ -129,10 +133,14 @@ export const LessonDetailModal: React.FC<LessonDetailModalProps> = ({
               </button>
               <button
                 onClick={handleShare}
-                title="مشاركة الملخص"
-                className="w-9 h-9 md:w-10 md:h-10 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-[#3B82F6] flex items-center justify-center transition cursor-pointer"
+                title={copiedShare ? 'تم النسخ!' : 'مشاركة الملخص'}
+                className="w-9 h-9 md:w-10 md:h-10 rounded-xl hover:bg-slate-200/70 text-slate-500 hover:text-[#3B82F6] flex items-center justify-center transition cursor-pointer relative"
               >
-                <Share2 className="w-4 h-4 md:w-5 md:h-5" />
+                {copiedShare ? (
+                  <Check className="w-4 h-4 md:w-5 md:h-5 text-emerald-600" />
+                ) : (
+                  <Share2 className="w-4 h-4 md:w-5 md:h-5" />
+                )}
               </button>
             </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAIL, FAKE_USER_EMAILS } from '../context/AuthContext';
 import { USER_JOB_OPTIONS } from '../types';
 import {
   Search,
@@ -56,6 +56,7 @@ export const UserManagementView: React.FC = () => {
     for (const u of registeredUsers) {
       if (!u || !u.email) continue;
       const key = u.email.trim().toLowerCase();
+      if (FAKE_USER_EMAILS.has(key)) continue;
       if (!map.has(key)) {
         map.set(key, u);
       } else {
@@ -179,6 +180,11 @@ export const UserManagementView: React.FC = () => {
                         {currentJob}
                       </span>
                     ) : null}
+                    {u.classroom && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-blue-100 text-blue-900 border border-blue-200 shrink-0">
+                        فصل {u.classroom}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-slate-400 font-mono font-medium truncate mt-0.5" title={u.email}>
                     {u.email}

@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Lesson, Subject, SubjectBooklet } from '../types';
+import { Lesson, Subject, SubjectBooklet, Homework, HomeworkSubmission, User } from '../types';
 
 /**
  * Normalizes any data URL, raw base64 string, or missing mime prefix.
@@ -176,7 +176,10 @@ export function triggerFileDownload(blobOrDataUrl: Blob | string, fileName: stri
     link.href = blobUrl;
     link.download = cleanName;
     link.style.display = 'none';
+    link.setAttribute('download', cleanName); // Force download attribute
     document.body.appendChild(link);
+    
+    // Synchronous click ensures PC & mobile browsers never block the download
     link.click();
 
     setTimeout(() => {
@@ -184,9 +187,14 @@ export function triggerFileDownload(blobOrDataUrl: Blob | string, fileName: stri
         document.body.removeChild(link);
       }
       if (shouldRevoke && blobUrl) {
-        URL.revokeObjectURL(blobUrl);
+        // Very long delay before revoking to ensure large files finish "saving" in browser UI
+        setTimeout(() => {
+          try {
+            URL.revokeObjectURL(blobUrl);
+          } catch (e) {}
+        }, 60000);
       }
-    }, 15000);
+    }, 1000);
 
     return true;
   } catch (err) {
@@ -388,8 +396,22 @@ export async function downloadLessonPDF(lesson: Lesson, subject?: Subject): Prom
     const pdfBlob = pdf.output('blob');
     return triggerFileDownload(pdfBlob, cleanFileName);
   } catch (err) {
-    console.error('Error generating PDF with canvas:', err);
-    return false;
+    console.warn('Canvas PDF generation notice, falling back to direct PDF:', err);
+    try {
+      const fallbackPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      fallbackPdf.setFontSize(16);
+      fallbackPdf.text(lesson.title, 105, 25, { align: 'center' });
+      fallbackPdf.setFontSize(11);
+      fallbackPdf.text(`المادة: ${subject ? subject.name : 'أول ثانوي'} - الصفحات: ${lesson.pages || ''}`, 105, 33, { align: 'center' });
+      fallbackPdf.setFontSize(10);
+      const splitText = fallbackPdf.splitTextToSize(lesson.summary || 'ملخص الدرس', 170);
+      fallbackPdf.text(splitText, 20, 45);
+      const fallbackBlob = fallbackPdf.output('blob');
+      return triggerFileDownload(fallbackBlob, cleanFileName);
+    } catch (fallbackErr) {
+      console.error('Fallback PDF generation error:', fallbackErr);
+      return false;
+    }
   }
 }
 
@@ -658,8 +680,278 @@ export async function downloadBookletPDF(
     const pdfBlob = pdf.output('blob');
     return triggerFileDownload(pdfBlob, cleanTitle);
   } catch (err) {
-    console.error('Error generating booklet PDF:', err);
-    return false;
+    console.warn('Canvas booklet generation notice, falling back to direct PDF:', err);
+    try {
+      const fallbackPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      fallbackPdf.setFontSize(16);
+      fallbackPdf.text(booklet.title, 105, 25, { align: 'center' });
+      fallbackPdf.setFontSize(11);
+      fallbackPdf.text(`مادة ${subject.name} - ${booklet.pagesCount || ''}`, 105, 33, { align: 'center' });
+      fallbackPdf.setFontSize(10);
+      const splitDesc = fallbackPdf.splitTextToSize(booklet.description || 'مذكرة وملخص المقرر', 170);
+      fallbackPdf.text(splitDesc, 20, 45);
+      const fallbackBlob = fallbackPdf.output('blob');
+      return triggerFileDownload(fallbackBlob, cleanTitle);
+    } catch (fallbackErr) {
+      console.error('Fallback booklet PDF generation error:', fallbackErr);
+      return false;
+    }
   }
 }
+
+/**
+ * Generates and downloads a comprehensive PDF of all student solutions and details for a homework.
+ * Formats the assignment description, metadata, and all submissions in a clean, official report.
+ */
+export async function downloadHomeworkSolutionsPDF(
+  homework: Homework,
+  subject?: Subject,
+  submissions: HomeworkSubmission[] = [],
+  registeredUsers: User[] = []
+): Promise<boolean> {
+  const hwTitle = homework.title || `واجب صـ ${homework.pageNumber || ''} سـ ${homework.questionNumber || ''}`;
+  const cleanTitle = `حلول_${hwTitle.replace(/\s+/g, '_')}.pdf`;
+
+  // Filter submissions strictly belonging to this homework
+  const hwSubmissions = submissions.filter((s) => s.homeworkId === homework.id);
+
+  // Helper to format student full name
+  const getStudentName = (sub: HomeworkSubmission): string => {
+    if (sub.studentName && sub.studentName.trim() && !['طالب', 'مستخدم'].includes(sub.studentName.trim())) {
+      return sub.studentName.trim();
+    }
+    const found = registeredUsers.find(
+      (u) => u.email && sub.studentEmail && u.email.toLowerCase().trim() === sub.studentEmail.toLowerCase().trim()
+    );
+    if (found?.name && found.name.trim()) {
+      return found.name.trim();
+    }
+    return sub.studentEmail ? sub.studentEmail.split('@')[0] : 'طالب';
+  };
+
+  const getStudentClass = (sub: HomeworkSubmission): string => {
+    const found = registeredUsers.find(
+      (u) => u.email && sub.studentEmail && u.email.toLowerCase().trim() === sub.studentEmail.toLowerCase().trim()
+    );
+    return (found as any)?.class || (found as any)?.section || 'أول ثانوي';
+  };
+
+  const getSubFilesCount = (sub: HomeworkSubmission): number => {
+    if (Array.isArray(sub.attachedFiles) && sub.attachedFiles.length > 0) {
+      return sub.attachedFiles.length;
+    }
+    if (sub.attachedFile && sub.attachedFile.hasFile) {
+      return 1;
+    }
+    return 0;
+  };
+
+  const getSubFilesNames = (sub: HomeworkSubmission): string => {
+    const names: string[] = [];
+    if (Array.isArray(sub.attachedFiles) && sub.attachedFiles.length > 0) {
+      sub.attachedFiles.forEach((f) => {
+        if (f.name) names.push(f.name);
+      });
+    } else if (sub.attachedFile?.hasFile && sub.attachedFile.name) {
+      names.push(sub.attachedFile.name);
+    }
+    return names.length > 0 ? names.join('، ') : 'بدون ملفات مرفقة (حل نصي)';
+  };
+
+  const formatDateTime = (isoDate?: string): string => {
+    if (!isoDate) return '-';
+    try {
+      const d = new Date(isoDate);
+      return `${d.toLocaleDateString('ar-SA')} ${d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}`;
+    } catch {
+      return isoDate;
+    }
+  };
+
+  try {
+    const htmlContent = `
+      <div style="padding: 24px; background: #ffffff; color: #0f172a; direction: rtl; text-align: right; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+        <!-- Official Report Header -->
+        <div style="border: 2px solid #0284c7; border-radius: 14px; padding: 20px 24px; background: #f0f9ff; margin-bottom: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #bae6fd; padding-bottom: 12px; margin-bottom: 12px;">
+            <div>
+              <div style="font-size: 11px; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px;">
+                منصة زاد التعليمية • كشف تقرير الواجب وحلول الطلاب
+              </div>
+              <h1 style="font-size: 20px; font-weight: 900; color: #0c4a6e; margin: 4px 0 0 0;">
+                ${hwTitle}
+              </h1>
+            </div>
+            <div style="text-align: left; font-size: 11px; color: #0369a1; font-weight: 700;">
+              <div>المقرر: <strong>${subject?.name || 'مقرر دراسي'}</strong></div>
+              <div>المشرف/المعلم: <strong>${homework.supervisorName || subject?.supervisorName || 'معلم المادة'}</strong></div>
+            </div>
+          </div>
+
+          <!-- Metadata Grid -->
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-size: 12px;">
+            <div style="background: #ffffff; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0f2fe;">
+              <span style="color: #64748b; font-size: 10px; display: block;">تاريخ الاستحقاق</span>
+              <strong style="color: #0369a1;">${homework.dueDate || 'غير محدد'}</strong>
+            </div>
+            <div style="background: #ffffff; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0f2fe;">
+              <span style="color: #64748b; font-size: 10px; display: block;">الصفحة والسؤال</span>
+              <strong style="color: #0369a1;">صـ ${homework.pageNumber || '-'} | سـ ${homework.questionNumber || '-'}</strong>
+            </div>
+            <div style="background: #ffffff; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0f2fe;">
+              <span style="color: #64748b; font-size: 10px; display: block;">الفصول المستهدفة</span>
+              <strong style="color: #0369a1;">${homework.targetClasses?.join('، ') || 'جميع الفصول'}</strong>
+            </div>
+            <div style="background: #ffffff; padding: 8px 12px; border-radius: 8px; border: 1px solid #e0f2fe;">
+              <span style="color: #64748b; font-size: 10px; display: block;">عدد التسليمات</span>
+              <strong style="color: #0284c7; font-size: 14px;">${hwSubmissions.length} طالب</strong>
+            </div>
+          </div>
+
+          <!-- Homework Notes / Description -->
+          ${homework.notes ? `
+            <div style="margin-top: 12px; background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #92400e; line-height: 1.5;">
+              <strong style="display: block; margin-bottom: 2px;">📌 وصف وتعليمات الواجب:</strong>
+              ${homework.notes}
+            </div>
+          ` : ''}
+        </div>
+
+        <!-- Submissions Section -->
+        <div style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="font-size: 16px; font-weight: 800; color: #1e293b; margin: 0;">
+              قائمة حلول الطلاب المسلمة (${hwSubmissions.length})
+            </h2>
+            <span style="font-size: 11px; color: #64748b;">
+              تاريخ استخراج التقرير: ${new Date().toLocaleDateString('ar-SA')}
+            </span>
+          </div>
+
+          ${hwSubmissions.length === 0 ? `
+            <div style="padding: 24px; text-align: center; background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; color: #64748b; font-size: 13px;">
+              لا توجد أي حلول مسلمة لهذا الواجب حتى تاريخ إنشاء هذا التقرير.
+            </div>
+          ` : `
+            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: right; border: 1px solid #cbd5e1;">
+              <thead>
+                <tr style="background: #0284c7; color: #ffffff;">
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1; width: 30px; text-align: center;">#</th>
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1; width: 140px;">اسم الطالب</th>
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1; width: 80px;">الفصل</th>
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1; width: 110px;">وقت التسليم</th>
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1;">نص الحل / الملاحظات</th>
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1; width: 120px;">الملفات المرفقة</th>
+                  <th style="padding: 8px 10px; border: 1px solid #0369a1; width: 70px; text-align: center;">التقييم</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${hwSubmissions.map((sub, idx) => `
+                  <tr style="background: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: center; font-weight: 700;">
+                      ${idx + 1}
+                    </td>
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-weight: 800; color: #0f172a;">
+                      ${getStudentName(sub)}
+                      <div style="font-size: 9px; color: #64748b; font-weight: normal;">${sub.studentEmail || ''}</div>
+                    </td>
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; color: #475569;">
+                      ${getStudentClass(sub)}
+                    </td>
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; color: #475569; font-size: 10px;">
+                      ${formatDateTime(sub.submittedAt)}
+                    </td>
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; color: #1e293b; line-height: 1.4;">
+                      ${sub.notes || '<span style="color: #94a3b8;">تم التسليم بدون ملاحظات نصية</span>'}
+                    </td>
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; font-size: 10px; color: #0369a1;">
+                      <strong>${getSubFilesCount(sub)} ملف</strong>
+                      <div style="font-size: 9px; color: #64748b; word-break: break-all;">${getSubFilesNames(sub)}</div>
+                    </td>
+                    <td style="padding: 8px 10px; border: 1px solid #e2e8f0; text-align: center;">
+                      ${sub.grade ? `
+                        <span style="background: #dcfce7; color: #15803d; padding: 2px 6px; border-radius: 4px; font-weight: 800;">
+                          ${sub.grade}
+                        </span>
+                      ` : `
+                        <span style="color: #94a3b8; font-size: 10px;">لم يُرصد</span>
+                      `}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `}
+        </div>
+
+        <!-- Footer -->
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 14px; text-align: center; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center;">
+          <div>منصة زاد التعليمية • تقرير رصد الحلول والواجبات</div>
+          <div>مع تمنياتنا لجميع الطلاب بالتوفيق والدرجات العلا ✨</div>
+        </div>
+      </div>
+    `;
+
+    const canvas = await renderHtmlToCanvasDirect(htmlContent, 820);
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const pdf = new jsPDF({
+      orientation: 'p',
+      unit: 'mm',
+      format: 'a4',
+      compress: true
+    });
+
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    let heightLeft = pdfHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+    heightLeft -= pageHeight;
+
+    while (heightLeft > 0) {
+      position = heightLeft - pdfHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, pdfHeight);
+      heightLeft -= pageHeight;
+    }
+
+    const pdfBlob = pdf.output('blob');
+    return triggerFileDownload(pdfBlob, cleanTitle);
+  } catch (err) {
+    console.warn('Canvas homework report notice, falling back to direct PDF:', err);
+    try {
+      const fallbackPdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      fallbackPdf.setFontSize(16);
+      fallbackPdf.text(hwTitle, 105, 20, { align: 'center' });
+      fallbackPdf.setFontSize(11);
+      fallbackPdf.text(`المقرر: ${subject?.name || ''} - تاريخ الاستحقاق: ${homework.dueDate || ''}`, 105, 28, { align: 'center' });
+      fallbackPdf.setFontSize(10);
+      if (homework.notes) {
+        const splitNotes = fallbackPdf.splitTextToSize(`وصف الواجب: ${homework.notes}`, 170);
+        fallbackPdf.text(splitNotes, 20, 38);
+      }
+      fallbackPdf.text(`إجمالي حلول الطلاب المسلمة: ${hwSubmissions.length}`, 20, 52);
+      
+      let y = 62;
+      hwSubmissions.forEach((sub, i) => {
+        if (y > 270) {
+          fallbackPdf.addPage();
+          y = 20;
+        }
+        fallbackPdf.text(`${i + 1}. ${getStudentName(sub)} - ${sub.submittedAt || ''} - ${sub.notes || 'تم الحل'}`, 20, y);
+        y += 8;
+      });
+
+      const fallbackBlob = fallbackPdf.output('blob');
+      return triggerFileDownload(fallbackBlob, cleanTitle);
+    } catch (fallbackErr) {
+      console.error('Fallback homework PDF generation error:', fallbackErr);
+      return false;
+    }
+  }
+}
+
 

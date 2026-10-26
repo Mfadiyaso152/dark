@@ -90,18 +90,11 @@ export const TopNav: React.FC<TopNavProps> = ({
     ...(showStudents ? [{ id: 'students' as TabType, label: t('students', 'الطلاب'), icon: GraduationCap }] : [])
   ];
 
-  // Final committed navigation (only triggered on finger lift / pointerup)
+  // Final committed navigation (triggered on click or gesture release)
   const commitTabSelection = (tab: TabType) => {
     if (tab === 'qudurat') {
       triggerHaptic('warning');
       showNavToast('قسم القدرات قريباً 🔒✨');
-      return;
-    }
-
-    if (tab === 'homeworks' && !user) {
-      triggerHaptic('warning');
-      showNavToast(t('login_required_homeworks', 'يجب تسجيل الدخول أولاً للوصول للواجبات 🔒'));
-      setIsAuthModalOpen(true);
       return;
     }
 
@@ -147,7 +140,8 @@ export const TopNav: React.FC<TopNavProps> = ({
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    // On PC / mouse devices, allow standard button click without pointer capture
+    if (e.pointerType === 'mouse') return;
 
     const targetTab = getTabFromCoordinates(e.clientX, e.clientY);
     if (!targetTab) return;
@@ -158,7 +152,7 @@ export const TopNav: React.FC<TopNavProps> = ({
     setPreviewTab(targetTab);
     triggerHaptic('light');
 
-    // Capture pointer so all sliding movements track smoothly across the viewport
+    // Capture pointer only on touch devices so gestures glide smoothly
     try {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       pointerIdRef.current = e.pointerId;
@@ -287,9 +281,13 @@ export const TopNav: React.FC<TopNavProps> = ({
                   key={item.id}
                   type="button"
                   data-nav-tab={item.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    commitTabSelection(item.id);
+                  }}
                   title={item.label}
                   aria-label={item.label}
-                  className={`relative px-3 sm:px-4.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none touch-none ${
+                  className={`relative px-3 sm:px-4.5 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer select-none ${
                     isSelected
                       ? 'text-slate-950 font-extrabold'
                       : isPressing

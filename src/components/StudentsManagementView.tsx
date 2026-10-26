@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
-import { User, Lesson, Subject, Homework, HomeworkSubmission, AttachedFile, getSubmissionFiles, StudentSubjectPerformance } from '../types';
+import { useAuth, SUPER_ADMIN_EMAIL, SUPER_ADMIN_USER, FAKE_USER_EMAILS, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
+import { User, Lesson, Subject, Homework, HomeworkSubmission, AttachedFile, getSubmissionFiles } from '../types';
 import {
   Search,
   CheckCircle,
@@ -17,9 +17,7 @@ import {
   RotateCcw,
   Check,
   Calendar,
-  Clock,
-  TrendingUp,
-  Award
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { triggerFileDownload } from '../utils/pdfGenerator';
@@ -32,15 +30,12 @@ import {
 } from '../utils/dateFormatter';
 import { FilePreviewModal } from './FilePreviewModal';
 import { ClassFilterDropdown } from './ClassFilterDropdown';
-import { TeacherGradesManagementView } from './TeacherGradesManagementView';
 
 interface StudentsManagementViewProps {
   allLessons?: Lesson[];
   allSubjects: Subject[];
   allHomeworks: Homework[];
   allSubmissions: HomeworkSubmission[];
-  performances?: StudentSubjectPerformance[];
-  onSavePerformance?: (perf: StudentSubjectPerformance) => Promise<void> | void;
   onSelectLesson?: (lesson: Lesson) => void;
 }
 
@@ -49,51 +44,17 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   allSubjects,
   allHomeworks,
   allSubmissions,
-  performances = [],
-  onSavePerformance,
   onSelectLesson
 }) => {
   const {
     user,
     registeredUsers,
-    refreshUsers,
-    canManageSubject,
-    isSuperAdmin,
-    isAssistantAdmin
+    refreshUsers
   } = useAuth();
-
-  const isGlobalAdminOrSupervisor =
-    isSuperAdmin ||
-    isAssistantAdmin ||
-    user?.role === 'supervisor' ||
-    user?.jobTitle === 'مشرف مساعد' ||
-    (user?.email && user.email.toLowerCase().trim() === SUPER_ADMIN_EMAIL.toLowerCase());
-
-  // Submissions visible to the current teacher/supervisor (teacher only sees their assigned subject's submissions)
-  const visibleSubmissions = useMemo(() => {
-    if (isGlobalAdminOrSupervisor) {
-      return allSubmissions;
-    }
-    return allSubmissions.filter((sub) => {
-      if (!sub) return false;
-      const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
-      const subjectId = sub.subjectId || hw?.subjectId;
-      return canManageSubject(subjectId);
-    });
-  }, [allSubmissions, allHomeworks, canManageSubject, isGlobalAdminOrSupervisor]);
-
-  // Homeworks visible to current user (teacher only sees their subject's homeworks)
-  const visibleHomeworks = useMemo(() => {
-    if (isGlobalAdminOrSupervisor) {
-      return allHomeworks;
-    }
-    return allHomeworks.filter((hw) => canManageSubject(hw.subjectId));
-  }, [allHomeworks, canManageSubject, isGlobalAdminOrSupervisor]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeStudentPage, setActiveStudentPage] = useState<User | null>(null);
-  const [studentSubView, setStudentSubView] = useState<'submissions' | 'grades'>('submissions');
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
 
   // Filter & Sort State
@@ -110,7 +71,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const [previewTitle, setPreviewTitle] = useState('');
   const [previewStudentName, setPreviewStudentName] = useState('');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [showGradesComingSoon, setShowGradesComingSoon] = useState(false);
 
   // Close filter popover on click outside
   useEffect(() => {
@@ -178,33 +138,24 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       fullNameConfirmed: true
     });
 
-    // 1.1 Always inject currently logged in user if admin/supervisor so they can see themselves in the list
-    if (user && user.email) {
-      const userKey = user.email.trim().toLowerCase();
-      if (!map.has(userKey)) {
-        const resolvedCurrentName = resolveStudentFullName(userKey, user.name, registeredUsers);
-        map.set(userKey, {
-          ...user,
-          email: userKey,
-          name: resolvedCurrentName,
-          fullNameConfirmed: true
-        });
-      }
-    }
-
     for (const u of registeredUsers) {
       if (!u || !u.email) continue;
-      if (!isStudentUser(u)) continue;
       const key = u.email.trim().toLowerCase();
+      if (FAKE_USER_EMAILS.has(key)) continue;
+      if (!isStudentUser(u)) continue;
       const resolvedName = resolveStudentFullName(u.email, u.name, registeredUsers);
       const isConfirmed = isFullNameValid(resolvedName);
+      const matchingSubClass = allSubmissions.find((s) => s.studentEmail && s.studentEmail.trim().toLowerCase() === key && s.studentClass)?.studentClass;
+      const studentClassroom = u.classroom || matchingSubClass;
+
       if (!map.has(key)) {
-        map.set(key, { ...u, name: resolvedName, fullNameConfirmed: isConfirmed });
+        map.set(key, { ...u, name: resolvedName, classroom: studentClassroom, fullNameConfirmed: isConfirmed });
       }
     }
     for (const s of allSubmissions) {
       if (!s || !s.studentEmail) continue;
       const key = s.studentEmail.trim().toLowerCase();
+      if (FAKE_USER_EMAILS.has(key)) continue;
       const resolvedName = resolveStudentFullName(s.studentEmail, s.studentName, registeredUsers);
       const isConfirmed = isFullNameValid(resolvedName);
       if (!map.has(key)) {
@@ -216,6 +167,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
           role: 'student',
           jobTitle: 'طالب',
           grade: 'أول ثانوي',
+          classroom: s.studentClass,
           fullNameConfirmed: isConfirmed
         };
         if (isStudentUser(dummyUser)) {
@@ -226,10 +178,10 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     return Array.from(map.values());
   }, [registeredUsers, allSubmissions]);
 
-  // Get student's submissions count (strictly scoped to teacher's subject)
+  // Get student's submissions count
   const getStudentSubmissions = (u: User) => {
     const email = (u.email || '').toLowerCase().trim();
-    return visibleSubmissions.filter(
+    return allSubmissions.filter(
       (s) =>
         (s.studentEmail && s.studentEmail.toLowerCase().trim() === email) ||
         (s.studentId && s.studentId === u.id) ||
@@ -247,7 +199,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     if (studentSubs.length === 0) return 0;
     let maxTs = 0;
     for (const sub of studentSubs) {
-      const hw = visibleHomeworks.find((h) => h.id === sub.homeworkId) || allHomeworks.find((h) => h.id === sub.homeworkId);
+      const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
       const dateStr = sub.submittedAt || hw?.dueDate || '';
       if (dateStr) {
         const ts = new Date(dateStr).getTime() || 0;
@@ -264,14 +216,16 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
     // 1. Class filter
     if (selectedClass && selectedClass !== 'all') {
       result = result.filter((u) => {
-        // If student has submissions with matching class or student's class matches
+        // Direct classroom match
+        if (u.classroom === selectedClass) return true;
+        // Or submissions matching this class
         const studentSubs = getStudentSubmissions(u);
         const hasClassSub = studentSubs.some((sub) => {
-          const hw = visibleHomeworks.find((h) => h.id === sub.homeworkId) || allHomeworks.find((h) => h.id === sub.homeworkId);
-          return hw && (hw.targetClasses?.includes(selectedClass) || hw.targetClasses?.includes('all') || (hw as any).targetClass === selectedClass || (hw as any).classNumber === selectedClass);
+          if (sub.studentClass === selectedClass) return true;
+          const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
+          return hw && (hw.targetClasses?.includes(selectedClass) || (hw as any).targetClass === selectedClass);
         });
-        const userClassMatches = (u as any).class === selectedClass || (u as any).section === selectedClass;
-        return hasClassSub || userClassMatches || studentSubs.length > 0;
+        return hasClassSub;
       });
     }
 
@@ -310,24 +264,24 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
       }
       return 0;
     });
-  }, [uniqueStudents, selectedClass, searchQuery, statusFilter, sortOrder, visibleSubmissions, visibleHomeworks, allHomeworks]);
+  }, [uniqueStudents, selectedClass, searchQuery, statusFilter, sortOrder, allSubmissions, allHomeworks]);
 
   // Submission count metrics for the filter badges
   const totalSubmittedCount = useMemo(() => {
     return uniqueStudents.filter((u) => getStudentSubmissionsCount(u) > 0).length;
-  }, [uniqueStudents, visibleSubmissions]);
+  }, [uniqueStudents, allSubmissions]);
 
   const totalNotSubmittedCount = useMemo(() => {
     return uniqueStudents.filter((u) => getStudentSubmissionsCount(u) === 0).length;
-  }, [uniqueStudents, visibleSubmissions]);
+  }, [uniqueStudents, allSubmissions]);
 
   // Active student detail submissions sorted by date
   const activeStudentSubmissionsSorted = useMemo(() => {
     if (!activeStudentPage) return [];
     const subs = getStudentSubmissions(activeStudentPage);
     return [...subs].sort((a, b) => {
-      const hwA = visibleHomeworks.find((h) => h.id === a.homeworkId) || allHomeworks.find((h) => h.id === a.homeworkId);
-      const hwB = visibleHomeworks.find((h) => h.id === b.homeworkId) || allHomeworks.find((h) => h.id === b.homeworkId);
+      const hwA = allHomeworks.find((h) => h.id === a.homeworkId);
+      const hwB = allHomeworks.find((h) => h.id === b.homeworkId);
       const timeA = new Date(a.submittedAt || hwA?.dueDate || 0).getTime() || 0;
       const timeB = new Date(b.submittedAt || hwB?.dueDate || 0).getTime() || 0;
       if (studentDetailDateSort === 'asc') {
@@ -336,7 +290,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         return timeB - timeA;
       }
     });
-  }, [activeStudentPage, visibleSubmissions, visibleHomeworks, allHomeworks, studentDetailDateSort]);
+  }, [activeStudentPage, allSubmissions, allHomeworks, studentDetailDateSort]);
 
   // Open Preview Modal for Student or Homework files
   const handleOpenPreview = (
@@ -398,7 +352,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   // Click on student card
   const handleStudentClick = (u: User) => {
     setActiveStudentPage(u);
-    setStudentSubView('submissions');
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
 
@@ -419,16 +372,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
         {/* VIEW 1: FULL STUDENT HOMEWORKS PAGE (صفحة واجبات الطالب) */}
         {/* ---------------------------------------------------- */}
         {activeStudentPage ? (
-          studentSubView === 'grades' ? (
-            <TeacherGradesManagementView
-              key={`student-grades-${activeStudentPage.id || activeStudentPage.email}`}
-              student={activeStudentPage}
-              allSubjects={allSubjects}
-              performances={performances}
-              onSavePerformance={onSavePerformance || (async () => {})}
-              onBack={() => setStudentSubView('submissions')}
-            />
-          ) : (
           <motion.div
             key={`student-detail-${activeStudentPage.id || activeStudentPage.email}`}
             initial={{ opacity: 0, y: 6 }}
@@ -437,7 +380,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
             transition={{ duration: 0.15 }}
             className="space-y-4 min-h-[60vh]"
           >
-            {/* Header: Student Info Header & Academic Level Button + Back Button */}
+            {/* Header: Student Info Header & Icon-only Back Button */}
             <div className="glass-subject-vessel rounded-3xl p-4 sm:p-5 border border-white/90 shadow-xs flex items-center justify-between gap-3 relative overflow-hidden">
               <div className="absolute top-0 inset-x-6 h-[1.5px] bg-gradient-to-r from-transparent via-white to-transparent pointer-events-none" />
               <div className="flex items-center gap-3">
@@ -459,48 +402,36 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                 </div>
 
                 <div className="space-y-0.5">
-                  <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
-                    {activeStudentPage.name}
-                  </h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
+                      {activeStudentPage.name}
+                    </h2>
+                    {activeStudentPage.classroom && (
+                      <span className="text-[11px] font-black bg-blue-500/15 text-blue-900 border border-blue-500/25 px-2.5 py-0.5 rounded-full backdrop-blur-md">
+                        فصل {activeStudentPage.classroom}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-slate-600 font-medium">
                     {getStudentSubmissionsCount(activeStudentPage)} واجبات مسلّمة
                   </span>
                 </div>
               </div>
 
-              {/* Action Buttons: Academic Level button NEXT TO Back Button (مقفل مؤقتاً ويظهر إشعار قريباً) */}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGradesComingSoon(true);
-                  }}
-                  className="py-2 sm:py-2.5 px-3 sm:px-4 rounded-2xl bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 hover:from-sky-700 hover:to-indigo-800 active:scale-95 text-white transition flex items-center gap-1.5 cursor-pointer shadow-xs border border-white/20 text-xs sm:text-sm font-bold"
-                  title="المستوى الدراسي (قريباً)"
-                >
-                  <TrendingUp className="w-4 h-4 text-sky-200" />
-                  <span>المستوى الدراسي</span>
-                  <span className="text-[9px] bg-white/20 text-white px-1.5 py-0.2 rounded-full font-bold">
-                    قريباً
-                  </span>
-                </button>
-
-                {/* Single Prominent Back Button (Icon Only) */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPreviewOpen(false);
-                    setActiveStudentPage(null);
-                    setStudentSubView('submissions');
-                    window.scrollTo({ top: 0, behavior: 'instant' });
-                  }}
-                  className="p-2.5 sm:p-3 rounded-2xl glass-subject-vessel hover:bg-white/80 active:scale-95 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-xs border border-white/90"
-                  title="الرجوع لقائمة الطلاب"
-                  aria-label="الرجوع لقائمة الطلاب"
-                >
-                  <ArrowRight className="w-5 h-5 text-slate-800" />
-                </button>
-              </div>
+              {/* Single Prominent Back Button (Icon Only) */}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPreviewOpen(false);
+                  setActiveStudentPage(null);
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                }}
+                className="p-2.5 sm:p-3 rounded-2xl glass-subject-vessel hover:bg-white/80 active:scale-95 text-slate-800 transition flex items-center justify-center cursor-pointer shadow-xs border border-white/90"
+                title="الرجوع لقائمة الطلاب"
+                aria-label="الرجوع لقائمة الطلاب"
+              >
+                <ArrowRight className="w-5 h-5 text-slate-800" />
+              </button>
             </div>
 
             {/* List Header with Date Sort Selector */}
@@ -619,7 +550,7 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               )}
             </div>
           </motion.div>
-        )) : (
+        ) : (
           /* ---------------------------------------------------- */
           /* VIEW 2: UNIFIED STUDENTS LIST */
           /* ---------------------------------------------------- */
@@ -922,6 +853,11 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                               مشرف
                             </span>
                           )}
+                          {u.classroom && (
+                            <span className="text-[10px] font-black bg-blue-500/15 text-blue-900 border border-blue-500/25 px-2 py-0.5 rounded-full shrink-0 backdrop-blur-md">
+                              فصل {u.classroom}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -947,43 +883,6 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
               )}
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Coming Soon Notification Modal for Academic Level */}
-      <AnimatePresence>
-        {showGradesComingSoon && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-['IBM_Plex_Sans_Arabic',sans-serif]">
-            <motion.div
-              initial={{ scale: 0.92, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.92, opacity: 0 }}
-              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center space-y-4 border border-slate-100 relative overflow-hidden"
-            >
-              <div className="w-14 h-14 rounded-2xl bg-sky-50 text-sky-600 border border-sky-100 flex items-center justify-center mx-auto shadow-sm">
-                <TrendingUp className="w-7 h-7" />
-              </div>
-
-              <div className="space-y-1.5">
-                <h3 className="text-base sm:text-lg font-bold font-['Alexandria',sans-serif] text-slate-900">
-                  خدمة المستوى الدراسي
-                </h3>
-                <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                  خدمة المستوى الدراسي ورصد الدرجات قيد التجهيز والتطوير وستتوفر قريباً للمعلمين والطلاب! ⏳
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowGradesComingSoon(false)}
-                  className="w-full py-3 bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
-                >
-                  حسناً، فهمت
-                </button>
-              </div>
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
     </div>

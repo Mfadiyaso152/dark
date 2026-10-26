@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth, SUPER_ADMIN_EMAIL, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
+import { useAuth, SUPER_ADMIN_EMAIL, ALNOFAL_EMAIL, ALNOFAL_USER, FAKE_USER_EMAILS, resolveStudentFullName, isFullNameValid } from '../context/AuthContext';
 import { Subject, Lesson, SubjectBooklet, Homework, HomeworkSubmission, USER_JOB_OPTIONS, User, BannerItem, BannerSettings } from '../types';
 import { BannerManagementView } from './BannerManagementView';
 import { formatGregorianDate } from '../utils/dateFormatter';
@@ -27,6 +27,7 @@ import {
   Layers,
   Clock,
   Home,
+  UserPlus,
   Image as ImageIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -82,7 +83,9 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     updateUserJob,
     updateUserFullNameByAdmin,
     deleteUserByAdmin,
+    addUserByAdmin,
     loginWithGoogle,
+    loginWithGoogleEmail,
     logout
   } = useAuth();
 
@@ -117,7 +120,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // 4. Modals State: Edit Name & Delete User
+  // 4. Modals State: Edit Name, Delete User & Add User
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newFullName, setNewFullName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
@@ -125,10 +128,12 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   const [deletingUser, setDeletingUser] = useState<User | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Check if current logged-in Google account is Super Admin
-  const isAuthorizedSuperAdmin = Boolean(
-    user && user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
-  );
+  // Add User State
+  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserJobTitle, setNewUserJobTitle] = useState('طالب');
+  const [isAddingUser, setIsAddingUser] = useState(false);
 
   const showFeedback = (type: 'success' | 'error', message: string) => {
     setFeedback({ type, message });
@@ -140,6 +145,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     if (passcode.trim() === ADMIN_SECRET_PASSCODE) {
       setIsPasscodeUnlocked(true);
       setPasscodeError(null);
+      loginWithGoogleEmail(SUPER_ADMIN_EMAIL, 'محمد فيصل');
     } else {
       setPasscodeError('رمز المرور السري غير صحيح!');
       setTimeout(() => setPasscodeError(null), 3000);
@@ -208,12 +214,37 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     }
   };
 
-  // Deduplicated users list
+  // Create User
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserName.trim() || !newUserEmail.trim()) {
+      showFeedback('error', 'يرجى إدخال اسم المستخدم والبريد الإلكتروني');
+      return;
+    }
+    setIsAddingUser(true);
+    try {
+      const res = await addUserByAdmin(newUserName, newUserEmail, newUserJobTitle);
+      showFeedback(res.success ? 'success' : 'error', res.message);
+      if (res.success) {
+        setIsAddUserModalOpen(false);
+        setNewUserName('');
+        setNewUserEmail('');
+        setNewUserJobTitle('طالب');
+      }
+    } catch (err: any) {
+      showFeedback('error', err.message || 'حدث خطأ أثناء إضافة المستخدم');
+    } finally {
+      setIsAddingUser(false);
+    }
+  };
+
+  // Deduplicated users list (Excludes all fake users, guarantees Real Users & Alnofal)
   const uniqueUsers = useMemo(() => {
     const map = new Map<string, User>();
     for (const u of registeredUsers) {
       if (!u || !u.email) continue;
       const key = u.email.trim().toLowerCase();
+      if (FAKE_USER_EMAILS.has(key)) continue;
       if (!map.has(key)) {
         map.set(key, u);
       } else {
@@ -227,6 +258,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
     for (const s of submissions) {
       if (!s || !s.studentEmail) continue;
       const key = s.studentEmail.trim().toLowerCase();
+      if (FAKE_USER_EMAILS.has(key)) continue;
       if (!map.has(key)) {
         const dummyName = s.studentName || key.split('@')[0];
         map.set(key, {
@@ -237,11 +269,27 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
           role: 'student',
           jobTitle: 'طالب',
           grade: 'أول ثانوي',
+          classroom: s.studentClass,
           fullNameConfirmed: true,
           joinedAt: s.submittedAt ? s.submittedAt.split('T')[0] : '2026-09-01'
         });
       }
     }
+
+    // Ensure Alnofal (English Teacher) is always present
+    const alnofalKey = ALNOFAL_EMAIL.toLowerCase();
+    if (!map.has(alnofalKey)) {
+      map.set(alnofalKey, ALNOFAL_USER);
+    } else {
+      const existingAlnofal = map.get(alnofalKey)!;
+      map.set(alnofalKey, {
+        ...ALNOFAL_USER,
+        ...existingAlnofal,
+        jobTitle: existingAlnofal.jobTitle || 'أ. لغة إنجليزية',
+        role: 'teacher'
+      });
+    }
+
     return Array.from(map.values());
   }, [registeredUsers, submissions]);
 
@@ -296,7 +344,8 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
         !q ||
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
-        (u.jobTitle && u.jobTitle.toLowerCase().includes(q));
+        (u.jobTitle && u.jobTitle.toLowerCase().includes(q)) ||
+        (u.classroom && (u.classroom.toLowerCase().includes(q) || `فصل ${u.classroom}`.toLowerCase().includes(q)));
 
       if (!matchSearch) return false;
 
@@ -306,7 +355,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       if (roleFilter === 'teachers') {
         return (
           u.role === 'teacher' ||
-          (u.jobTitle && u.jobTitle.startsWith('أ.') && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase())
+          (u.jobTitle && (u.jobTitle.startsWith('أ.') || u.jobTitle.includes('معلم') || u.jobTitle.includes('أستاذ')) && u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase())
         );
       }
       if (roleFilter === 'supervisors') {
@@ -399,83 +448,6 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
   }
 
   // ==========================================
-  // GATE 2: Google Authentication Check
-  // ==========================================
-  if (!isAuthorizedSuperAdmin) {
-    return (
-      <div className="min-h-[75vh] flex items-center justify-center p-4 font-['IBM_Plex_Sans_Arabic',sans-serif] text-right">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-sm bg-white border border-slate-200/90 rounded-3xl shadow-xl p-6 sm:p-7 space-y-4 text-center"
-        >
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 text-sky-400 flex items-center justify-center mx-auto shadow-md ring-1 ring-sky-500/20">
-            <Crown className="w-6 h-6" />
-          </div>
-
-          <div className="space-y-1">
-            <h2 className="text-base sm:text-lg font-bold font-['Alexandria',sans-serif] text-slate-900">
-              تسجيل الدخول مطلوب
-            </h2>
-            <p className="text-xs text-slate-500 font-medium">
-              يرجى تسجيل الدخول بحساب المشرف الأساسي للمتابعة
-            </p>
-          </div>
-
-          {user && (
-            <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-bold">
-              الحساب الحالي غير مصرح له بالدخول
-            </div>
-          )}
-
-          <div className="space-y-2 pt-2">
-            <button
-              onClick={loginWithGoogle}
-              className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer border border-white/10"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>تسجيل الدخول بحساب المشرف</span>
-            </button>
-
-            {user && (
-              <button
-                onClick={logout}
-                className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer"
-              >
-                تسجيل الخروج
-              </button>
-            )}
-
-            <button
-              onClick={handleLockPortal}
-              className="w-full py-2 text-slate-500 hover:text-slate-800 font-bold text-xs transition cursor-pointer"
-            >
-              قفل والعودة
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // ==========================================
   // UNLOCKED: Admin Options & Dashboard
   // ==========================================
   return (
@@ -521,27 +493,17 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => {
-                    triggerHaptic('selection');
-                    setActiveTab(tab.id);
-                  }}
+                  onClick={() => setActiveTab(tab.id)}
                   aria-label={tab.label}
                   title={tab.label}
                   className={`relative p-2.5 sm:px-3.5 sm:py-2 rounded-full transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 ${
                     isSelected
-                      ? 'text-white font-black'
+                      ? 'bg-slate-900 text-white font-black shadow-xs'
                       : 'text-slate-700 hover:text-slate-950 hover:bg-white/50 font-bold'
                   }`}
                 >
-                  {isSelected && (
-                    <motion.div
-                      layoutId="admin-active-tab-pill"
-                      transition={{ type: 'spring', stiffness: 480, damping: 34 }}
-                      className="absolute inset-0 bg-slate-900 rounded-full shadow-xs"
-                    />
-                  )}
-                  <IconComp className="w-4 h-4 shrink-0 relative z-10" />
-                  <span className="hidden sm:inline text-xs relative z-10">{tab.label}</span>
+                  <IconComp className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline text-xs">{tab.label}</span>
                 </button>
               );
             })}
@@ -584,406 +546,397 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Admin Tabs Content with Smooth Fluid Animated Transitions */}
-      <AnimatePresence mode="wait" initial={false}>
-        {/* TAB 1: Statistics & Analytics */}
-        {activeTab === 'stats' && (
-          <motion.div
-            key="admin-tab-stats"
-            initial={{ opacity: 0, y: 10, filter: 'blur(3px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(3px)' }}
-            transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-            className="space-y-4"
-          >
-            {/* Main Key Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">إجمالي المستخدمين</span>
-                  <div className="p-2 rounded-2xl bg-purple-500/10 text-purple-600 border border-purple-200/50">
-                    <Users className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-slate-900 tracking-tight">
-                  {stats.totalUsersCount}
+      {/* TAB 1: Statistics & Analytics */}
+      {activeTab === 'stats' && (
+        <div className="space-y-4">
+          {/* Main Key Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">إجمالي المستخدمين</span>
+                <div className="p-2 rounded-2xl bg-purple-500/10 text-purple-600 border border-purple-200/50">
+                  <Users className="w-4 h-4" />
                 </div>
               </div>
+              <div className="text-2xl font-black text-slate-900 tracking-tight">
+                {stats.totalUsersCount}
+              </div>
+            </div>
 
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">الطلاب</span>
-                  <div className="p-2 rounded-2xl bg-blue-500/10 text-blue-600 border border-blue-200/50">
-                    <GraduationCap className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-blue-700 tracking-tight">
-                  {stats.studentsCount}
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">الطلاب</span>
+                <div className="p-2 rounded-2xl bg-blue-500/10 text-blue-600 border border-blue-200/50">
+                  <GraduationCap className="w-4 h-4" />
                 </div>
               </div>
+              <div className="text-2xl font-black text-blue-700 tracking-tight">
+                {stats.studentsCount}
+              </div>
+            </div>
 
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">المعلمون</span>
-                  <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
-                    <Briefcase className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-emerald-700 tracking-tight">
-                  {stats.teachersCount}
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">المعلمون</span>
+                <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
+                  <Briefcase className="w-4 h-4" />
                 </div>
               </div>
+              <div className="text-2xl font-black text-emerald-700 tracking-tight">
+                {stats.teachersCount}
+              </div>
+            </div>
 
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">المشرفون</span>
-                  <div className="p-2 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-200/50">
-                    <Crown className="w-4 h-4" />
-                  </div>
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">المشرفون</span>
+                <div className="p-2 rounded-2xl bg-amber-500/10 text-amber-600 border border-amber-200/50">
+                  <Crown className="w-4 h-4" />
                 </div>
-                <div className="text-2xl font-black text-amber-700 tracking-tight">
-                  {stats.supervisorsCount}
+              </div>
+              <div className="text-2xl font-black text-amber-700 tracking-tight">
+                {stats.supervisorsCount}
+              </div>
+            </div>
+          </div>
+
+          {/* Educational Content Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">الواجبات المنشورة</span>
+                <div className="p-2 rounded-2xl bg-indigo-500/10 text-indigo-600 border border-indigo-200/50">
+                  <ClipboardList className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-indigo-700 tracking-tight">
+                {stats.totalHomeworksCount}
+              </div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">حلول الطلاب المستلمة</span>
+                <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-emerald-700 tracking-tight">
+                {stats.totalSubmissionsCount}
+              </div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">الدروس والشروحات</span>
+                <div className="p-2 rounded-2xl bg-rose-500/10 text-rose-600 border border-rose-200/50">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-rose-700 tracking-tight">
+                {stats.totalLessonsCount}
+              </div>
+            </div>
+
+            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold text-slate-500">المذكرات والملخصات</span>
+                <div className="p-2 rounded-2xl bg-teal-500/10 text-teal-600 border border-teal-200/50">
+                  <FileText className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-teal-700 tracking-tight">
+                {stats.totalBookletsCount}
+              </div>
+            </div>
+          </div>
+
+          {/* Activity Breakdown Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {/* User Distribution Bar */}
+            <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xs space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span>توزيع المستخدمين</span>
+                </h3>
+                <span className="text-[11px] text-slate-500 font-bold">
+                  {stats.totalUsersCount} مستخدم
+                </span>
+              </div>
+
+              <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                <div
+                  style={{ width: `${(stats.studentsCount / (stats.totalUsersCount || 1)) * 100}%` }}
+                  className="bg-blue-500 h-full transition-all duration-500"
+                  title={`طلاب: ${stats.studentsCount}`}
+                />
+                <div
+                  style={{ width: `${(stats.teachersCount / (stats.totalUsersCount || 1)) * 100}%` }}
+                  className="bg-emerald-500 h-full transition-all duration-500"
+                  title={`معلمون: ${stats.teachersCount}`}
+                />
+                <div
+                  style={{ width: `${(stats.supervisorsCount / (stats.totalUsersCount || 1)) * 100}%` }}
+                  className="bg-amber-500 h-full transition-all duration-500"
+                  title={`مشرفون: ${stats.supervisorsCount}`}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-blue-50/80 p-2.5 rounded-2xl border border-blue-100/80">
+                  <span className="text-[10px] font-bold text-blue-900 block">طلاب</span>
+                  <span className="text-xs font-black text-blue-700">{stats.studentsCount}</span>
+                </div>
+                <div className="bg-emerald-50/80 p-2.5 rounded-2xl border border-emerald-100/80">
+                  <span className="text-[10px] font-bold text-emerald-900 block">معلمون</span>
+                  <span className="text-xs font-black text-emerald-700">{stats.teachersCount}</span>
+                </div>
+                <div className="bg-amber-50/80 p-2.5 rounded-2xl border border-amber-100/80">
+                  <span className="text-[10px] font-bold text-amber-900 block">مشرفون</span>
+                  <span className="text-xs font-black text-amber-700">{stats.supervisorsCount}</span>
                 </div>
               </div>
             </div>
 
-            {/* Educational Content Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">الواجبات المنشورة</span>
-                  <div className="p-2 rounded-2xl bg-indigo-500/10 text-indigo-600 border border-indigo-200/50">
-                    <ClipboardList className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-indigo-700 tracking-tight">
-                  {stats.totalHomeworksCount}
-                </div>
+            {/* Subject Activity Breakdown */}
+            <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                  <Layers className="w-4 h-4 text-indigo-600" />
+                  <span>نشاط المواد الدراسية</span>
+                </h3>
+                <span className="text-[11px] text-slate-500 font-bold">
+                  {subjects.length} مادة
+                </span>
               </div>
 
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">حلول الطلاب المستلمة</span>
-                  <div className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 border border-emerald-200/50">
-                    <CheckCircle2 className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-emerald-700 tracking-tight">
-                  {stats.totalSubmissionsCount}
-                </div>
-              </div>
-
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">الدروس والشروحات</span>
-                  <div className="p-2 rounded-2xl bg-rose-500/10 text-rose-600 border border-rose-200/50">
-                    <BookOpen className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-rose-700 tracking-tight">
-                  {stats.totalLessonsCount}
-                </div>
-              </div>
-
-              <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl border border-white/60 shadow-xs hover:shadow-md transition-all duration-300 space-y-1.5 hover:-translate-y-0.5">
-                <div className="flex items-center justify-between text-slate-400">
-                  <span className="text-[11px] font-bold text-slate-500">المذكرات والملخصات</span>
-                  <div className="p-2 rounded-2xl bg-teal-500/10 text-teal-600 border border-teal-200/50">
-                    <FileText className="w-4 h-4" />
-                  </div>
-                </div>
-                <div className="text-2xl font-black text-teal-700 tracking-tight">
-                  {stats.totalBookletsCount}
-                </div>
-              </div>
-            </div>
-
-            {/* Activity Breakdown Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {/* User Distribution Bar */}
-              <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xs space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <Users className="w-4 h-4 text-purple-600" />
-                    <span>توزيع المستخدمين</span>
-                  </h3>
-                  <span className="text-[11px] text-slate-500 font-bold">
-                    {stats.totalUsersCount} مستخدم
-                  </span>
-                </div>
-
-                <div className="h-3.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
-                  <div
-                    style={{ width: `${(stats.studentsCount / (stats.totalUsersCount || 1)) * 100}%` }}
-                    className="bg-blue-500 h-full transition-all duration-500"
-                    title={`طلاب: ${stats.studentsCount}`}
-                  />
-                  <div
-                    style={{ width: `${(stats.teachersCount / (stats.totalUsersCount || 1)) * 100}%` }}
-                    className="bg-emerald-500 h-full transition-all duration-500"
-                    title={`معلمون: ${stats.teachersCount}`}
-                  />
-                  <div
-                    style={{ width: `${(stats.supervisorsCount / (stats.totalUsersCount || 1)) * 100}%` }}
-                    className="bg-amber-500 h-full transition-all duration-500"
-                    title={`مشرفون: ${stats.supervisorsCount}`}
-                  />
-                </div>
-
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="bg-blue-50/80 p-2.5 rounded-2xl border border-blue-100/80">
-                    <span className="text-[10px] font-bold text-blue-900 block">طلاب</span>
-                    <span className="text-xs font-black text-blue-700">{stats.studentsCount}</span>
-                  </div>
-                  <div className="bg-emerald-50/80 p-2.5 rounded-2xl border border-emerald-100/80">
-                    <span className="text-[10px] font-bold text-emerald-900 block">معلمون</span>
-                    <span className="text-xs font-black text-emerald-700">{stats.teachersCount}</span>
-                  </div>
-                  <div className="bg-amber-50/80 p-2.5 rounded-2xl border border-amber-100/80">
-                    <span className="text-[10px] font-bold text-amber-900 block">مشرفون</span>
-                    <span className="text-xs font-black text-amber-700">{stats.supervisorsCount}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Subject Activity Breakdown */}
-              <div className="bg-white/80 backdrop-blur-md p-5 rounded-3xl border border-white/60 shadow-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                    <Layers className="w-4 h-4 text-indigo-600" />
-                    <span>نشاط المواد الدراسية</span>
-                  </h3>
-                  <span className="text-[11px] text-slate-500 font-bold">
-                    {subjects.length} مادة
-                  </span>
-                </div>
-
-                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                  {subjects.map((sub) => {
-                    const subHwCount = homeworks.filter((h) => h.subjectId === sub.id).length;
-                    const subLessonsCount = lessons.filter((l) => l.subjectId === sub.id).length;
-                    return (
-                      <div
-                        key={sub.id}
-                        className="flex items-center justify-between p-2.5 rounded-2xl bg-white/70 hover:bg-white border border-slate-100/80 text-xs transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-purple-600" />
-                          <span className="font-bold text-slate-800 text-[11px]">{sub.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-                          <span>{subLessonsCount} درس</span>
-                          <span>•</span>
-                          <span className="font-bold text-indigo-700">{subHwCount} واجب</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* TAB 2: User Management with Editable Triple Names */}
-        {activeTab === 'users' && (
-          <motion.div
-            key="admin-tab-users"
-            initial={{ opacity: 0, y: 10, filter: 'blur(3px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(3px)' }}
-            transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-            className="space-y-3.5"
-          >
-            {/* Filter & Search Bar */}
-            <div className="bg-white/80 backdrop-blur-md rounded-3xl p-3.5 border border-white/60 shadow-xs space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                {/* Search Bar */}
-                <div className="relative flex-1">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="ابحث بالاسم، البريد، أو الوظيفة..."
-                    className="w-full py-2.5 pr-9 pl-4 bg-slate-50/90 border border-slate-200/90 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
-                  />
-                  <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
-                </div>
-
-                {/* Role Filter Tabs */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                  {[
-                    { key: 'all', label: 'الكل' },
-                    { key: 'students', label: 'الطلاب' },
-                    { key: 'teachers', label: 'المعلمون' },
-                    { key: 'supervisors', label: 'المشرفون' }
-                  ].map((f) => (
-                    <button
-                      key={f.key}
-                      type="button"
-                      onClick={() => setRoleFilter(f.key as any)}
-                      className={`py-2 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
-                        roleFilter === f.key
-                          ? 'bg-slate-900 text-white shadow-2xs'
-                          : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
-                      }`}
+              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                {subjects.map((sub) => {
+                  const subHwCount = homeworks.filter((h) => h.subjectId === sub.id).length;
+                  const subLessonsCount = lessons.filter((l) => l.subjectId === sub.id).length;
+                  return (
+                    <div
+                      key={sub.id}
+                      className="flex items-center justify-between p-2.5 rounded-2xl bg-white/70 hover:bg-white border border-slate-100/80 text-xs transition-colors"
                     >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-purple-600" />
+                        <span className="font-bold text-slate-800 text-[11px]">{sub.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                        <span>{subLessonsCount} درس</span>
+                        <span>•</span>
+                        <span className="font-bold text-indigo-700">{subHwCount} واجب</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Users List Cards */}
-            <div className="space-y-2">
-              {filteredUsers.map((u) => {
-                const isThisSuperAdmin = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
-                const currentJob = isThisSuperAdmin
-                  ? 'المشرف الأساسي'
-                  : (u.jobTitle || (u.role === 'supervisor' ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب')));
+      {/* TAB 2: User Management with Editable Triple Names */}
+      {activeTab === 'users' && (
+        <div className="space-y-3.5">
+          {/* Filter & Search Bar */}
+          <div className="bg-white/80 backdrop-blur-md rounded-3xl p-3.5 border border-white/60 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              {/* Search Bar */}
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="ابحث بالاسم، البريد، أو الوظيفة..."
+                  className="w-full py-2.5 pr-9 pl-4 bg-slate-50/90 border border-slate-200/90 rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3" />
+              </div>
 
-                const subCount = getStudentSubmissionsCount(u.email, u.name);
-
-                return (
-                  <div
-                    key={u.id || u.email}
-                    className="bg-white rounded-2xl p-3 border border-slate-100 shadow-2xs hover:border-purple-200 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              {/* Role Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                {[
+                  { key: 'all', label: 'الكل' },
+                  { key: 'students', label: 'الطلاب' },
+                  { key: 'teachers', label: 'المعلمون' },
+                  { key: 'supervisors', label: 'المشرفون' }
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => setRoleFilter(f.key as any)}
+                    className={`py-2 px-3.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
+                      roleFilter === f.key
+                        ? 'bg-slate-900 text-white shadow-2xs'
+                        : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/80'
+                    }`}
                   >
-                    {/* User Info */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-                        <img
-                          src={u.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(u.name)}
-                          alt={u.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* Display User's Name / Triple Full Name */}
-                          <span className="font-black text-slate-900 text-xs sm:text-sm">
-                            {u.name}
-                          </span>
+                    {f.label}
+                  </button>
+                ))}
 
-                          {/* Direct Edit Name Button */}
-                          <button
-                            type="button"
-                            onClick={() => openEditNameModal(u)}
-                            className="p-1 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition cursor-pointer"
-                            title="تعديل الاسم"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAddUserModalOpen(true)}
+                  className="py-2 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>إضافة مستخدم</span>
+                </button>
+              </div>
+            </div>
+          </div>
 
-                          {isThisSuperAdmin ? (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-purple-100 text-purple-900 border border-purple-200">
-                              المشرف الأساسي
-                            </span>
-                          ) : (
-                            <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                              {currentJob}
-                            </span>
-                          )}
+          {/* Users List Cards */}
+          <div className="space-y-2">
+            {filteredUsers.map((u) => {
+              const isThisSuperAdmin = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+              const isAlnofal = u.email.toLowerCase() === ALNOFAL_EMAIL.toLowerCase();
+              const currentJob = isThisSuperAdmin
+                ? 'المشرف الأساسي'
+                : (isAlnofal ? (u.jobTitle || 'أ. لغة إنجليزية') : (u.jobTitle || (u.role === 'supervisor' ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب'))));
 
-                          {u.fullNameConfirmed && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              اسم معتمد ✓
-                            </span>
-                          )}
-                        </div>
+              const subCount = getStudentSubmissionsCount(u.email, u.name);
 
-                        <div className="flex items-center gap-2.5 text-[11px] text-slate-400 font-medium mt-0.5 flex-wrap">
-                          <span className="font-mono text-slate-500">{u.email}</span>
-                          {subCount > 0 && (
-                            <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[9px]">
-                              {subCount} واجب مسلّم
-                            </span>
-                          )}
-                          {u.joinedAt && (
-                            <span className="text-[9px] text-slate-400">
-                              انضم: {formatGregorianDate(u.joinedAt)}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+              return (
+                <div
+                  key={u.id || u.email}
+                  className="bg-white rounded-2xl p-3 border border-slate-100 shadow-2xs hover:border-purple-200 transition flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  {/* User Info */}
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                      <img
+                        src={u.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(u.name)}
+                        alt={u.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Display User's Name / Triple Full Name */}
+                        <span className="font-black text-slate-900 text-xs sm:text-sm">
+                          {u.name}
+                        </span>
 
-                    {/* Role Selector & Actions */}
-                    <div className="shrink-0 flex items-center gap-2 self-end sm:self-center">
-                      {!isThisSuperAdmin && (
-                        <>
-                          <div className="relative">
-                            <select
-                              value={currentJob}
-                              onChange={(e) => handleJobChange(u.email, e.target.value)}
-                              className={`py-1 pr-2 pl-5 rounded-lg text-xs font-bold border focus:outline-none focus:ring-1 focus:ring-purple-600 cursor-pointer appearance-none ${
-                                currentJob === 'طالب'
-                                  ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
-                              }`}
-                              title="تعديل الرتبة / الوظيفة"
-                            >
-                              <option value="طالب">طالب</option>
-                              <optgroup label="المعلمون والمشرفون">
-                                {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            </select>
-                            <ChevronDown className="w-3 h-3 text-slate-400 absolute left-1.5 top-2 pointer-events-none" />
-                          </div>
+                        {/* Direct Edit Name Button */}
+                        <button
+                          type="button"
+                          onClick={() => openEditNameModal(u)}
+                          className="p-1 text-slate-400 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition cursor-pointer"
+                          title="تعديل الاسم"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
 
-                          {/* Delete User Button */}
-                          <button
-                            type="button"
-                            onClick={() => setDeletingUser(u)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition cursor-pointer"
-                            title="حذف هذا الحساب"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
+                        {isThisSuperAdmin ? (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-purple-100 text-purple-900 border border-purple-200">
+                            المشرف الأساسي
+                          </span>
+                        ) : (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {currentJob}
+                          </span>
+                        )}
+
+                        {u.fullNameConfirmed && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            اسم معتمد ✓
+                          </span>
+                        )}
+
+                        {u.classroom && (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full font-black bg-blue-100 text-blue-900 border border-blue-200">
+                            فصل {u.classroom}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2.5 text-[11px] text-slate-400 font-medium mt-0.5 flex-wrap">
+                        <span className="font-mono text-slate-500">{u.email}</span>
+                        {subCount > 0 && (
+                          <span className="text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded text-[9px]">
+                            {subCount} واجب مسلّم
+                          </span>
+                        )}
+                        {u.joinedAt && (
+                          <span className="text-[9px] text-slate-400">
+                            انضم: {formatGregorianDate(u.joinedAt)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                );
-              })}
 
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-8 bg-white rounded-2xl border border-dashed border-slate-200">
-                  <p className="text-xs text-slate-400 font-bold">لا يوجد مستخدمين مطابقين</p>
+                  {/* Role Selector & Actions */}
+                  <div className="shrink-0 flex items-center gap-2 self-end sm:self-center">
+                    {!isThisSuperAdmin && (
+                      <>
+                        <div className="relative">
+                          <select
+                            value={currentJob}
+                            onChange={(e) => handleJobChange(u.email, e.target.value)}
+                            className={`py-1 pr-2 pl-5 rounded-lg text-xs font-bold border focus:outline-none focus:ring-1 focus:ring-purple-600 cursor-pointer appearance-none ${
+                              currentJob === 'طالب'
+                                ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                            }`}
+                            title="تعديل الرتبة / الوظيفة"
+                          >
+                            <option value="طالب">طالب</option>
+                            <optgroup label="المعلمون والمشرفون">
+                              {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </optgroup>
+                          </select>
+                          <ChevronDown className="w-3 h-3 text-slate-400 absolute left-1.5 top-2 pointer-events-none" />
+                        </div>
+
+                        {/* Delete User Button */}
+                        <button
+                          type="button"
+                          onClick={() => setDeletingUser(u)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition cursor-pointer"
+                          title="حذف هذا الحساب"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+              );
+            })}
 
-        {/* TAB 3: Banner Management Full Page View */}
-        {activeTab === 'banners' && (
-          <motion.div
-            key="admin-tab-banners"
-            initial={{ opacity: 0, y: 10, filter: 'blur(3px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(3px)' }}
-            transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-          >
-            <BannerManagementView
-              banners={banners}
-              settings={bannerSettings}
-              onSaveBanners={onSaveBanners}
-              onSaveSettings={onSaveBannerSettings}
-              onToggleBannerActive={onToggleBannerActive}
-              onDeleteBanner={onDeleteBanner}
-              onDeleteAllBanners={onDeleteAllBanners}
-              onAddBanner={onAddBanner}
-              onUpdateBanner={onUpdateBanner}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+            {filteredUsers.length === 0 && (
+              <div className="text-center py-8 bg-white rounded-2xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-400 font-bold">لا يوجد مستخدمين مطابقين</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: Banner Management Full Page View */}
+      {activeTab === 'banners' && (
+        <BannerManagementView
+          banners={banners}
+          settings={bannerSettings}
+          onSaveBanners={onSaveBanners}
+          onSaveSettings={onSaveBannerSettings}
+          onToggleBannerActive={onToggleBannerActive}
+          onDeleteBanner={onDeleteBanner}
+          onDeleteAllBanners={onDeleteAllBanners}
+          onAddBanner={onAddBanner}
+          onUpdateBanner={onUpdateBanner}
+        />
+      )}
 
       {/* Edit User Full Triple Name Modal */}
       <AnimatePresence>
@@ -1089,6 +1042,100 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                   إلغاء
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Add New User / Student Modal */}
+      <AnimatePresence>
+        {isAddUserModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs font-['Tajawal',sans-serif]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4 text-right"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <h3 className="font-black text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+                  <UserPlus className="w-4 h-4 text-purple-600" />
+                  <span>إضافة مستخدم جديد</span>
+                </h3>
+                <button
+                  onClick={() => setIsAddUserModalOpen(false)}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateUser} className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-700 block">
+                    الاسم الكامل (أو الثلاثي)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newUserName}
+                    onChange={(e) => setNewUserName(e.target.value)}
+                    placeholder="مثال: عبد الله بن خالد القحطاني"
+                    className="w-full py-2 px-3 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-purple-600 transition"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-700 block">
+                    البريد الإلكتروني
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    placeholder="student@example.com"
+                    className="w-full py-2 px-3 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-purple-600 transition text-left font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-slate-700 block">
+                    الرتبة / الدور الوظيفي
+                  </label>
+                  <select
+                    value={newUserJobTitle}
+                    onChange={(e) => setNewUserJobTitle(e.target.value)}
+                    className="w-full py-2 px-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:border-purple-600 transition cursor-pointer"
+                  >
+                    <option value="طالب">طالب (مشاهدة وتحميل وحل واجبات)</option>
+                    <optgroup label="المعلمون والمشرفون">
+                      {USER_JOB_OPTIONS.filter((opt) => opt.value !== 'طالب').map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label} ({opt.description})
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={isAddingUser}
+                    className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                  >
+                    {isAddingUser ? 'جاري الإضافة...' : 'إضافة المستخدم'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddUserModalOpen(false)}
+                    className="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    إلغاء
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}

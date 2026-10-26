@@ -131,18 +131,20 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
   const isTeacher =
     !isSupervisor &&
-    (user?.role === 'teacher' || (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
+    (user?.role === 'teacher' ||
+      (user?.email && user.email.toLowerCase() === 'alnofal.2026108@gmail.com') ||
+      (!!user?.jobTitle && user?.jobTitle !== 'طالب'));
 
   // Submit button is available for students and supervisors
   const canSubmitHomework = !isTeacher || isSupervisor;
 
-  // Restrict allowed subjects for adding/editing homework - ONLY Semester 1 (P1)
+  // Restrict allowed subjects for adding/editing homework - ONLY Semester 1 (P1) and only teacher's subject
   const allowedSubjects = useMemo(() => {
     const p1Subjects = allSubjects.filter((s) => s.semester === 1);
     if (isSupervisor) return p1Subjects;
     if (isTeacher) {
       const filtered = p1Subjects.filter((s) => canManageSubject(s.id));
-      return filtered.length > 0 ? filtered : p1Subjects;
+      return filtered;
     }
     return p1Subjects;
   }, [allSubjects, isSupervisor, isTeacher, canManageSubject]);
@@ -558,6 +560,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         studentId: user?.id || 'guest',
         studentName: studentFullName,
         studentEmail: user?.email || '',
+        studentClass: user?.classroom || undefined,
         notes: studentNotes.trim() || undefined,
         attachedFiles: studentAttachedFiles,
         attachedFile: studentAttachedFiles[0] || undefined
@@ -1096,6 +1099,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                 {hwSubmissions.map((sub) => {
                   const studentFullName = resolveStudentFullName(sub.studentEmail, sub.studentName, registeredUsers);
                   const isConfirmedName = isFullNameValid(studentFullName);
+                  const studentClass = sub.studentClass || registeredUsers.find((u) => u.email?.toLowerCase().trim() === sub.studentEmail?.toLowerCase().trim())?.classroom;
                   const subFiles = getSubmissionFiles(sub);
 
                   return (
@@ -1109,6 +1113,11 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                             <span className="font-black text-slate-900 text-xs sm:text-sm">
                               {studentFullName}
                             </span>
+                            {studentClass && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-lg font-black bg-blue-50 text-blue-700 border border-blue-200">
+                                فصل {studentClass}
+                              </span>
+                            )}
                             {isConfirmedName && (
                               <span className="text-[10px] px-2 py-0.5 rounded-lg font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                 الاسم الثلاثي ✓

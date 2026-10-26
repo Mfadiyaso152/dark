@@ -380,9 +380,14 @@ export async function downloadFileFromCloud(
     primaryPrefixed,
     fileId,
     `sub-sol-${fileId}`,
+    `hw-sol-${fileId}`,
+    `booklet-${fileId}`,
+    `lesson-file-${fileId}`,
     `sub-sol-${rawClean}`,
     `sub-${rawClean}`,
     `hw-sol-${rawClean}`,
+    `booklet-${rawClean}`,
+    `lesson-file-${rawClean}`,
     rawClean
   ].filter((v, idx, arr) => !!v && arr.indexOf(v) === idx);
 

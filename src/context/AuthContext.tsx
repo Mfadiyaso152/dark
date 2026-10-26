@@ -33,7 +33,38 @@ export const SUPER_ADMIN_USER: User = {
   lastLogin: new Date().toISOString()
 };
 
-export const INITIAL_USERS: User[] = [SUPER_ADMIN_USER];
+export const ALNOFAL_EMAIL = 'alnofal.2026108@gmail.com';
+
+export const ALNOFAL_USER: User = {
+  id: 'user-alnofal-eng',
+  name: 'أ. النوفل (معلم لغة إنجليزية)',
+  email: 'Alnofal.2026108@gmail.com',
+  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alnofal',
+  role: 'teacher',
+  jobTitle: 'أ. لغة إنجليزية',
+  grade: 'أول ثانوي',
+  isSuperAdmin: false,
+  isAssistantAdmin: false,
+  fullNameConfirmed: true,
+  joinedAt: '2026-09-01',
+  lastLogin: new Date().toISOString()
+};
+
+export const INITIAL_USERS: User[] = [
+  SUPER_ADMIN_USER,
+  ALNOFAL_USER
+];
+
+export const FAKE_USER_EMAILS = new Set([
+  'abdullah.q@gmail.com',
+  'rayan.sh@gmail.com',
+  'faisal.otb@gmail.com',
+  'saud.dos@gmail.com',
+  'sara.gh@gmail.com',
+  'noura.hr@gmail.com',
+  'khaled.q@gmail.com',
+  'fahad.sh@gmail.com'
+]);
 
 export const formatDisplayName = (name?: string, isTeacherOrSupervisor?: boolean): string => {
   if (!name || typeof name !== 'string') return isTeacherOrSupervisor ? 'أ. المعلم' : 'طالبنا العزيز';
@@ -107,16 +138,25 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
     if (isInvalidOrFakeUser(u.name, emailKey)) continue;
 
     const isSuper = emailKey === SUPER_ADMIN_EMAIL.toLowerCase();
+    const isAlnofal = emailKey === ALNOFAL_EMAIL.toLowerCase();
     const isAssistant = !isSuper && (u.role === 'supervisor' || u.jobTitle === 'مشرف مساعد' || emailKey === 'kalshrby90@gmail.com');
-    const jobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || (isAssistant ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب')));
-    const isTeacher = !isSuper && !isAssistant && (u.role === 'teacher' || (jobTitle !== 'طالب' && !jobTitle.includes('مشرف')));
-    const isConfirmed = !!u.fullNameConfirmed || isSuper;
+    const jobTitle = isSuper
+      ? 'المشرف الأساسي'
+      : (isAlnofal
+          ? (u.jobTitle || 'أ. لغة إنجليزية')
+          : (u.jobTitle || (isAssistant ? 'مشرف مساعد' : (u.role === 'teacher' ? 'أ. رياضيات' : 'طالب'))));
+    const isTeacher = !isSuper && !isAssistant && (isAlnofal || u.role === 'teacher' || (jobTitle !== 'طالب' && !jobTitle.includes('مشرف')));
+    const isConfirmed = !!u.fullNameConfirmed || isSuper || isAlnofal;
+
+    const savedLocalClass = safeGetItem(`thanaweya_student_class_${emailKey}`) || undefined;
+    const finalClassroom = u.classroom || savedLocalClass;
 
     if (!map.has(emailKey)) {
       map.set(emailKey, {
         ...u,
         email: emailKey,
         jobTitle,
+        classroom: finalClassroom,
         isSuperAdmin: isSuper,
         isAssistantAdmin: isAssistant,
         fullNameConfirmed: isConfirmed,
@@ -129,19 +169,23 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
           ? u.lastLogin
           : existing.lastLogin;
       const avatar = u.avatar && !u.avatar.includes('dicebear') ? u.avatar : existing.avatar;
-      const finalJobTitle = isSuper ? 'المشرف الأساسي' : (u.jobTitle || existing.jobTitle || 'طالب');
+      const finalJobTitle = isSuper
+        ? 'المشرف الأساسي'
+        : (isAlnofal ? (existing.jobTitle || u.jobTitle || 'أ. لغة إنجليزية') : (u.jobTitle || existing.jobTitle || 'طالب'));
       const finalIsAssistant = !isSuper && (finalJobTitle === 'مشرف مساعد' || existing.isAssistantAdmin || u.isAssistantAdmin || emailKey === 'kalshrby90@gmail.com');
-      const finalIsTeacher = !isSuper && !finalIsAssistant && (finalJobTitle !== 'طالب');
+      const finalIsTeacher = !isSuper && !finalIsAssistant && (isAlnofal || finalJobTitle !== 'طالب');
       const confirmedName = (existing.fullNameConfirmed ? existing.name : (u.fullNameConfirmed ? u.name : (u.name || existing.name)));
+      const combinedClassroom = u.classroom || existing.classroom || savedLocalClass;
 
       map.set(emailKey, {
         ...existing,
         ...u,
-        name: isSuper ? (u.name || existing.name) : confirmedName,
+        name: isSuper ? (u.name || existing.name) : (isAlnofal ? (u.name || existing.name || 'أ. النوفل (معلم لغة إنجليزية)') : confirmedName),
         jobTitle: finalJobTitle,
+        classroom: combinedClassroom,
         isSuperAdmin: isSuper,
         isAssistantAdmin: finalIsAssistant,
-        fullNameConfirmed: isSuper || !!(existing.fullNameConfirmed || u.fullNameConfirmed),
+        fullNameConfirmed: isSuper || isAlnofal || !!(existing.fullNameConfirmed || u.fullNameConfirmed),
         role: isSuper ? 'supervisor' : (finalIsAssistant ? 'supervisor' : (finalIsTeacher ? 'teacher' : 'student')),
         avatar,
         lastLogin
@@ -166,12 +210,30 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
     });
   }
 
+  // Ensure ALNOFAL_USER (English teacher) is always present
+  const alnofalKey = ALNOFAL_EMAIL.toLowerCase();
+  if (!map.has(alnofalKey)) {
+    map.set(alnofalKey, ALNOFAL_USER);
+  } else {
+    const existingAlnofal = map.get(alnofalKey)!;
+    map.set(alnofalKey, {
+      ...ALNOFAL_USER,
+      ...existingAlnofal,
+      name: existingAlnofal.name && existingAlnofal.name !== 'طالب' ? existingAlnofal.name : 'أ. النوفل (معلم لغة إنجليزية)',
+      jobTitle: existingAlnofal.jobTitle || 'أ. لغة إنجليزية',
+      role: 'teacher',
+      fullNameConfirmed: true
+    });
+  }
+
   const result = Array.from(map.values());
 
-  // Sort: Super Admin first, then by lastLogin descending
+  // Sort: Super Admin first, then Alnofal, then by lastLogin descending
   result.sort((a, b) => {
     if (a.isSuperAdmin) return -1;
     if (b.isSuperAdmin) return 1;
+    if (a.email.toLowerCase() === alnofalKey) return -1;
+    if (b.email.toLowerCase() === alnofalKey) return 1;
     const timeA = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
     const timeB = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
     return timeB - timeA;
@@ -180,23 +242,11 @@ export const deduplicateUsersByEmail = (users: User[]): User[] => {
   return result;
 };
 
-const isInvalidOrFakeUser = (name: string, email: string): boolean => {
-  const n = (name || '').toLowerCase();
-  const e = (email || '').toLowerCase();
-  return (
-    e.includes('fake') ||
-    e.includes('edu.sa') ||
-    e.includes('saud.otb') ||
-    e.includes('abdulrahman.d') ||
-    e.includes('sara') ||
-    e.includes('mansour') ||
-    n.includes('سعود') ||
-    n.includes('عبد الرحمن') ||
-    n.includes('ريان') ||
-    n.includes('سارة') ||
-    n.includes('ساره') ||
-    n.includes('المنصور')
-  );
+export const isInvalidOrFakeUser = (_name: string, email: string): boolean => {
+  if (!email || !email.includes('@')) return true;
+  const clean = email.trim().toLowerCase();
+  if (FAKE_USER_EMAILS.has(clean)) return true;
+  return false;
 };
 
 interface AuthContextType {
@@ -215,11 +265,13 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<boolean>;
   loginWithGoogleEmail: (email: string, name?: string, avatar?: string) => Promise<void>;
   updateUserName: (fullName: string) => Promise<{ success: boolean; message: string }>;
+  setStudentClassroom: (classroom: string) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
   switchRole: (role: UserRole) => void;
   updateUserJob: (email: string, jobTitle: string) => Promise<{ success: boolean; message: string }>;
   updateUserFullNameByAdmin: (email: string, newFullName: string) => Promise<{ success: boolean; message: string }>;
   deleteUserByAdmin: (email: string) => Promise<{ success: boolean; message: string }>;
+  addUserByAdmin: (name: string, email: string, jobTitle: string) => Promise<{ success: boolean; message: string }>;
   addAssistantAdmin: (email: string, name: string) => { success: boolean; message: string };
   removeAssistantAdmin: (email: string) => { success: boolean; message: string };
   toggleUserRole: (userId: string) => { success: boolean; message: string };
@@ -262,7 +314,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const validUsers = deduplicateUsersByEmail(parsed);
+          const cleaned = parsed.filter((u: any) => u && u.email && !FAKE_USER_EMAILS.has(String(u.email).toLowerCase().trim()));
+          const validUsers = deduplicateUsersByEmail([...INITIAL_USERS, ...cleaned]);
           if (validUsers.length > 0) {
             safeSetItem('thanaweya_registered_users', JSON.stringify(validUsers));
             return validUsers;
@@ -274,6 +327,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return INITIAL_USERS;
   });
+
+  // Ensure default cloud users (Super Admin & English Teacher Alnofal) exist in Firestore Cloud
+  useEffect(() => {
+    const seedCloudUsers = async () => {
+      try {
+        const alnofalDocId = getSafeUserDocId(ALNOFAL_EMAIL);
+        await setDoc(
+          doc(db, 'users', alnofalDocId),
+          {
+            id: alnofalDocId,
+            name: 'أ. النوفل (معلم لغة إنجليزية)',
+            email: 'alnofal.2026108@gmail.com',
+            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alnofal',
+            role: 'teacher',
+            jobTitle: 'أ. لغة إنجليزية',
+            grade: 'أول ثانوي',
+            isSuperAdmin: false,
+            isAssistantAdmin: false,
+            fullNameConfirmed: true,
+            joinedAt: '2026-09-01'
+          },
+          { merge: true }
+        );
+
+        const superDocId = getSafeUserDocId(SUPER_ADMIN_EMAIL);
+        await setDoc(
+          doc(db, 'users', superDocId),
+          {
+            id: superDocId,
+            name: SUPER_ADMIN_USER.name,
+            email: SUPER_ADMIN_EMAIL.toLowerCase(),
+            avatar: SUPER_ADMIN_USER.avatar,
+            role: 'supervisor',
+            jobTitle: 'المشرف الأساسي',
+            grade: 'أول ثانوي',
+            isSuperAdmin: true,
+            isAssistantAdmin: false,
+            fullNameConfirmed: true,
+            joinedAt: '2026-08-15'
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.warn('Seed cloud users note:', err);
+      }
+    };
+    seedCloudUsers();
+  }, []);
 
   // App starts with NO logged-in user by default (forcing Login Page entry)
   const [user, setUser] = useState<User | null>(() => {
@@ -326,6 +427,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: userObj.role,
           jobTitle: userObj.jobTitle || 'طالب',
           grade: userObj.grade || 'أول ثانوي',
+          classroom: userObj.classroom || safeGetItem(`thanaweya_student_class_${cleanEmail}`) || undefined,
           isSuperAdmin: !!userObj.isSuperAdmin,
           isAssistantAdmin: !!userObj.isAssistantAdmin,
           fullNameConfirmed: !!userObj.fullNameConfirmed,
@@ -352,6 +454,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         let existingJobTitle = isSuper ? 'المشرف الأساسي' : 'طالب';
         let existingRole: UserRole = isSuper ? 'supervisor' : 'student';
         let cloudSavedName: string | undefined = undefined;
+        let cloudClassroom: string | undefined = safeGetItem(`thanaweya_student_class_${cleanEmail}`) || undefined;
         let isConfirmed = isSuper || !!safeGetItem(`thanaweya_name_confirmed_${cleanEmail}`);
 
         try {
@@ -365,6 +468,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
               if (d.name && isFullNameValid(d.name)) {
                 cloudSavedName = d.name;
+              }
+              if (d.classroom) {
+                cloudClassroom = d.classroom;
+                safeSetItem(`thanaweya_student_class_${cleanEmail}`, d.classroom);
+                safeSetItem(`thanaweya_student_class_locked_${cleanEmail}`, 'true');
               }
               if (d.fullNameConfirmed) {
                 isConfirmed = true;
@@ -395,6 +503,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: isSuper ? 'supervisor' : (isAssistant ? 'supervisor' : (isTeacher ? 'teacher' : 'student')),
           jobTitle: existingJobTitle,
           grade: 'أول ثانوي',
+          classroom: cloudClassroom,
           isSuperAdmin: isSuper,
           isAssistantAdmin: isAssistant,
           fullNameConfirmed: isConfirmed,
@@ -441,6 +550,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const isTeacher = !isSuper && !isAssistant && jobTitle !== 'طالب';
             const isConfirmed = isSuper || !!data.fullNameConfirmed || !!safeGetItem(`thanaweya_name_confirmed_${email}`) || isFullNameValid(cleanName);
 
+            const savedClass = data.classroom || safeGetItem(`thanaweya_student_class_${email}`) || undefined;
+            if (data.classroom) {
+              safeSetItem(`thanaweya_student_class_${email}`, data.classroom);
+              safeSetItem(`thanaweya_student_class_locked_${email}`, 'true');
+            }
+
             cloudUsers.push({
               id: docSnap.id,
               name: cleanName || 'مستخدم',
@@ -451,6 +566,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               role: isSuper ? 'supervisor' : (isAssistant ? 'supervisor' : (isTeacher ? 'teacher' : 'student')),
               jobTitle,
               grade: data.grade || 'أول ثانوي',
+              classroom: savedClass,
               isSuperAdmin: isSuper,
               isAssistantAdmin: isAssistant,
               fullNameConfirmed: isConfirmed,
@@ -462,21 +578,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           // Ensure deduplicated users with single Super Admin entry
-          const merged = deduplicateUsersByEmail(cloudUsers);
+          const merged = deduplicateUsersByEmail([...INITIAL_USERS, ...cloudUsers]);
 
           setRegisteredUsers(merged);
           safeSetItem('thanaweya_registered_users', JSON.stringify(merged));
 
-          // If current logged-in user's role was updated by super admin in real-time, sync it
+          // If current logged-in user's role or classroom was updated in cloud in real-time, sync it
           setUser((currentUser) => {
             if (!currentUser || !currentUser.email) return currentUser;
             const myEmail = currentUser.email.toLowerCase();
             const foundInCloud = merged.find((u) => u.email.toLowerCase() === myEmail);
-            if (foundInCloud && (foundInCloud.jobTitle !== currentUser.jobTitle || foundInCloud.role !== currentUser.role)) {
+            if (foundInCloud && (
+              foundInCloud.jobTitle !== currentUser.jobTitle ||
+              foundInCloud.role !== currentUser.role ||
+              (foundInCloud.classroom && foundInCloud.classroom !== currentUser.classroom)
+            )) {
               const updated = {
                 ...currentUser,
                 jobTitle: foundInCloud.jobTitle,
                 role: foundInCloud.role,
+                classroom: foundInCloud.classroom || currentUser.classroom,
                 isAssistantAdmin: foundInCloud.isAssistantAdmin
               };
               safeSetItem('thanaweya_user', JSON.stringify(updated));
@@ -530,11 +651,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
       });
-      if (cloudUsers.length > 0) {
-        const merged = deduplicateUsersByEmail(cloudUsers);
+        const merged = deduplicateUsersByEmail([...INITIAL_USERS, ...cloudUsers]);
         setRegisteredUsers(merged);
         safeSetItem('thanaweya_registered_users', JSON.stringify(merged));
-      }
     } catch (e) {
       console.warn('Manual refresh users note:', e);
     }
@@ -589,45 +708,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // 3. Student has NO manage permissions anywhere
-    if (user.jobTitle === 'طالب' || !user.jobTitle) {
+    if (user.jobTitle === 'طالب' || user.role === 'student') {
       return false;
     }
 
-    // 4. If checking general capability (e.g. is user a teacher?)
+    // 4. If checking general capability (e.g. is user a teacher with edit capability?)
     if (!subjectIdOrName) {
-      return user.role === 'teacher' || user.jobTitle !== 'طالب';
+      return user.role === 'teacher' || (user.jobTitle !== 'طالب' && !user.jobTitle.includes('طالب'));
     }
 
-    const job = user.jobTitle.trim().toLowerCase();
-    const target = subjectIdOrName.trim().toLowerCase();
+    const job = (user.jobTitle || '').trim().toLowerCase();
+    const target = (subjectIdOrName || '').trim().toLowerCase();
 
-    // 5. Check specific subject assignment:
-    if (job.includes('رياضيات')) {
-      return target.startsWith('math') || target.includes('رياضيات');
+    // English Teacher (Alnofal or any English teacher):
+    // Can manage ALL info of English, but CANNOT manage any other subjects!
+    const isEnglishTeacher =
+      cleanEmail === 'alnofal.2026108@gmail.com' ||
+      job.includes('إنجليز') ||
+      job.includes('انجليز') ||
+      job.includes('انقليز') ||
+      job.includes('انكليز') ||
+      job.includes('english') ||
+      job.includes('mega');
+
+    if (isEnglishTeacher) {
+      const isEnglishTarget =
+        target === 'eng-1' ||
+        target === 'eng-2' ||
+        target.includes('إنجليز') ||
+        target.includes('انجليز') ||
+        target.includes('انقليز') ||
+        target.includes('english') ||
+        target.includes('mega') ||
+        target.includes('goal');
+      return isEnglishTarget;
     }
-    if (job.includes('كيمياء')) {
-      return target.startsWith('chem') || target.includes('كيمياء');
+
+    // Math Teacher
+    if (job.includes('رياضيات') || job.includes('math')) {
+      return target === 'math-1' || target === 'math-2' || target.includes('رياضيات') || target.includes('math');
     }
-    if (job.includes('بيئة') || job.includes('أحياء') || job.includes('احياء')) {
-      return target === 'eco-1' || target === 'bio-1' || target.includes('بيئة') || target.includes('بيئه') || target.includes('eco') || target.includes('أحياء') || target.includes('احياء') || target.includes('bio');
+
+    // Chemistry Teacher
+    if (job.includes('كيمياء') || job.includes('chem')) {
+      return target === 'chem-1' || target.includes('كيمياء') || target.includes('chem');
     }
-    if (job.includes('تقنية') || job.includes('رقمية') || job.includes('حاسب')) {
-      return target.startsWith('digi') || target.includes('تقنية') || target.includes('رقمية') || target.includes('tech') || target.includes('حاسب');
+
+    // Ecology / Biology Teacher
+    if (job.includes('بيئة') || job.includes('بيئه') || job.includes('أحياء') || job.includes('احياء') || job.includes('eco') || job.includes('bio')) {
+      return target === 'eco-1' || target === 'bio-1' || target.includes('بيئة') || target.includes('أحياء') || target.includes('احياء');
     }
-    if (job.includes('تفكير') || job.includes('ناقد')) {
-      return target.startsWith('think') || target.includes('تفكير') || target.includes('ناقد') || target.includes('crit');
+
+    // Digital Technology Teacher
+    if (job.includes('تقنية') || job.includes('رقمية') || job.includes('حاسب') || job.includes('digi') || job.includes('tech')) {
+      return target === 'digi-1' || target === 'digi-2' || target.includes('تقنية') || target.includes('رقمية');
     }
-    if (job.includes('تفسير') || job.includes('قرآن')) {
-      return target.startsWith('tafsir') || target.includes('تفسير') || target.includes('قرآن') || target.includes('taf');
+
+    // Critical Thinking Teacher
+    if (job.includes('تفكير') || job.includes('ناقد') || job.includes('think')) {
+      return target === 'think-1' || target.includes('تفكير') || target.includes('ناقد');
     }
-    if (job.includes('إنجليزي') || job.includes('انجليزي') || job.includes('english')) {
-      return target.startsWith('eng') || target.includes('إنجليزي') || target.includes('انجليزي') || target.includes('mega');
+
+    // Tafsir Teacher
+    if (job.includes('تفسير') || job.includes('قرآن') || job.includes('tafsir')) {
+      return target === 'tafsir-1' || target.includes('تفسير') || target.includes('قرآن');
     }
-    if (job.includes('كفايات') || job.includes('عربي') || job.includes('لغوية')) {
-      return target.startsWith('lang') || target.includes('كفايات') || target.includes('لغوية') || target.includes('عربي');
+
+    // Arabic / Competencies Teacher
+    if (job.includes('كفايات') || job.includes('عربي') || job.includes('لغوية') || job.includes('lang')) {
+      return target === 'lang-1' || target === 'lang-2' || target.includes('كفايات') || target.includes('لغوية');
     }
-    if (job.includes('مرشد') || job.includes('إرشاد') || job.includes('ارشاد')) {
-      return target.startsWith('guidance') || target.includes('إرشاد') || target.includes('ارشاد') || target.includes('مرشد');
+
+    // Guidance
+    if (job.includes('مرشد') || job.includes('إرشاد') || job.includes('ارشاد') || job.includes('guidance')) {
+      return target === 'guidance-1' || target === 'guidance-2' || target.includes('إرشاد') || target.includes('مرشد');
     }
 
     return false;
@@ -656,7 +810,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cleanName = rawName.replace(/^(أ\.|أستاذ\s*|\(المدير العام\))/g, '').trim();
         const isTeacher = isSuper || (existingJob !== 'طالب');
 
-        let isConfirmed = isSuper || !!found?.fullNameConfirmed;
+        const savedClass = found?.classroom || safeGetItem(`thanaweya_student_class_${cleanEmail}`) || undefined;
+        const isConfirmed = isSuper || !!found?.fullNameConfirmed || isFullNameValid(cleanName);
 
         const newUserObj: User = {
           id: result.user.uid,
@@ -668,6 +823,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: isSuper ? 'supervisor' : existingRole,
           jobTitle: existingJob,
           grade: 'أول ثانوي',
+          classroom: savedClass,
           isSuperAdmin: isSuper,
           isAssistantAdmin: !isSuper && isTeacher,
           fullNameConfirmed: isConfirmed,
@@ -725,6 +881,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const nowIso = new Date().toISOString();
+    const savedClass = existing?.classroom || safeGetItem(`thanaweya_student_class_${cleanEmail}`) || undefined;
 
     if (existing) {
       const jobTitle = isSuper ? 'المشرف الأساسي' : (existing.jobTitle || 'طالب');
@@ -734,6 +891,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...existing,
         name: cleanName,
         jobTitle,
+        classroom: savedClass,
         isSuperAdmin: isSuper,
         isAssistantAdmin: isAssistant,
         fullNameConfirmed: isConfirmed,
@@ -753,6 +911,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: isSuper ? 'supervisor' : 'student',
         jobTitle,
         grade: 'أول ثانوي',
+        classroom: savedClass,
         isSuperAdmin: isSuper,
         isAssistantAdmin: false,
         fullNameConfirmed: isConfirmed,
@@ -822,6 +981,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: 'تم حفظ الاسم الثلاثي بنجاح' };
   };
 
+  // Set student classroom (mandatory on entry for all students - once and never repeated / cannot change)
+  const setStudentClassroom = async (classroom: string): Promise<{ success: boolean; message: string }> => {
+    if (!user || !user.email) {
+      return { success: false, message: 'المستخدم غير مسجل' };
+    }
+
+    const cleanClass = classroom.trim();
+    if (!['1/1', '1/2', '1/3', '1/4', '1/5', '1/6', '1/7'].includes(cleanClass)) {
+      return { success: false, message: 'يرجى اختيار فصل صحيح من الخيارات المتاحة (1/1 إلى 1/7).' };
+    }
+
+    const cleanEmail = user.email.toLowerCase().trim();
+
+    // Lock permanently in localStorage
+    safeSetItem(`thanaweya_student_class_${cleanEmail}`, cleanClass);
+    safeSetItem(`thanaweya_student_class_locked_${cleanEmail}`, 'true');
+
+    const updatedUser: User = {
+      ...user,
+      classroom: cleanClass
+    };
+
+    setUser(updatedUser);
+    safeSetItem('thanaweya_user', JSON.stringify(updatedUser));
+
+    // Update in registeredUsers
+    setRegisteredUsers((prev) => {
+      const next = prev.map((u) => (u.email && u.email.toLowerCase().trim() === cleanEmail ? { ...u, classroom: cleanClass } : u));
+      safeSetItem('thanaweya_registered_users', JSON.stringify(next));
+      return next;
+    });
+
+    // Save to Firestore Cloud immediately so all teachers and supervisors see it in real time
+    try {
+      const docId = getSafeUserDocId(cleanEmail);
+      await setDoc(
+        doc(db, 'users', docId),
+        {
+          classroom: cleanClass,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Error saving classroom to cloud:', e);
+    }
+
+    return { success: true, message: `تم تأكيد الفصل الدراسي (${cleanClass}) بنجاح` };
+  };
+
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
@@ -840,18 +1049,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     syncUserToCloud(updated);
   };
 
-  // Update user role / job title (Only Super Admin can do this)
+  // Update user role / job title (Authorized for Admin)
   const updateUserJob = async (email: string, jobTitle: string): Promise<{ success: boolean; message: string }> => {
-    if (!isSuperAdmin) {
-      return { success: false, message: 'عذراً، فقط المشرف الأساسي يملك صلاحية تعيين وظائف المستخدمين.' };
-    }
-
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
       return { success: false, message: 'لا يمكن تعديل وظيفة المشرف الأساسي.' };
     }
 
-    const jobOption = USER_JOB_OPTIONS.find((j) => j.value === jobTitle) || USER_JOB_OPTIONS[0];
+    const jobOption = USER_JOB_OPTIONS.find((j) => j.value === jobTitle) || {
+      value: jobTitle,
+      label: jobTitle,
+      role: (jobTitle === 'طالب' ? 'student' : (jobTitle.includes('مشرف') ? 'supervisor' : 'teacher')) as UserRole,
+      isSupervisorOrTeacher: jobTitle !== 'طالب'
+    };
     const newRole: UserRole = jobOption.role;
     const isTeacherOrSupervisor = jobOption.isSupervisorOrTeacher;
 
@@ -862,22 +1072,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setAssistantAdminEmails(nextAssistants);
 
-    // Update registeredUsers state
-    setRegisteredUsers((prev) =>
-      prev.map((u) => {
-        if (u.email.toLowerCase() === cleanEmail) {
-          return {
-            ...u,
-            jobTitle: jobOption.value,
-            role: newRole,
-            isAssistantAdmin: isTeacherOrSupervisor
-          };
-        }
-        return u;
-      })
-    );
+    // Update registeredUsers state (upsert so it never fails if user was not in state yet)
+    setRegisteredUsers((prev) => {
+      const exists = prev.some((u) => u.email.toLowerCase() === cleanEmail);
+      let updated: User[];
+      if (exists) {
+        updated = prev.map((u) => {
+          if (u.email.toLowerCase() === cleanEmail) {
+            return {
+              ...u,
+              jobTitle: jobOption.value,
+              role: newRole,
+              isAssistantAdmin: isTeacherOrSupervisor
+            };
+          }
+          return u;
+        });
+      } else {
+        const newUser: User = {
+          id: getSafeUserDocId(cleanEmail),
+          name: cleanEmail.split('@')[0],
+          email: cleanEmail,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanEmail)}`,
+          role: newRole,
+          jobTitle: jobOption.value,
+          grade: 'أول ثانوي',
+          fullNameConfirmed: true,
+          isSuperAdmin: false,
+          isAssistantAdmin: isTeacherOrSupervisor,
+          joinedAt: new Date().toISOString().split('T')[0]
+        };
+        updated = deduplicateUsersByEmail([newUser, ...prev]);
+      }
+      safeSetItem('thanaweya_registered_users', JSON.stringify(updated));
+      return updated;
+    });
 
-    // If target user is the currently active user (e.g. self-testing)
+    // If target user is the currently active user
     if (user && user.email.toLowerCase() === cleanEmail) {
       const updatedSelf = {
         ...user,
@@ -895,6 +1126,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await setDoc(
         doc(db, 'users', docId),
         {
+          id: docId,
+          email: cleanEmail,
           jobTitle: jobOption.value,
           role: newRole,
           isAssistantAdmin: isTeacherOrSupervisor,
@@ -908,16 +1141,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       success: true,
-      message: `تم تعيين وظيفة (${jobOption.label}) للمستخدم بنجاح.`
+      message: `تم تعيين رتبة (${jobOption.label}) للمستخدم بنجاح.`
     };
   };
 
-  // Only Super Admin can add assistant admins
-  const addAssistantAdmin = (email: string, name: string): { success: boolean; message: string } => {
-    if (!isSuperAdmin) {
-      return { success: false, message: 'عذراً، فقط حساب المشرف يملك صلاحية إضافة مساعدين.' };
+  // Add new user directly by Admin
+  const addUserByAdmin = async (
+    name: string,
+    email: string,
+    jobTitle: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return { success: false, message: 'يرجى إدخال بريد إلكتروني صحيح' };
+    }
+    const cleanName = name.trim();
+    if (!cleanName) {
+      return { success: false, message: 'يرجى إدخال اسم المستخدم' };
     }
 
+    const jobOption = USER_JOB_OPTIONS.find((j) => j.value === jobTitle) || USER_JOB_OPTIONS[0];
+    const newRole: UserRole = jobOption.role;
+    const isTeacherOrSupervisor = jobOption.isSupervisorOrTeacher;
+    const nowIso = new Date().toISOString();
+
+    const newUser: User = {
+      id: `user-${Date.now()}`,
+      name: cleanName,
+      email: cleanEmail,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanName)}`,
+      role: newRole,
+      jobTitle: jobOption.value,
+      grade: 'أول ثانوي',
+      isSuperAdmin: cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase(),
+      isAssistantAdmin: isTeacherOrSupervisor,
+      fullNameConfirmed: true,
+      joinedAt: nowIso.split('T')[0],
+      lastLogin: nowIso
+    };
+
+    setRegisteredUsers((prev) => {
+      const updated = deduplicateUsersByEmail([newUser, ...prev]);
+      safeSetItem('thanaweya_registered_users', JSON.stringify(updated));
+      return updated;
+    });
+
+    // Push to Firestore
+    try {
+      const docId = getSafeUserDocId(cleanEmail);
+      await setDoc(
+        doc(db, 'users', docId),
+        {
+          id: docId,
+          name: cleanName,
+          email: cleanEmail,
+          avatar: newUser.avatar,
+          role: newRole,
+          jobTitle: jobOption.value,
+          grade: 'أول ثانوي',
+          isSuperAdmin: newUser.isSuperAdmin,
+          isAssistantAdmin: isTeacherOrSupervisor,
+          fullNameConfirmed: true,
+          joinedAt: newUser.joinedAt,
+          lastLogin: nowIso,
+          updatedAt: nowIso
+        },
+        { merge: true }
+      );
+    } catch (err) {
+      console.warn('Error saving new user to Firestore:', err);
+    }
+
+    return { success: true, message: `تمت إضافة (${cleanName}) بنجاح كـ (${jobOption.label}).` };
+  };
+
+  // Admin can add assistant admins
+  const addAssistantAdmin = (email: string, _name: string): { success: boolean; message: string } => {
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
       return { success: false, message: 'يرجى إدخال بريد إلكتروني صحيح' };
@@ -935,12 +1234,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Only Super Admin can remove assistant admins
+  // Admin can remove assistant admins
   const removeAssistantAdmin = (email: string): { success: boolean; message: string } => {
-    if (!isSuperAdmin) {
-      return { success: false, message: 'عذراً، فقط حساب المشرف يملك صلاحية إزالة المساعدين.' };
-    }
-
     const cleanEmail = email.trim().toLowerCase();
     updateUserJob(cleanEmail, 'طالب');
 
@@ -950,15 +1245,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Super Admin can update any user's full name directly
+  // Admin can update any user's full name directly
   const updateUserFullNameByAdmin = async (
     email: string,
     newFullName: string
   ): Promise<{ success: boolean; message: string }> => {
-    if (!isSuperAdmin) {
-      return { success: false, message: 'عذراً، فقط المشرف الأساسي يملك صلاحية تعديل أسماء المستخدمين.' };
-    }
-
     const trimmed = (newFullName || '').trim().replace(/\s+/g, ' ');
     if (trimmed.length < 3) {
       return { success: false, message: 'يرجى إدخال اسم صحيح يتكون من 3 أحرف على الأقل.' };
@@ -970,9 +1261,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     safeSetItem(`thanaweya_name_confirmed_${cleanEmail}`, 'true');
     safeSetItem(`thanaweya_confirmed_fullname_${cleanEmail}`, trimmed);
 
-    setRegisteredUsers((prev) =>
-      prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, name: trimmed, fullNameConfirmed: true } : u))
-    );
+    setRegisteredUsers((prev) => {
+      const updated = prev.map((u) => (u.email.toLowerCase() === cleanEmail ? { ...u, name: trimmed, fullNameConfirmed: true } : u));
+      safeSetItem('thanaweya_registered_users', JSON.stringify(updated));
+      return updated;
+    });
 
     if (user && user.email.toLowerCase() === cleanEmail) {
       const updatedSelf = { ...user, name: trimmed, fullNameConfirmed: true };
@@ -999,29 +1292,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true, message: `تم تحديث اسم المستخدم إلى (${trimmed}) بنجاح.` };
   };
 
-  // Super Admin can delete a user (remove duplicate / fake account)
+  // Admin can delete a user
   const deleteUserByAdmin = async (email: string): Promise<{ success: boolean; message: string }> => {
-    if (!isSuperAdmin) {
-      return { success: false, message: 'عذراً، فقط المشرف الأساسي يملك صلاحية حذف المستخدمين.' };
-    }
-
     const cleanEmail = email.trim().toLowerCase();
     if (cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase()) {
       return { success: false, message: 'لا يمكن حذف حساب المشرف الأساسي.' };
     }
 
     // Remove from state
-    setRegisteredUsers((prev) => prev.filter((u) => u.email.toLowerCase() !== cleanEmail));
+    setRegisteredUsers((prev) => {
+      const updated = prev.filter((u) => u.email.toLowerCase() !== cleanEmail);
+      safeSetItem('thanaweya_registered_users', JSON.stringify(updated));
+      return updated;
+    });
     setAssistantAdminEmails((prev) => prev.filter((e) => e.toLowerCase() !== cleanEmail));
-
-    // Update local storage
-    try {
-      const stored = JSON.parse(safeGetItem('thanaweya_registered_users') || '[]');
-      const filtered = stored.filter((u: any) => (u.email || '').toLowerCase() !== cleanEmail);
-      safeSetItem('thanaweya_registered_users', JSON.stringify(filtered));
-    } catch (e) {
-      console.warn(e);
-    }
 
     // Mark as deleted in Firestore
     try {
@@ -1042,10 +1326,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleUserRole = (userId: string): { success: boolean; message: string } => {
-    if (!isSuperAdmin) {
-      return { success: false, message: 'فقط المشرف يملك صلاحية تعديل الأدوار.' };
-    }
-
     const target = registeredUsers.find((u) => u.id === userId);
     if (!target) return { success: false, message: 'المستخدم غير موجود' };
     if (target.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
@@ -1079,11 +1359,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         loginWithGoogleEmail,
         updateUserName,
+        setStudentClassroom,
         logout,
         switchRole,
         updateUserJob,
         updateUserFullNameByAdmin,
         deleteUserByAdmin,
+        addUserByAdmin,
         addAssistantAdmin,
         removeAssistantAdmin,
         toggleUserRole,

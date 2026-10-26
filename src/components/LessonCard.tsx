@@ -79,7 +79,7 @@ export const LessonCard: React.FC<LessonCardProps> = ({
   };
 
   const handleCardClick = () => {
-    handleDownload();
+    onSelect(lesson);
   };
 
   const handleComplete = (e: React.MouseEvent) => {

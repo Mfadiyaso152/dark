@@ -120,6 +120,7 @@ export interface User {
   role: UserRole;
   jobTitle?: string;
   grade: string;
+  classroom?: string;
   isSuperAdmin?: boolean;
   isAssistantAdmin?: boolean;
   fullNameConfirmed?: boolean;
@@ -264,8 +265,10 @@ export interface HomeworkSubmission {
   studentId: string;
   studentName: string;
   studentEmail: string;
+  studentClass?: string;
   submittedAt: string;
   notes?: string;
+  grade?: number | string;
   isDeleted?: boolean;
   attachedFile?: AttachedFile; // Optional PDF/image solution attached by student (backward compatibility)
   attachedFiles?: AttachedFile[]; // Multiple solution files & images attached by student

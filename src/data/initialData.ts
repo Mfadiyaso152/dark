@@ -1,4 +1,4 @@
-import { Subject, Lesson, SubjectBooklet, BannerItem } from '../types';
+import { Subject, Lesson, SubjectBooklet, BannerItem, Homework } from '../types';
 
 export const INITIAL_SUBJECTS: Subject[] = [
   // ==================== الفصل الدراسي الأول (Semester 1) ====================
@@ -68,7 +68,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     titleColor: 'text-[#7C2D12]',
     countColor: 'text-[#FB923C]',
     description: '',
-    supervisorName: 'David & أحمد'
+    supervisorName: 'أ. النوفل'
   },
   // 5. تقنية رقمية 1-1
   {
@@ -210,7 +210,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
     titleColor: 'text-[#7C2D12]',
     countColor: 'text-[#FB923C]',
     description: '',
-    supervisorName: 'David & أحمد'
+    supervisorName: 'أ. النوفل'
   },
   // 5. تقنية رقمية 1-2
   {
@@ -301,6 +301,24 @@ export const INITIAL_SUBJECTS: Subject[] = [
     countColor: 'text-[#10B981]',
     description: '',
     supervisorName: 'مشرف المادة'
+  },
+  // 10. الإرشاد الطلابي
+  {
+    id: 'guidance-2',
+    name: 'الإرشاد الطلابي',
+    semester: 2,
+    isComingSoon: true,
+    icon: 'HeartHandshake',
+    emoji: '🤝',
+    color: 'rose',
+    gradient: 'from-[#F43F5E] to-[#E11D48]',
+    lightBg: 'bg-[#FFF1F2]',
+    borderColor: 'border-[#FFE4E6]',
+    badgeBg: 'bg-[#F43F5E]',
+    titleColor: 'text-[#881337]',
+    countColor: 'text-[#FB7185]',
+    description: '',
+    supervisorName: 'الموجه الطلابي'
   }
 ];
 
@@ -1359,6 +1377,8 @@ export const INITIAL_LESSONS: Lesson[] = [
 
 export const INITIAL_BOOKLETS: SubjectBooklet[] = [];
 
+export const INITIAL_HOMEWORKS: Homework[] = [];
+
 export const INITIAL_BANNERS: BannerItem[] = [
   {
     id: 'default-banner-zad-1',
@@ -1378,4 +1398,5 @@ export const INITIAL_BANNER_SETTINGS = {
   autoPlay: true,
   intervalSeconds: 5
 };
+
 

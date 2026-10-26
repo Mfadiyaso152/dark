@@ -12,8 +12,6 @@ import {
 import {
   initializeFirestore,
   getFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
   doc,
   setDoc,
   getDoc,
@@ -26,19 +24,18 @@ import {
   deleteDoc,
   writeBatch
 } from 'firebase/firestore';
+import firebaseConfigJson from '../../firebase-applet-config.json';
 
-// Your web app's Firebase configuration from user
 export const firebaseConfig = {
-  apiKey: "AIzaSyBQp80jJi8KVZXGlx9Reg60c86LNtkrD6A",
-  authDomain: "thanwy-15084.firebaseapp.com",
-  projectId: "thanwy-15084",
-  storageBucket: "thanwy-15084.firebasestorage.app",
-  messagingSenderId: "41455937556",
-  appId: "1:41455937556:web:786ffe4041eb8429505f01",
-  measurementId: "G-ZW5RM8V9E7"
+  apiKey: firebaseConfigJson.apiKey || "AIzaSyBQp80jJi8KVZXGlx9Reg60c86LNtkrD6A",
+  authDomain: firebaseConfigJson.authDomain || "thanwy-15084.firebaseapp.com",
+  projectId: firebaseConfigJson.projectId || "thanwy-15084",
+  storageBucket: firebaseConfigJson.storageBucket || "thanwy-15084.firebasestorage.app",
+  messagingSenderId: firebaseConfigJson.messagingSenderId || "41455937556",
+  appId: firebaseConfigJson.appId || "1:41455937556:web:786ffe4041eb8429505f01",
+  measurementId: firebaseConfigJson.measurementId || "G-ZW5RM8V9E7"
 };
 
-// Initialize Firebase with ignoreUndefinedProperties
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const db = (() => {
@@ -47,7 +44,7 @@ export const db = (() => {
       ignoreUndefinedProperties: true
     });
   } catch (err) {
-    return getFirestore(app);
+    return getFirestore(app, (firebaseConfigJson as any).firestoreDatabaseId || '(default)');
   }
 })();
 
@@ -75,4 +72,3 @@ export {
   writeBatch
 };
 export type { FirebaseUser };
-

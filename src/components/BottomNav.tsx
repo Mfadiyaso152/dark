@@ -31,12 +31,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   };
 
   const handleHomeworksClick = () => {
-    if (!user) {
-      triggerHaptic('warning');
-      showNavToast('يجب تسجيل الدخول أولاً للوصول للواجبات 🔒');
-      setIsAuthModalOpen(true);
-      return;
-    }
     triggerHaptic('light');
     onTabChange('homeworks');
   };

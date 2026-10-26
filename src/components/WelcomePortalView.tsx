@@ -24,6 +24,7 @@ import { safeSetItem, safeGetItem } from '../utils/storage';
 import { ZhrawiFeedback, BannerItem, BannerSettings } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { HomeBannerSlider } from './HomeBannerSlider';
+import { PlatformShutdownBanner } from './PlatformShutdownNotice';
 
 interface WelcomePortalViewProps {
   onEnterSite: () => void;
@@ -403,6 +404,14 @@ export const WelcomePortalView: React.FC<WelcomePortalViewProps> = ({
           </div>
         </nav>
       </header>
+
+      {/* ======================================================== */}
+      {/* MAINTENANCE NOTIFICATION BANNER (Thursday Closure)      */}
+      {/* ======================================================== */}
+      {/* Platform Shutdown Countdown Banner */}
+      <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <PlatformShutdownBanner />
+      </div>
 
       {/* ======================================================== */}
       {/* MAIN BODY: BANNERS & GRADE SELECTION                     */}

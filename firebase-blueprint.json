@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Application user profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "jobTitle": { "type": "string" }
+      },
+      "required": ["id", "email", "name"]
+    },
+    "Lesson": {
+      "title": "Lesson",
+      "description": "Subject lesson",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "required": ["id", "subjectId", "title"]
+    },
+    "Booklet": {
+      "title": "Booklet",
+      "description": "Subject booklet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "required": ["id", "subjectId", "title"]
+    },
+    "Homework": {
+      "title": "Homework",
+      "description": "Daily homework assignment",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "required": ["id", "subjectId", "title"]
+    },
+    "HomeworkSubmission": {
+      "title": "HomeworkSubmission",
+      "description": "Student homework submission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "homeworkId": { "type": "string" },
+        "studentEmail": { "type": "string" }
+      },
+      "required": ["id", "homeworkId", "studentEmail"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles collection"
+    },
+    "/lessons/{lessonId}": {
+      "schema": { "$ref": "#/entities/Lesson" },
+      "description": "Lessons collection"
+    },
+    "/booklets/{bookletId}": {
+      "schema": { "$ref": "#/entities/Booklet" },
+      "description": "Booklets collection"
+    },
+    "/homeworks/{homeworkId}": {
+      "schema": { "$ref": "#/entities/Homework" },
+      "description": "Homeworks collection"
+    },
+    "/homework_submissions/{subId}": {
+      "schema": { "$ref": "#/entities/HomeworkSubmission" },
+      "description": "Submissions collection"
+    }
+  }
+}

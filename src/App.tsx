@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, MessageCircle, Calendar, Clock, Sparkles, ClipboardCheck } from 'lucide-react';
-import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings, formatFileSize, getLatestUniqueSubmissions, getSubmissionFiles, StudentSubjectPerformance } from './types';
-import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_BANNER_SETTINGS, INITIAL_BANNERS } from './data/initialData';
+import { Subject, Lesson, UserProgress, SubjectBooklet, Semester, Homework, HomeworkSubmission, AttachedFile, BannerItem, BannerSettings, formatFileSize, getLatestUniqueSubmissions, getSubmissionFiles } from './types';
+import { INITIAL_SUBJECTS, INITIAL_LESSONS, INITIAL_BOOKLETS, INITIAL_HOMEWORKS, INITIAL_BANNER_SETTINGS, INITIAL_BANNERS } from './data/initialData';
 import { SubjectCard } from './components/SubjectCard';
 import { SubjectDetailView } from './components/SubjectDetailView';
 import { LessonCard } from './components/LessonCard';
@@ -18,6 +18,7 @@ import { AdminPortalView } from './components/AdminPortalView';
 import { TopNav, TabType } from './components/TopNav';
 import { SupervisorSettingsDrawer } from './components/SupervisorSettingsDrawer';
 import { FullNameRequiredModal } from './components/FullNameRequiredModal';
+import { StudentClassModal } from './components/StudentClassModal';
 import { NotFoundView } from './components/NotFoundView';
 import { HomeBannerSlider } from './components/HomeBannerSlider';
 import {
@@ -71,13 +72,13 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((l) => !deletedIds.has(l.id) && !l.subjectId?.startsWith('guidance'));
+          return parsed.filter((l) => !deletedIds.has(l.id));
         }
       }
     } catch (e) {
       console.error(e);
     }
-    return INITIAL_LESSONS.filter((l) => !deletedIds.has(l.id) && !l.subjectId?.startsWith('guidance'));
+    return INITIAL_LESSONS.filter((l) => !deletedIds.has(l.id));
   });
 
   // Booklets (مذكرات وملخصات)
@@ -544,18 +545,65 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Homeworks (الواجبات المدرسية)
+  // Legacy artificial mock homework IDs: must never be displayed or restored
+  const MOCK_HW_IDS = useMemo(() => new Set(['hw-1', 'hw-2', 'hw-3', 'hw-4']), []);
+
+  // Proactively purge any artificial mock homeworks from cloud Firestore & local storage
+  useEffect(() => {
+    ['hw-1', 'hw-2', 'hw-3', 'hw-4'].forEach(async (mockId) => {
+      try {
+        await deleteDoc(doc(db, 'homeworks', mockId)).catch(() => {});
+        await setDoc(doc(db, 'homeworks', mockId), { id: mockId, isDeleted: true, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+      } catch {
+        // silent
+      }
+    });
+
+    // Also purge any submissions to mock homeworks from localStorage
+    try {
+      const savedHws = safeGetItem('thanaweya_homeworks_v2');
+      if (savedHws) {
+        const parsed = JSON.parse(savedHws);
+        if (Array.isArray(parsed)) {
+          const cleaned = parsed.filter((h: any) => h && h.id && !MOCK_HW_IDS.has(h.id));
+          if (cleaned.length !== parsed.length) {
+            safeSetItem('thanaweya_homeworks_v2', JSON.stringify(cleaned));
+            setHomeworks(cleaned);
+          }
+        }
+      }
+
+      const savedSubs = safeGetItem('thanaweya_homework_submissions_v1');
+      if (savedSubs) {
+        const parsedSubs = JSON.parse(savedSubs);
+        if (Array.isArray(parsedSubs)) {
+          const cleanedSubs = parsedSubs.filter((s: any) => s && !MOCK_HW_IDS.has(s.homeworkId));
+          if (cleanedSubs.length !== parsedSubs.length) {
+            safeSetItem('thanaweya_homework_submissions_v1', JSON.stringify(cleanedSubs));
+            setSubmissions(cleanedSubs);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+  }, [MOCK_HW_IDS]);
+
+  // Homeworks (الواجبات المدرسية المضافة رسمياً من المعلمين والمشرفين فقط)
   const [homeworks, setHomeworks] = useState<Homework[]>(() => {
     try {
       const saved = safeGetItem('thanaweya_homeworks_v2');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          // Strictly filter out any artificial mock IDs, keeping only official teacher homeworks
+          return parsed.filter((h: any) => h && h.id && !MOCK_HW_IDS.has(h.id));
+        }
       }
     } catch (e) {
       console.error(e);
     }
-    return [];
+    return INITIAL_HOMEWORKS;
   });
 
   // Sync homeworks safely to localStorage
@@ -580,11 +628,15 @@ export default function App() {
         console.warn(e);
       }
 
+      // Always treat artificial mock IDs as deleted
+      MOCK_HW_IDS.forEach((id) => deletedIds.add(id));
+
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
-        if (data.isDeleted || deletedIds.has(docSnap.id) || deletedIds.has(data.id)) {
-          deletedIds.add(data.id || docSnap.id);
-        } else if (data.id && data.subjectId && data.dueDate && !deletedIds.has(data.id)) {
+        const hwId = data.id || docSnap.id;
+        if (data.isDeleted || deletedIds.has(docSnap.id) || deletedIds.has(data.id) || MOCK_HW_IDS.has(hwId)) {
+          deletedIds.add(hwId);
+        } else if (data.id && data.subjectId && data.dueDate && !deletedIds.has(data.id) && !MOCK_HW_IDS.has(data.id)) {
           cloudHws.push(data as Homework);
         }
       });
@@ -592,12 +644,12 @@ export default function App() {
       setHomeworks((prev) => {
         const map = new Map<string, Homework>();
         prev.forEach((h) => {
-          if (!deletedIds.has(h.id)) {
+          if (!deletedIds.has(h.id) && !MOCK_HW_IDS.has(h.id)) {
             map.set(h.id, h);
           }
         });
         cloudHws.forEach((ch) => {
-          if (!deletedIds.has(ch.id)) {
+          if (!deletedIds.has(ch.id) && !MOCK_HW_IDS.has(ch.id)) {
             const existing = map.get(ch.id);
             if (existing?.solutionFile?.dataUrl && !ch.solutionFile?.dataUrl) {
               map.set(ch.id, {
@@ -622,7 +674,7 @@ export default function App() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [MOCK_HW_IDS]);
 
   // Homework Submissions (تسليمات وحلول واجبات الطلاب)
   const [submissions, setSubmissions] = useState<HomeworkSubmission[]>(() => {
@@ -630,7 +682,9 @@ export default function App() {
       const saved = safeGetItem('thanaweya_homework_submissions_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter((s: any) => s && !MOCK_HW_IDS.has(s.homeworkId));
+        }
       }
     } catch (e) {
       console.error(e);
@@ -652,6 +706,7 @@ export default function App() {
         const data = docSnap.data();
         if (data && data.id && data.homeworkId && (data.studentEmail || data.studentId || data.studentName)) {
           if ((data as any).isDeleted === true) return;
+          if (MOCK_HW_IDS.has(data.homeworkId)) return;
           cloudSubs.push(data as HomeworkSubmission);
         }
       });
@@ -705,94 +760,6 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
-
-  // Student Academic Performance & Grades (المستوى الدراسي ودرجات الطلاب لكل مادة)
-  const [studentPerformances, setStudentPerformances] = useState<StudentSubjectPerformance[]>(() => {
-    try {
-      const saved = safeGetItem('thanaweya_student_performances_v1');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
-  });
-
-  // Sync student performances safely to localStorage
-  useEffect(() => {
-    safeSetItem('thanaweya_student_performances_v1', JSON.stringify(studentPerformances));
-  }, [studentPerformances]);
-
-  // Real-time Firestore sync for Student Performances across all users (instant cloud sync)
-  useEffect(() => {
-    const perfCol = collection(db, 'student_performances');
-    const unsubscribe = onSnapshot(perfCol, (snapshot) => {
-      const cloudPerfs: StudentSubjectPerformance[] = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && !data.isDeleted && (data.studentEmail || data.studentId) && data.subjectId) {
-          cloudPerfs.push({
-            id: data.id || docSnap.id,
-            studentId: data.studentId || '',
-            studentEmail: data.studentEmail || '',
-            studentName: data.studentName || '',
-            subjectId: data.subjectId || '',
-            grades: Array.isArray(data.grades) ? data.grades : [],
-            customProgressPercentage: data.customProgressPercentage,
-            teacherNotes: data.teacherNotes,
-            updatedAt: data.updatedAt || new Date().toISOString(),
-            updatedBy: data.updatedBy
-          });
-        }
-      });
-
-      setStudentPerformances((prev) => {
-        const map = new Map<string, StudentSubjectPerformance>();
-        prev.forEach((p) => map.set(p.id, p));
-        cloudPerfs.forEach((cp) => map.set(cp.id, cp));
-        const merged = Array.from(map.values());
-        safeSetItem('thanaweya_student_performances_v1', JSON.stringify(merged));
-        return merged;
-      });
-    }, (err) => {
-      console.warn('Firestore student_performances snapshot error:', err);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Handler to save/update student grades & academic performance
-  const handleSaveStudentPerformance = async (perf: StudentSubjectPerformance) => {
-    const perfId = perf.id || `${(perf.studentEmail || perf.studentId).replace(/[^a-zA-Z0-9]/g, '_')}_${perf.subjectId}`;
-    const fullPerf: StudentSubjectPerformance = {
-      ...perf,
-      id: perfId,
-      updatedAt: new Date().toISOString()
-    };
-
-    // 1. Immediate local state update
-    setStudentPerformances((prev) => {
-      const map = new Map(prev.map((p) => [p.id, p]));
-      map.set(perfId, fullPerf);
-      const updated = Array.from(map.values());
-      safeSetItem('thanaweya_student_performances_v1', JSON.stringify(updated));
-      return updated;
-    });
-
-    // 2. Real-time Cloud Firestore save
-    try {
-      const payload = sanitizeForFirestore({
-        ...fullPerf,
-        isDeleted: false,
-        updatedAt: new Date().toISOString()
-      });
-      await setDoc(doc(db, 'student_performances', perfId), payload, { merge: true });
-    } catch (err) {
-      console.error('Failed to save student performance to Firestore:', err);
-    }
-  };
 
   // User-specific cloud progress key
   const userStorageKey = useMemo(() => {
@@ -1473,9 +1440,17 @@ export default function App() {
       registeredUsers
     );
 
+    const studentUser = registeredUsers.find(
+      (u) =>
+        (u.email && u.email.toLowerCase().trim() === (subData.studentEmail || '').trim().toLowerCase()) ||
+        (u.id && u.id === (subData.studentId || '').trim())
+    );
+    const resolvedClass = subData.studentClass || studentUser?.classroom || user?.classroom || undefined;
+
     const cloudSub: HomeworkSubmission = {
       ...subData,
       studentName: studentFullName,
+      studentClass: resolvedClass,
       id: subId,
       submittedAt: new Date().toISOString(),
       attachedFile: cloudFiles[0] || undefined,
@@ -1484,6 +1459,7 @@ export default function App() {
 
     const localSub: HomeworkSubmission = {
       ...cloudSub,
+      studentClass: resolvedClass,
       attachedFile: localFiles[0] || undefined,
       attachedFiles: localFiles
     };
@@ -1751,8 +1727,6 @@ export default function App() {
                   allSubjects={subjects}
                   allHomeworks={homeworks}
                   allSubmissions={submissions}
-                  performances={studentPerformances}
-                  onSavePerformance={handleSaveStudentPerformance}
                   onSelectLesson={openLessonDetail}
                 />
               ) : activeTab === 'admin' ? (
@@ -1813,7 +1787,6 @@ export default function App() {
                       submissions={submissions}
                       onSubmitHomeworkSolution={handleSubmitHomeworkSolution}
                       onDeleteSubmission={handleDeleteSubmission}
-                      performances={studentPerformances}
                     />
                   ) : (
                     /* All Subjects Grid */
@@ -1922,6 +1895,9 @@ export default function App() {
 
         {/* Mandatory Full Name Enforcement Modal */}
         <FullNameRequiredModal />
+
+        {/* Mandatory Student Classroom Selection Modal */}
+        <StudentClassModal />
 
         {/* Notifications Modal */}
         <NotificationsModal />

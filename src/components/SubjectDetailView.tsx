@@ -134,7 +134,7 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
   }, [initialSubView]);
 
   const handleSubViewSelect = (newSubView: 'lessons' | 'booklets' | 'homework' | 'performance' | null) => {
-    if (newSubView && !user) {
+    if (newSubView === 'performance' && !user) {
       setIsAuthModalOpen(true);
       return;
     }
@@ -463,9 +463,9 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
           </div>
         )}
 
-        {/* The Two Choices Cards: الدروس والملخصات فقط */}
+        {/* Choices Cards: الدروس والملخصات والواجبات المدرسية */}
         <div className="pt-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5">
             {/* Option 1: الدروس */}
             <motion.div
               whileHover={isLessonsActuallyPaused ? {} : { y: -3, scale: 1.01 }}
@@ -560,6 +560,58 @@ export const SubjectDetailView: React.FC<SubjectDetailViewProps> = ({
                   ) : (
                     <span className="text-xs text-slate-500 mt-0.5 inline-block">
                       {subjectBooklets.length} مذكرة وملخص
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="shrink-0">
+                <ChevronLeft className="w-5 h-5 text-slate-400 transition group-hover:-translate-x-1 group-hover:text-slate-900" />
+              </div>
+            </motion.div>
+
+            {/* Option 3: الواجبات المدرسية */}
+            <motion.div
+              whileHover={isHomeworksActuallyPaused ? {} : { y: -3, scale: 1.01 }}
+              whileTap={isHomeworksActuallyPaused ? {} : { scale: 0.98 }}
+              transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+              onClick={() => {
+                if (isHomeworksActuallyPaused) {
+                  setShowHomeworkSoonToast(true);
+                  setTimeout(() => setShowHomeworkSoonToast(false), 2500);
+                  return;
+                }
+                handleSubViewSelect('homework');
+              }}
+              className={`bg-white border rounded-3xl p-5 sm:p-6 shadow-2xs transition-all text-right flex items-center justify-between relative overflow-hidden ${
+                isHomeworksActuallyPaused
+                  ? 'border-slate-200 opacity-85 cursor-pointer hover:border-amber-300'
+                  : 'border-slate-200 hover:border-amber-300 hover:bg-slate-50/50 cursor-pointer group'
+              }`}
+            >
+              {showHomeworkSoonToast && (
+                <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xs flex items-center justify-center p-3 z-10 animate-fade-in text-center">
+                  <span className="text-white text-xs sm:text-sm font-bold font-['Alexandria',sans-serif]">
+                    قسم الواجبات لمادة {subject.name} قريباً ⏳
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-slate-900 text-white border border-slate-800 flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition">
+                  <ClipboardList className="w-6 h-6 sm:w-7 sm:h-7 text-amber-400" />
+                </div>
+                <div>
+                  <h4 className="text-base sm:text-lg font-bold font-['Alexandria',sans-serif] text-slate-900 group-hover:text-amber-700 transition">
+                    الواجبات المدرسية
+                  </h4>
+                  {isHomeworksActuallyPaused ? (
+                    <span className="text-[10px] sm:text-xs font-bold text-amber-700 mt-0.5 inline-block">
+                      متاح قريباً
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500 mt-0.5 inline-block">
+                      {subjectHomeworks.length} واجب مدرسي
                     </span>
                   )}
                 </div>
