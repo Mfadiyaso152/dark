@@ -196,7 +196,9 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   )}
                 </span>
               </div>
-              <p className="text-xs text-indigo-200/80 font-medium">{student.grade || 'المرحلة الثانوية'}</p>
+              <p className="text-xs text-indigo-200/80 font-medium">
+                {student.grade || 'المرحلة الثانوية'} {student.classroom ? `• فصل ${student.classroom}` : '• فصل -'}
+              </p>
             </div>
           </div>
 

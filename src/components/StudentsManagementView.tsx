@@ -213,20 +213,9 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
   const filteredUsers = useMemo(() => {
     let result = uniqueStudents;
 
-    // 1. Class filter
+    // 1. Class filter (Strict match on student classroom)
     if (selectedClass && selectedClass !== 'all') {
-      result = result.filter((u) => {
-        // Direct classroom match
-        if (u.classroom === selectedClass) return true;
-        // Or submissions matching this class
-        const studentSubs = getStudentSubmissions(u);
-        const hasClassSub = studentSubs.some((sub) => {
-          if (sub.studentClass === selectedClass) return true;
-          const hw = allHomeworks.find((h) => h.id === sub.homeworkId);
-          return hw && (hw.targetClasses?.includes(selectedClass) || (hw as any).targetClass === selectedClass);
-        });
-        return hasClassSub;
-      });
+      result = result.filter((u) => u.classroom === selectedClass);
     }
 
     // 2. Text Search query
@@ -406,9 +395,13 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                     <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                       {activeStudentPage.name}
                     </h2>
-                    {activeStudentPage.classroom && (
+                    {activeStudentPage.classroom ? (
                       <span className="text-[11px] font-black bg-blue-500/15 text-blue-900 border border-blue-500/25 px-2.5 py-0.5 rounded-full backdrop-blur-md">
                         فصل {activeStudentPage.classroom}
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-black bg-slate-500/15 text-slate-800 border border-slate-500/25 px-2.5 py-0.5 rounded-full backdrop-blur-md">
+                        فصل -
                       </span>
                     )}
                   </div>
@@ -853,9 +846,13 @@ export const StudentsManagementView: React.FC<StudentsManagementViewProps> = ({
                               مشرف
                             </span>
                           )}
-                          {u.classroom && (
+                          {u.classroom ? (
                             <span className="text-[10px] font-black bg-blue-500/15 text-blue-900 border border-blue-500/25 px-2 py-0.5 rounded-full shrink-0 backdrop-blur-md">
                               فصل {u.classroom}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-black bg-slate-500/15 text-slate-700 border border-slate-500/25 px-2 py-0.5 rounded-full shrink-0 backdrop-blur-md">
+                              فصل -
                             </span>
                           )}
                         </div>

@@ -15,15 +15,11 @@ export const StudentClassModal: React.FC = () => {
   // Supervisors and teachers must NEVER see this modal
   if (!user || !user.email) return null;
 
-  const isSuper = !!user.isSuperAdmin || user.email.toLowerCase().trim() === 'mfb.15.f@gmail.com';
-  const isTeacherOrSupervisor =
-    isSuper ||
+  const isTeacher =
     user.role === 'teacher' ||
-    user.role === 'supervisor' ||
-    user.isAssistantAdmin ||
-    (user.jobTitle && user.jobTitle !== 'طالب');
+    (user.jobTitle && (user.jobTitle.includes('معلم') || user.jobTitle.includes('أستاذ') || user.jobTitle.startsWith('أ.')));
 
-  if (isTeacherOrSupervisor) return null;
+  if (isTeacher) return null;
 
   const cleanEmail = user.email.toLowerCase().trim();
 
