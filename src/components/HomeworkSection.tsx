@@ -156,6 +156,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
+  const [submissionsClassFilter, setSubmissionsClassFilter] = useState<string>('all');
 
   // Form states for Teacher Add / Edit Homework
   const [dueDate, setDueDate] = useState('');
@@ -758,6 +759,14 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
 
             const isExpanded = !!expandedHwIds[hw.id];
 
+            const hwSubs = submissions.filter((s) => s.homeworkId === hw.id);
+            const filteredHwSubs = submissionsClassFilter === 'all'
+              ? hwSubs
+              : hwSubs.filter((sub) => {
+                  const studentClass = sub.studentClass || registeredUsers.find((u) => u.email?.toLowerCase().trim() === sub.studentEmail?.toLowerCase().trim())?.classroom;
+                  return studentClass === submissionsClassFilter;
+                });
+
             return (
               <motion.div
                 key={hw.id}
@@ -985,22 +994,40 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                       {/* Teacher / Supervisor View: All Student Submissions for this Homework */}
                       {(isTeacher || isSupervisor || canEdit) && (
                         <div className="p-3 bg-purple-50/60 border border-purple-200/80 rounded-2xl space-y-2 text-xs">
-                          <div className="flex items-center justify-between text-purple-900 font-bold border-b border-purple-200/60 pb-1.5">
+                          <div className="flex items-center justify-between text-purple-900 font-bold border-b border-purple-200/60 pb-1.5 flex-wrap gap-2">
                             <span className="flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5 text-purple-700" />
                               <span>حلول الطلاب المسلمة لهذا الواجب ({submissions.filter((s) => s.homeworkId === hw.id).length})</span>
                             </span>
+                            <ClassFilterDropdown
+                              selectedClass={submissionsClassFilter}
+                              onSelectClass={setSubmissionsClassFilter}
+                            />
                           </div>
 
-                          {submissions.filter((s) => s.homeworkId === hw.id).length === 0 ? (
-                            <p className="text-[11px] text-slate-400 py-1">لم يقم أي طالب بتسليم هذا الواجب بعد.</p>
-                          ) : (
-                            <div className="space-y-2 max-h-60 overflow-y-auto pr-0.5">
-                              {submissions
-                                .filter((s) => s.homeworkId === hw.id)
-                                .map((sub) => {
+                          {(() => {
+                            const getSubClass = (sub: HomeworkSubmission) =>
+                              sub.studentClass ||
+                              registeredUsers.find(
+                                (u) =>
+                                  (u.email && sub.studentEmail && u.email.toLowerCase().trim() === sub.studentEmail.toLowerCase().trim()) ||
+                                  (u.id && sub.studentId && u.id === sub.studentId) ||
+                                  (u.name && sub.studentName && u.name.trim().toLowerCase() === sub.studentName.trim().toLowerCase())
+                              )?.classroom;
+
+                            const hwSubs = submissions.filter((s) => s.homeworkId === hw.id);
+                            const filteredHwSubs = submissionsClassFilter === 'all'
+                              ? hwSubs
+                              : hwSubs.filter((sub) => getSubClass(sub) === submissionsClassFilter);
+
+                            return filteredHwSubs.length === 0 ? (
+                              <p className="text-[11px] text-slate-400 py-1">لم يقم أي طالب بتسليم هذا الواجب مطابقاً للفلتر المختار.</p>
+                            ) : (
+                              <div className="space-y-2 max-h-60 overflow-y-auto pr-0.5">
+                                {filteredHwSubs.map((sub) => {
                                   const studentFullName = resolveStudentFullName(sub.studentEmail, sub.studentName, registeredUsers);
                                   const isConfirmedName = isFullNameValid(studentFullName);
+                                  const studentClass = getSubClass(sub);
                                   const subFiles = getSubmissionFiles(sub);
 
                                   return (
@@ -1014,6 +1041,15 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                                             <span className="font-black text-slate-900 text-xs sm:text-sm">
                                               {studentFullName}
                                             </span>
+                                            {studentClass ? (
+                                              <span className="text-[10px] font-black bg-blue-500/15 text-blue-900 border border-blue-500/25 px-2 py-0.5 rounded-full shrink-0">
+                                                فصل {studentClass}
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-black bg-slate-500/15 text-slate-700 border border-slate-500/25 px-2 py-0.5 rounded-full shrink-0">
+                                                فصل -
+                                              </span>
+                                            )}
                                             {isConfirmedName && (
                                               <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                 الاسم الثلاثي ✓
@@ -1090,8 +1126,9 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                                     </div>
                                   );
                                 })}
-                            </div>
-                          )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </motion.div>
@@ -1292,23 +1329,7 @@ export const HomeworkSection: React.FC<HomeworkSectionProps> = ({
                   </div>
                 </div>
 
-                {/* Download All Student Solutions with Description PDF Button */}
-                <div className="pt-2 border-t border-slate-100/90 mt-1">
-                  <button
-                    type="button"
-                    onClick={(e) => handleDownloadHomeworkReport(hw, e)}
-                    disabled={downloadingReportHwId === hw.id}
-                    className="w-full py-2 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs cursor-pointer disabled:opacity-60"
-                    title="تحميل ملف PDF لجميع حلول الطلاب مع الوصف"
-                  >
-                    <FileText className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                    <span className="truncate">
-                      {downloadingReportHwId === hw.id
-                        ? 'جاري تجهيز الـ PDF...'
-                        : 'تحميل PDF لجميع حلول الطلاب مع الوصف'}
-                    </span>
-                  </button>
-                </div>
+
               </motion.div>
             );
           })}

@@ -151,6 +151,7 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
 
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+  const [submissionsClassFilter, setSubmissionsClassFilter] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingHomework, setEditingHomework] = useState<Homework | null>(null);
 
@@ -655,6 +656,26 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
     [hw, submissions]
   );
 
+  const resolveStudentClass = (sub: HomeworkSubmission) => {
+    return (
+      sub.studentClass ||
+      registeredUsers.find(
+        (u) =>
+          (u.email && sub.studentEmail && u.email.toLowerCase().trim() === sub.studentEmail.toLowerCase().trim()) ||
+          (u.id && sub.studentId && u.id === sub.studentId) ||
+          (u.name && sub.studentName && u.name.trim().toLowerCase() === sub.studentName.trim().toLowerCase())
+      )?.classroom
+    );
+  };
+
+  const filteredHwSubmissions = useMemo(() => {
+    if (submissionsClassFilter === 'all') return hwSubmissions;
+    return hwSubmissions.filter((sub) => {
+      const studentClass = resolveStudentClass(sub);
+      return studentClass === submissionsClassFilter;
+    });
+  }, [hwSubmissions, submissionsClassFilter, registeredUsers]);
+
   return (
     <div className="space-y-4 md:space-y-6 text-right font-['IBM_Plex_Sans_Arabic',sans-serif]">
       {selectedHomeworkId && hw ? (
@@ -1083,23 +1104,27 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
         {/* Teacher / Supervisor View: All Student Submissions for this Homework */}
         {(isTeacher || isSupervisor || canManageThis) && (
           <div className="bg-white rounded-3xl p-5 sm:p-7 border border-slate-200/90 shadow-2xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
               <h3 className="text-base sm:text-lg font-black font-['Alexandria',sans-serif] text-slate-900 flex items-center gap-2">
                 <Users className="w-5 h-5 text-indigo-600" />
-                <span>حلول الطلاب المسلمة لهذا الواجب ({hwSubmissions.length})</span>
+                <span>حلول الطلاب المسلمة لهذا الواجب ({filteredHwSubmissions.length})</span>
               </h3>
+              <ClassFilterDropdown
+                selectedClass={submissionsClassFilter}
+                onSelectClass={setSubmissionsClassFilter}
+              />
             </div>
 
-            {hwSubmissions.length === 0 ? (
+            {filteredHwSubmissions.length === 0 ? (
               <div className="text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs sm:text-sm">
-                لم يقم أي طالب بتسليم هذا الواجب بعد.
+                لم يقم أي طالب بتسليم هذا الواجب مطابقاً للفلتر المختار.
               </div>
             ) : (
               <div className="space-y-3">
-                {hwSubmissions.map((sub) => {
+                {filteredHwSubmissions.map((sub) => {
                   const studentFullName = resolveStudentFullName(sub.studentEmail, sub.studentName, registeredUsers);
                   const isConfirmedName = isFullNameValid(studentFullName);
-                  const studentClass = sub.studentClass || registeredUsers.find((u) => u.email?.toLowerCase().trim() === sub.studentEmail?.toLowerCase().trim())?.classroom;
+                  const studentClass = resolveStudentClass(sub);
                   const subFiles = getSubmissionFiles(sub);
 
                   return (
@@ -1113,9 +1138,13 @@ export const DailyHomeworksView: React.FC<DailyHomeworksViewProps> = ({
                             <span className="font-black text-slate-900 text-xs sm:text-sm">
                               {studentFullName}
                             </span>
-                            {studentClass && (
-                              <span className="text-[10px] px-2 py-0.5 rounded-lg font-black bg-blue-50 text-blue-700 border border-blue-200">
+                            {studentClass ? (
+                              <span className="text-[10px] font-black bg-blue-500/15 text-blue-900 border border-blue-500/25 px-2 py-0.5 rounded-full shrink-0">
                                 فصل {studentClass}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-black bg-slate-500/15 text-slate-700 border border-slate-500/25 px-2 py-0.5 rounded-full shrink-0">
+                                فصل -
                               </span>
                             )}
                             {isConfirmedName && (
